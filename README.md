@@ -21,6 +21,15 @@ Use at your own risk!
 If you state URLs then only the necessary bytes are downloaded into memory.
 
 
+<u>Requirements:</u>
+* Python Modules
+  * crypto
+  * requests (normally already present)
+
+On Windows try "pip install <modulename>".<br>
+On Linux install the corresponding packages, e.g. Debian python-<modulename> or python3-<modulename>.
+
+
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
