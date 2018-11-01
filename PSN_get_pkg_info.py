@@ -179,23 +179,23 @@ CONST_SHA256_HASH_SIZE = 0x20
 CONST_PKG3_HEADER_ENDIAN = CONST_FMT_BIG_ENDIAN
 CONST_PKG3_MAGIC = 0x7f504b47  ## "\x7FPKG"
 CONST_PKG3_MAIN_HEADER_FIELDS = collections.OrderedDict([ \
-    ( "MAGIC",        { "FORMAT": "L", "DEBUG": 1, "DESC": "Magic", }, ),
-    ( "REV",          { "FORMAT": "H", "DEBUG": 1, "DESC": "Revision", }, ),
-    ( "TYPE",         { "FORMAT": "H", "DEBUG": 1, "DESC": "Type", }, ),
-    ( "MDOFS",        { "FORMAT": "L", "DEBUG": 1, "DESC": "Meta Data Offset", }, ),
-    ( "MDCNT",        { "FORMAT": "L", "DEBUG": 1, "DESC": "Meta Data Count", }, ),
-    ( "HDRSIZE",      { "FORMAT": "L", "DEBUG": 1, "DESC": "Header [Additional] Size incl. PS3 0x40 Digest [and Extensions]", }, ),
-    ( "ITEMCNT",      { "FORMAT": "L", "DEBUG": 1, "DESC": "Item Count", }, ),
-    ( "TOTALSIZE",    { "FORMAT": "Q", "DEBUG": 1, "DESC": "Total Size", }, ),
-    ( "DATAOFS",      { "FORMAT": "Q", "DEBUG": 1, "DESC": "Data Offset", }, ),
-    ( "DATASIZE",     { "FORMAT": "Q", "DEBUG": 1, "DESC": "Data Size", }, ),
-    ( "CID",          { "FORMAT": "s", "SIZE": CONST_CONTENT_ID_SIZE, "CONV": 0x0204, "DEBUG": 1, "DESC": "Content ID", }, ),
-    ( "PADDING1",     { "FORMAT": "s", "SIZE": 12, "DEBUG": 3, "DESC": "Padding", "SKIP": True, }, ),
-    ( "DIGEST",       { "FORMAT": "s", "SIZE": 16, "DEBUG": 1, "DESC": "Digest", }, ),
-    ( "DATARIV",      { "FORMAT": "s", "SIZE": 16, "DEBUG": 1, "DESC": "Data RIV", }, ),
+    ( "MAGIC",     { "FORMAT": "L", "DEBUG": 1, "DESC": "Magic", }, ),
+    ( "REV",       { "FORMAT": "H", "DEBUG": 1, "DESC": "Revision", }, ),
+    ( "TYPE",      { "FORMAT": "H", "DEBUG": 1, "DESC": "Type", }, ),
+    ( "MDOFS",     { "FORMAT": "L", "DEBUG": 1, "DESC": "Meta Data Offset", }, ),
+    ( "MDCNT",     { "FORMAT": "L", "DEBUG": 1, "DESC": "Meta Data Count", }, ),
+    ( "HDRSIZE",   { "FORMAT": "L", "DEBUG": 1, "DESC": "Header [Additional] Size incl. PS3 0x40 Digest [and Extensions]", }, ),
+    ( "ITEMCNT",   { "FORMAT": "L", "DEBUG": 1, "DESC": "Item Count", }, ),
+    ( "TOTALSIZE", { "FORMAT": "Q", "DEBUG": 1, "DESC": "Total Size", }, ),
+    ( "DATAOFS",   { "FORMAT": "Q", "DEBUG": 1, "DESC": "Data Offset", }, ),
+    ( "DATASIZE",  { "FORMAT": "Q", "DEBUG": 1, "DESC": "Data Size", }, ),
+    ( "CID",       { "FORMAT": "s", "SIZE": CONST_CONTENT_ID_SIZE, "CONV": 0x0204, "DEBUG": 1, "DESC": "Content ID", }, ),
+    ( "PADDING1",  { "FORMAT": "s", "SIZE": 12, "DEBUG": 3, "DESC": "Padding", "SKIP": True, }, ),
+    ( "DIGEST",    { "FORMAT": "s", "SIZE": 16, "DEBUG": 1, "DESC": "Digest", }, ),
+    ( "DATARIV",   { "FORMAT": "s", "SIZE": 16, "DEBUG": 1, "DESC": "Data RIV", }, ),
     #
-    ( "PKG_ITEM_KEY", { "VIRTUAL": 1, "DEBUG": 1, "DESC": "Key Index for Decryption of Item Entries", }, ),
-    ( "PARAM.SFO",    { "VIRTUAL": -1, "DEBUG": 1, "DESC": "PARAM.SFO Item Name", }, ),
+    ( "KEYINDEX",  { "VIRTUAL": 1, "DEBUG": 1, "DESC": "Key Index for Decryption of Item Entries Table", }, ),
+    ( "PARAM.SFO", { "VIRTUAL": -1, "DEBUG": 1, "DESC": "PARAM.SFO Item Name", }, ),
 ])
 ## --> PS3 0x40 Digest
 CONST_PKG3_PS3_DIGEST_FIELDS = collections.OrderedDict([ \
@@ -675,7 +675,7 @@ def dprintBytesStructure(CONST_STRUCTURE_FIELDS, CONST_STRUCTURE_ENDIAN, tempfie
             dprint(output)
 
 
-def dprintField(key, field, fielddef, formatstring, parent_debug_level, parent_prefix):
+def dprintField(key, field, fielddef, formatstring, parent_debug_level, parent_prefix, print_func=dprint):
     if isinstance(key, unicode):
         key = "".join(("\"", key, "\"" ))
     if parent_prefix is None:
@@ -690,9 +690,9 @@ def dprintField(key, field, fielddef, formatstring, parent_debug_level, parent_p
     #
     if isinstance(field, list) \
     or isinstance(field, tuple):  ## indexed list
-        dprintFieldsList(field, formatstring, parent_debug_level, prefix)
+        dprintFieldsList(field, formatstring, parent_debug_level, prefix, print_func)
     elif isinstance(field, dict):  ## dictionary
-        dprintFieldsDict(field, formatstring, parent_debug_level, prefix)
+        dprintFieldsDict(field, formatstring, parent_debug_level, prefix, print_func)
     else:
         if isinstance(field, int):
             value = "{0} = {0:#x}".format(field)
@@ -702,9 +702,9 @@ def dprintField(key, field, fielddef, formatstring, parent_debug_level, parent_p
         else:
             value = field
         #
-        dprint("".join((prefix, ":")), value)
+        print_func("".join((prefix, ":")), value)
 
-def dprintFieldsList(fields, formatstring, parent_debug_level, parent_prefix):
+def dprintFieldsList(fields, formatstring, parent_debug_level, parent_prefix, print_func=dprint):
     length = len(fields)
     #
     if parent_prefix:
@@ -713,9 +713,9 @@ def dprintFieldsList(fields, formatstring, parent_debug_level, parent_prefix):
     for key in range(length):
         field = fields[key]
         #
-        dprintField(key, field, None, formatstring, parent_debug_level, parent_prefix)
+        dprintField(key, field, None, formatstring, parent_debug_level, parent_prefix, print_func)
 
-def dprintFieldsDict(fields, formatstring, parent_debug_level, parent_prefix):
+def dprintFieldsDict(fields, formatstring, parent_debug_level, parent_prefix, print_func=dprint):
     if parent_prefix:
         formatstring = "{}"
     #
@@ -739,7 +739,7 @@ def dprintFieldsDict(fields, formatstring, parent_debug_level, parent_prefix):
                 field_debug_level = fielddef["DEBUG"]
         #
         if parent_debug_level >= field_debug_level:
-            dprintField(key, field, fielddef, formatstring, parent_debug_level, parent_prefix)
+            dprintField(key, field, fielddef, formatstring, parent_debug_level, parent_prefix, print_func)
 
 
 def finalizeBytesStructure(CONST_STRUCTURE_FIELDS, CONST_STRUCTURE_ENDIAN, structure_name, formatstring, parent_debug_level):
@@ -1023,17 +1023,17 @@ def parsePkg3Header(headerbytes):
     if function_debug_level >= 2:
         dprint(">>>>> PKG3 Package Keys:")
     if headerfields["TYPE"] == 0x1:  ## PS3
-        headerfields["PKG_ITEM_KEY"] = 0
+        headerfields["KEYINDEX"] = 0
         headerfields["PARAM.SFO"] = "PARAM.SFO"
     elif headerfields["TYPE"] == 0x2:  ## PSX/PSP/PSV/PSM
         if extheaderfields:  ## PSV/PSM
-            headerfields["PKG_ITEM_KEY"] = extheaderfields["KEYID"] & 0xf
-            if headerfields["PKG_ITEM_KEY"] == 2:  ## PSV
+            headerfields["KEYINDEX"] = extheaderfields["KEYID"] & 0xf
+            if headerfields["KEYINDEX"] == 2:  ## PSV
                 headerfields["PARAM.SFO"] = "sce_sys/param.sfo"
-            elif headerfields["PKG_ITEM_KEY"] == 3:  ## Unknown
-                eprint("!!! PKG3 Key Index {}".format(headerfields["PKG_ITEM_KEY"]))
+            elif headerfields["KEYINDEX"] == 3:  ## Unknown
+                eprint("!!! PKG3 Key Index {}".format(headerfields["KEYINDEX"]))
         else:  ## PSX/PSP
-            headerfields["PKG_ITEM_KEY"] = 1
+            headerfields["KEYINDEX"] = 1
             headerfields["PARAM.SFO"] = "PARAM.SFO"
     else:
         eprint("!!! PKG3 Package Type {}".format(headerfields["TYPE"]))
@@ -1164,7 +1164,7 @@ def parsePkg3ItemEntries(headerfields):
         sys.exit(2)
 
     ## Decrypt PKG3 Item Entries
-    tempbytes = headerfields["AES_CTR"][headerfields["PKG_ITEM_KEY"]].decrypt(0, bytes(encrypted_bytes))
+    tempbytes = headerfields["AES_CTR"][headerfields["KEYINDEX"]].decrypt(0, bytes(encrypted_bytes))
     del encrypted_bytes
 
     ## Parse PKG3 Item Entries
@@ -1538,7 +1538,7 @@ if __name__ == "__main__":
 
         ## Open PKG source
         if DebugLevel >= 1:
-            eprint(">>>>>>>>>> PKG Source:", Source)
+            dprint(">>>>>>>>>> PKG Source:", Source)
         DataStream = PkgReader(Source, DebugLevel)
         FileSize = DataStream.getSize(DebugLevel)
         if DebugLevel >= 2:
@@ -1606,7 +1606,7 @@ if __name__ == "__main__":
             and HeaderFields["PARAM.SFO"]:
                 RetrieveEncryptedParamSfo = True
             ## Process PKG3 encrypted item entries
-            if not HeaderFields["PKG_ITEM_KEY"] is None \
+            if not HeaderFields["KEYINDEX"] is None \
             and ( ExtractItemEntries \
                   or RetrieveEncryptedParamSfo ):
                 ItemEntries = parsePkg3ItemEntries(HeaderFields)
@@ -1880,28 +1880,24 @@ if __name__ == "__main__":
                 print("unset PSN_PKG_FILESIZE")
         elif OutputFormat == 99:  ## Analysis Output
             print(">>> PKG Source:", Source)
-            OldDebugLevel = DebugLevel
-            if DebugLevel < 2:
-                DebugLevel = 2
-            dprint("File Size:", FileSize)
+            print("File Size:", FileSize)
             if PkgMagic == CONST_PKG3_MAGIC:
-                dprintFieldsDict(HeaderFields, "headerfields[{KEY:14}|{INDEX:2}]", DebugLevel, None)
+                dprintFieldsDict(HeaderFields, "headerfields[{KEY:14}|{INDEX:2}]", 2, None, print)
                 if ExtHeaderFields:
-                    dprintFieldsDict(ExtHeaderFields, "extheaderfields[{KEY:14}|{INDEX:2}]", DebugLevel, None)
-                dprintFieldsDict(MetaData, "metadata[{KEY:#04x}]", DebugLevel, None)
+                    dprintFieldsDict(ExtHeaderFields, "extheaderfields[{KEY:14}|{INDEX:2}]", 2, None, print)
+                dprintFieldsDict(MetaData, "metadata[{KEY:#04x}]", 2, None, print)
                 if ItemEntries:
                     FormatString = "".join(("{:", unicode(len(unicode(HeaderFields["ITEMCNT"]))), "}"))
                     for _i in range(len(ItemEntries)):
-                        dprint("".join(("itementries[", FormatString, "]: Ofs {:#012x} Size {:12} {}")).format(_i, ItemEntries[_i]["DATAOFS"], ItemEntries[_i]["DATASIZE"], "".join(("Name \"", ItemEntries[_i]["NAME"], "\"")) if "NAME" in ItemEntries[_i] else ""))
+                        print("".join(("itementries[", FormatString, "]: Ofs {:#012x} Size {:12} Key Index {} {}")).format(_i, ItemEntries[_i]["DATAOFS"], ItemEntries[_i]["DATASIZE"], ItemEntries[_i]["KEYINDEX"],"".join(("Name \"", ItemEntries[_i]["NAME"], "\"")) if "NAME" in ItemEntries[_i] else ""))
             elif PkgMagic == CONST_PKG4_MAGIC:
-                dprintFieldsDict(HeaderFields, "headerfields[{KEY:14}|{INDEX:2}]", DebugLevel, None)
+                dprintFieldsDict(HeaderFields, "headerfields[{KEY:14}|{INDEX:2}]", 2, None, print)
                 FormatString = "".join(("{:", unicode(len(unicode(HeaderFields["FILECNT"]))), "}"))
                 for _i in range(len(FileTable)):
-                    dprint("".join(("filetable[", FormatString, "]: ID {:#06x} Ofs {:#012x} Size {:12} {}")).format(_i, FileTable[_i]["FILEID"], FileTable[_i]["DATAOFS"], FileTable[_i]["DATASIZE"], "".join(("Name \"", FileTable[_i]["NAME"], "\"")) if "NAME" in FileTable[_i] else ""))
-                dprintFieldsDict(FileTableMap, "filetablemap[{KEY:#06x}]", DebugLevel, None)
+                    print("".join(("filetable[", FormatString, "]: ID {:#06x} Ofs {:#012x} Size {:12} {}")).format(_i, FileTable[_i]["FILEID"], FileTable[_i]["DATAOFS"], FileTable[_i]["DATASIZE"], "".join(("Name \"", FileTable[_i]["NAME"], "\"")) if "NAME" in FileTable[_i] else ""))
+                dprintFieldsDict(FileTableMap, "filetablemap[{KEY:#06x}]", 2, None, print)
             if SfoValues:
-                dprintFieldsDict(SfoValues, "sfovalues[{KEY:20}]", DebugLevel, None)
-            DebugLevel = OldDebugLevel
+                dprintFieldsDict(SfoValues, "sfovalues[{KEY:20}]", 2, None, print)
         else:  ## Generic Human Output
             print("\n")
             print("{:13} {}".format("NPS Type:", NpsType))
