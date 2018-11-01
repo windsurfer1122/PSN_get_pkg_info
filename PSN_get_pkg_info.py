@@ -103,6 +103,7 @@ import getopt
 import re
 import json
 import binascii
+import traceback
 
 from Crypto.Cipher import AES
 from Crypto.Util import Counter
@@ -123,6 +124,37 @@ def eprint(*args, **kwargs):  ## error print
 def dprint(*args, **kwargs):  ## debug print
     if DebugLevel:
         print("[debug]", *args, file=sys.stderr, **kwargs)
+
+
+## Enhanced TraceBack
+## http://code.activestate.com/recipes/52215-get-more-information-from-tracebacks/
+## https://stackoverflow.com/questions/27674602/hide-traceback-unless-a-debug-flag-is-set
+def print_exc_plus():
+    """
+    Print the usual traceback information, followed by a listing of all the
+    local variables in each frame.
+    """
+    tb = sys.exc_info()[2]
+    stack = []
+
+    while tb:
+        stack.append(tb.tb_frame)
+        tb = tb.tb_next
+
+    for frame in stack:
+        for key, value in frame.f_locals.items():
+            if key != "Source":
+                continue
+            eprint(">>> PKG Source:", end=" ")
+            #We have to be careful not to cause a new error in our error
+            #printer! Calling str() on an unknown object could cause an
+            #error we don't want.
+            try:
+                eprint(value)
+            except:
+                eprint("<ERROR WHILE PRINTING VALUE>")
+
+    traceback.print_exc()
 
 
 ## Python 2 workaround: set system default encoding to UTF-8 like in Python 3
@@ -636,7 +668,7 @@ def convertUtf8BytesToString(data, conversion, length = 0):
                 break
     #
     if _i > 0:
-        result = data.decode("utf-8")
+        result = data.decode("utf-8", errors="ignore")
     #
     return result
 
@@ -1379,555 +1411,558 @@ def showUsage():
 
 ## Global code
 if __name__ == "__main__":
-    ## Initialize (global) variables changeable by command line parameters
-    ## Global Debug [Verbosity] Level: can be set via '-d'/'--debug='
-    DebugLevel = 0
-    ## Output Format: can be set via '-f'/'--format='
-    OutputFormat = 0
-    ReplaceList = [ ["™®☆◆", " "], ["—–", "-"], ]
-    UncleanedTitle = False
-    ExtractUnknown = False
-    ExtractItemEntries = False
-    ShowUsage = False
-    ExitCode = 0
-
-    ## Check parameters from command line
     try:
-        Options, Arguments = getopt.gnu_getopt(sys.argv[1:], "hf:d:ux", ["help", "format=", "debug=", "unclean", "unknown", "itementries"])
-    except getopt.GetoptError as err:
-        ## Print help information and exit
-        eprint(unicode(err))  ## will print something like "option -X not recognized"
-        showUsage()
-        sys.exit(2)
-    #
-    for Option, OptionValue in Options:
-        if Option in ("-h", "--help"):
-            ShowUsage = True
-        elif Option in ("-u", "--unclean"):
-            UncleanedTitle = True
-        elif Option in ("--unknown"):
-            ExtractUnknown = True
-        elif Option in ("--itementries"):
-            ExtractItemEntries = True
-        elif Option in ("-f", "--format"):
-            try:
-                OutputFormat = int(OptionValue)
-                if OutputFormat < 0:
-                    eprint("Option {}: value {} is not valid".format(Option, OptionValue))
-                    ExitCode = 2
-            except:
-                eprint("Option {}: value {} is not a number".format(Option, OptionValue))
-                ExitCode = 2
-        elif Option in ("-d", "--debug"):
-            try:
-                DebugLevel = int(OptionValue)
-                if DebugLevel < 0:
-                    eprint("Option {}: value {} is not valid".format(Option, OptionValue))
-                    ExitCode = 2
-            except:
-                eprint("Option {}: value {} is not a number".format(Option, OptionValue))
-                ExitCode = 2
-        else:
-            eprint("Option {} is unhandled in program".format(Option, OptionValue))
-            ExitCode = 2
-    #
-    if not ShowUsage \
-    and not Arguments:
-        eprint("No paths or URLs stated")
-        ExitCode = 2
-    #
-    if ShowUsage \
-    or ExitCode:
-        showUsage()
-        sys.exit(ExitCode)
+        ## Initialize (global) variables changeable by command line parameters
+        ## Global Debug [Verbosity] Level: can be set via '-d'/'--debug='
+        DebugLevel = 0
+        ## Output Format: can be set via '-f'/'--format='
+        OutputFormat = 0
+        ReplaceList = [ ["™®☆◆", " "], ["—–", "-"], ]
+        UncleanedTitle = False
+        ExtractUnknown = False
+        ExtractItemEntries = False
+        ShowUsage = False
+        ExitCode = 0
 
-    ## Enrich structure format arrays
-    ## --> PKG3 Main Header
-    finalizeBytesStructure(CONST_PKG3_MAIN_HEADER_FIELDS, CONST_PKG3_HEADER_ENDIAN, "PKG3 Main Header", "{}[{:2}]: ofs {:#04x} size {:2} key {:12} = {}", DebugLevel)
-    ## --> PKG3 PS3 0x40 Digest
-    finalizeBytesStructure(CONST_PKG3_PS3_DIGEST_FIELDS, CONST_PKG3_HEADER_ENDIAN, "PKG3 PS3 0x40 Digest", "{}[{:1}]: ofs {:#04x} size {:2} key {:12} = {}", DebugLevel)
-    ## --> PKG3 Extended Header
-    finalizeBytesStructure(CONST_PKG3_EXT_HEADER_FIELDS, CONST_PKG3_HEADER_ENDIAN, "PKG3 Ext Header", "{}[{:2}]: ofs {:#04x} size {:2} key {:12} = {}", DebugLevel)
-    ## --> PKG3 Item Entry
-    finalizeBytesStructure(CONST_PKG3_ITEM_ENTRY_FIELDS, CONST_PKG3_HEADER_ENDIAN, "PKG3 Item Entry", "{}[{:1}]: ofs {:#04x} size {:1} key {:12} = {}", DebugLevel)
-    ## --> PKG4 Main Header
-    finalizeBytesStructure(CONST_PKG4_MAIN_HEADER_FIELDS, CONST_PKG4_HEADER_ENDIAN, "PKG4 Main Header", "{}[{:2}]: ofs {:#05x} size {:3} key {:12} = {}", DebugLevel)
-    ## --> PKG4 File Entry
-    finalizeBytesStructure(CONST_PKG4_FILE_ENTRY_FIELDS, CONST_PKG4_HEADER_ENDIAN, "PKG4 File Entry", "{}[{:1}]: ofs {:#04x} size {:1} key {:12} = {}", DebugLevel)
-    ## --> PARAM.SFO Header
-    finalizeBytesStructure(CONST_PARAM_SFO_HEADER_FIELDS, CONST_PARAM_SFO_ENDIAN, "SFO Header", "{}[{:1}]: ofs {:#04x} size {:1} key {:12} = {}", DebugLevel)
-    ## --> PARAM.SFO Index Entry
-    finalizeBytesStructure(CONST_PARAM_SFO_INDEX_ENTRY_FIELDS, CONST_PARAM_SFO_ENDIAN, "SFO Index Entry", "{}[{:1}]: ofs {:#03x} size {:1} key {:12} = {}", DebugLevel)
-
-    ## Process paths and URLs
-    for Source in Arguments:
-        ## Initialize per-file variables
-        HeaderFields = None
-        ExtHeaderFields = None
-        MetaData = None
-        RetrieveEncryptedParamSfo = False
-        ItemEntries = None
-        FileTable = None
-        FileTableMap = None
-        SfoBytes = None
-        SfoValues = None
-        #
-        PkgContentId = ""
-        PkgDrmType = -1
-        PkgContentType = -1
-        PkgTitleId = ""
-        PkgSfoOffset = -1
-        PkgSfoSize = -1
-        PkgTotalSize = -1
-        PkgMdType0A = False
-        PkgMdType0B = False
-        #
-        SfoContentId = ""
-        SfoTitleId = ""
-        SfoMinVer = 0.00
-        SfoCategory = ""
-        SfoVersion = 0.00
-        SfoAppVer = 0.00
-        SfoSdkVer = 0.00
-        SfoCreationDate = ""
-        #
-        SfoTitle = ""
-        SfoTitleRegional = ""
-        #
-        NpsType = "UNKNOWN"
-        #
-        PsxTitleId = ""
-        #
-        ContentId = ""
-        TitleId = ""
-        Region = ""
-        Languages = []
-
-        ## If source is a JSON file then determine the first package url from it
-        if Source.endswith(".json"):
-            dprint(">>>>> JSON Source:", Source)
-            if Source.startswith("http:") \
-            or Source.startswith("https:"):
-                if DebugLevel >= 2:
-                    dprint("Opening source as URL data stream")
-                try:
-                    DataStream = requests.get(Source, headers={"User-Agent": "Download/1.00 libhttp/6.00 (PlayStation 4)"})
-                except:
-                    eprint("\nERROR: {}: Could not open URL (1) {}".format(sys.argv[0], Source))
-                    sys.exit(2)
-                StreamData = DataStream.json()
-            else:
-                if DebugLevel >= 2:
-                    dprint("Opening source as FILE data stream")
-                try:
-                    DataStream = io.open(Source, mode="r", buffering=-1, encoding=None, errors=None, newline=None, closefd=True)
-                except:
-                    eprint("\nERROR: {}: Could not open FILE {}".format(sys.argv[0], Source))
-                    sys.exit(2)
-                StreamData = json.load(DataStream)
-                DataStream.close()
-
-            ## Get PKG source from JSON data
-            if not 'pieces' in StreamData \
-            or not StreamData['pieces'][0] \
-            or not 'url' in StreamData['pieces'][0]:
-                eprint("\nERROR: {}: JSON source does not look like PKG meta data (missing [pieces][0]) {}".format(sys.argv[0], Source))
-                sys.exit(2)
-
-            Source = StreamData['pieces'][0]['url']
-
-        ## Open PKG source
-        if DebugLevel >= 1:
-            dprint(">>>>>>>>>> PKG Source:", Source)
-        DataStream = PkgReader(Source, DebugLevel)
-        FileSize = DataStream.getSize(DebugLevel)
-        if DebugLevel >= 2:
-            dprint("File Size:", FileSize)
-
-        ## Initialize headerbytes array
-        dprint(">>>>> PKG Main Header:")
-        HeaderBytes = bytearray()
-
-        ## Get file magic code/string and check for GAME PKG file
-        ## see http://www.psdevwiki.com/ps3/PKG_files#File_Header_2
-        ## see http://www.psdevwiki.com/ps4/PKG_files#File_Header
-        HeaderBytes.extend(DataStream.read(0, 4, DebugLevel))
-        PkgMagic = getInteger32BitBE(HeaderBytes, 0x00)
-        #
-        if PkgMagic == CONST_PKG3_MAGIC:
-            HeaderSize = CONST_PKG3_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"]
-            NpsType = "".join((NpsType, " (PS3/PSV/PSP/PSX/PSM)"))
-            dprint("Detected PS3/PSV/PSP/PSX/PSM game package")
-        elif PkgMagic == CONST_PKG4_MAGIC:
-            HeaderSize = CONST_PKG4_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"]
-            NpsType = "".join((NpsType, " (PS4)"))
-            dprint("Detected PS4 game package")
-        else:
-            DataStream.close(DebugLevel)
-            eprint("\nERROR: {}: Not a known GAME PKG file ({:#x} <> {:#x}|{:#x}) {}".format(sys.argv[0], PkgMagic, CONST_PKG3_MAGIC, CONST_PKG4_MAGIC, Source))
+        ## Check parameters from command line
+        try:
+            Options, Arguments = getopt.gnu_getopt(sys.argv[1:], "hf:d:ux", ["help", "format=", "debug=", "unclean", "unknown", "itementries"])
+        except getopt.GetoptError as err:
+            ## Print help information and exit
+            eprint(unicode(err))  ## will print something like "option -X not recognized"
+            showUsage()
             sys.exit(2)
-
-        ## Get rest of PKG main header from data stream
-        if DebugLevel >= 2:
-            dprint("Get PKG main header from offset {:#x} with size {}".format(0, HeaderSize))
-        HeaderBytes.extend(DataStream.read(4, HeaderSize - 4, DebugLevel))
-
-        ## Process GAME PKG main header data
-        ## --> PKG3
-        if PkgMagic == CONST_PKG3_MAGIC:
-            HeaderFields, ExtHeaderFields, MetaData = parsePkg3Header(HeaderBytes)
-            ## --> Size of package (=file size)
-            if "TOTALSIZE" in HeaderFields:
-                PkgTotalSize = HeaderFields["TOTALSIZE"]
-            ## --> Package content id
-            if "CID" in HeaderFields:
-                PkgContentId = HeaderFields["CID"]
-            ## --> param.sfo offset + size
-            if 0xE in MetaData:
-                PkgSfoOffset = MetaData[0xE]["OFS"]
-                PkgSfoSize = MetaData[0xE]["SIZE"]
-            ## --> DRM Type
-            if 0x1 in MetaData:
-                PkgDrmType = MetaData[0x1]["VALUE"]
-            ## --> Content Type
-            if 0x2 in MetaData:
-                PkgContentType = MetaData[0x2]["VALUE"]
-            ## --> Title ID
-            if 0x6 in MetaData:  ## Version + App Version / TitleID (on size 0xC)
-                PkgTitleId = MetaData[0x6]["VALUE"]
-            ## --> Other flags for NPS Package Type
-            if 0xA in MetaData:
-                PkgMdType0A = True
-            if 0xB in MetaData:
-                PkgMdType0B = True
-            ## If PARAM.SFO not present in unencrypted data, then search in encrypted item entries
-            if PkgSfoOffset <= 0 \
-            and "PARAM.SFO" in HeaderFields \
-            and HeaderFields["PARAM.SFO"]:
-                RetrieveEncryptedParamSfo = True
-            ## Process PKG3 encrypted item entries
-            if not HeaderFields["KEYINDEX"] is None \
-            and ( ExtractItemEntries \
-                  or RetrieveEncryptedParamSfo ):
-                ItemEntries = parsePkg3ItemEntries(HeaderFields)
-                #
-                if RetrieveEncryptedParamSfo:
-                    ## Find PARAM.SFO in encrypted item entries
-                    for _i in range(len(ItemEntries)):
-                        Item = ItemEntries[_i]
-                        if "NAME" in Item \
-                        and Item["NAME"] \
-                        and Item["NAME"] == HeaderFields["PARAM.SFO"] \
-                        and Item["DATASIZE"] > 0:
-                            SfoBytes = retrievePkg3Item(HeaderFields, Item)
-                            break
-                    del Item
-        ## --> PKG4
-        elif PkgMagic == CONST_PKG4_MAGIC:
-            HeaderFields, FileTable, FileTableMap = parsePkg4Header(HeaderBytes)
-            ## --> Size of package (=file size)
-            if "PKGSIZE" in HeaderFields:
-                PkgTotalSize = HeaderFields["PKGSIZE"]
-            ## --> Package content id
-            if "CID" in HeaderFields:
-                PkgContentId = HeaderFields["CID"]
-            ## --> param.sfo offset + size
-            if CONST_PKG4_FILE_ENTRY_ID_PARAM_SFO in FileTableMap:
-                FileEntry = FileTable[FileTableMap[CONST_PKG4_FILE_ENTRY_ID_PARAM_SFO]]
-                PkgSfoOffset = FileEntry["DATAOFS"]
-                PkgSfoSize = FileEntry["DATASIZE"]
-            ## --> DRM Type
-            if "DRMTYPE" in HeaderFields:
-                PkgDrmType = HeaderFields["DRMTYPE"]
-            ## --> Content Type
-            if "CONTTYPE" in HeaderFields:
-                PkgContentType = HeaderFields["CONTTYPE"]
         #
-        if PkgTitleId and PkgTitleId.strip():
-            TitleId = PkgTitleId.strip()
-        #
-        if PkgContentId and PkgContentId.strip():
-            ContentId = PkgContentId.strip()
-            if not (PkgTitleId and PkgTitleId.strip()):
-                TitleId = ContentId[7:16]
-
-        ## Retrieve PARAM.SFO from unencrypted data if present
-        if PkgSfoOffset > 0 \
-        and not SfoBytes:
-            if DebugLevel >= 2:
-                dprint(">>>>> PARAM.SFO:")
-            ## Get PARAM.SFO from data stream
-            if DebugLevel >= 2:
-                dprint("Get PARAM.SFO from offset {:#x} with size {}".format(PkgSfoOffset, PkgSfoSize))
-            SfoBytes = bytearray()
-            try:
-                SfoBytes.extend(DataStream.read(PkgSfoOffset, PkgSfoSize, DebugLevel))
-            except:
-                DataStream.close(DebugLevel)
-                eprint("\nERROR: {}: Could not get PARAM.SFO at offset {:#x} with size {} from {}".format(sys.argv[0], PkgSfoOffset, PkgSfoSize, Source))
-                sys.exit(2)
-
-        ## Process PARAM.SFO if present
-        if SfoBytes:
-            ## Check for known PARAM.SFO data
-            SfoMagic = getInteger32BitLE(SfoBytes, 0)
-            if SfoMagic != 0x46535000:
-                DataStream.close(DebugLevel)
-                eprint("\nERROR: {}: Not a known PARAM.SFO structure ({:#x} <> 0x46535000) {}".format(sys.argv[0], SfoMagic, Source))
-                sys.exit(2)
-
-            ## Process PARAM.SFO data
-            SfoValues = parseSfo(SfoBytes)
-            ## -->
-            if "TITLE_ID" in SfoValues:
-                SfoTitleId = SfoValues["TITLE_ID"]
-            ## -->
-            if "CONTENT_ID" in SfoValues:
-                SfoContentId = SfoValues["CONTENT_ID"]
-            ## -->
-            if "PS3_SYSTEM_VER" in SfoValues:
-                SfoMinVer = float(SfoValues["PS3_SYSTEM_VER"])
-            ## -->
-            if "PSP2_DISP_VER" in SfoValues:
-                SfoMinVer = float(SfoValues["PSP2_DISP_VER"])
-            ## -->
-            if "CATEGORY" in SfoValues:
-                SfoCategory = SfoValues["CATEGORY"]
-            ## -->
-            if "VERSION" in SfoValues:
-                SfoVersion = float(SfoValues["VERSION"])
-            ## -->
-            if "APP_VER" in SfoValues:
-                SfoAppVer = float(SfoValues["APP_VER"])
-            ## -->
-            if "PUBTOOLINFO" in SfoValues:
+        for Option, OptionValue in Options:
+            if Option in ("-h", "--help"):
+                ShowUsage = True
+            elif Option in ("-u", "--unclean"):
+                UncleanedTitle = True
+            elif Option in ("--unknown"):
+                ExtractUnknown = True
+            elif Option in ("--itementries"):
+                ExtractItemEntries = True
+            elif Option in ("-f", "--format"):
                 try:
-                    SfoSdkVer = int(SfoValues["PUBTOOLINFO"][24:32]) / 1000000
-                    SfoCreationDate = SfoValues["PUBTOOLINFO"][7:15]
+                    OutputFormat = int(OptionValue)
+                    if OutputFormat < 0:
+                        eprint("Option {}: value {} is not valid".format(Option, OptionValue))
+                        ExitCode = 2
                 except:
-                    pass
+                    eprint("Option {}: value {} is not a number".format(Option, OptionValue))
+                    ExitCode = 2
+            elif Option in ("-d", "--debug"):
+                try:
+                    DebugLevel = int(OptionValue)
+                    if DebugLevel < 0:
+                        eprint("Option {}: value {} is not valid".format(Option, OptionValue))
+                        ExitCode = 2
+                except:
+                    eprint("Option {}: value {} is not a number".format(Option, OptionValue))
+                    ExitCode = 2
+            else:
+                eprint("Option {} is unhandled in program".format(Option, OptionValue))
+                ExitCode = 2
+        #
+        if not ShowUsage \
+        and not Arguments:
+            eprint("No paths or URLs stated")
+            ExitCode = 2
+        #
+        if ShowUsage \
+        or ExitCode:
+            showUsage()
+            sys.exit(ExitCode)
+
+        ## Enrich structure format arrays
+        ## --> PKG3 Main Header
+        finalizeBytesStructure(CONST_PKG3_MAIN_HEADER_FIELDS, CONST_PKG3_HEADER_ENDIAN, "PKG3 Main Header", "{}[{:2}]: ofs {:#04x} size {:2} key {:12} = {}", DebugLevel)
+        ## --> PKG3 PS3 0x40 Digest
+        finalizeBytesStructure(CONST_PKG3_PS3_DIGEST_FIELDS, CONST_PKG3_HEADER_ENDIAN, "PKG3 PS3 0x40 Digest", "{}[{:1}]: ofs {:#04x} size {:2} key {:12} = {}", DebugLevel)
+        ## --> PKG3 Extended Header
+        finalizeBytesStructure(CONST_PKG3_EXT_HEADER_FIELDS, CONST_PKG3_HEADER_ENDIAN, "PKG3 Ext Header", "{}[{:2}]: ofs {:#04x} size {:2} key {:12} = {}", DebugLevel)
+        ## --> PKG3 Item Entry
+        finalizeBytesStructure(CONST_PKG3_ITEM_ENTRY_FIELDS, CONST_PKG3_HEADER_ENDIAN, "PKG3 Item Entry", "{}[{:1}]: ofs {:#04x} size {:1} key {:12} = {}", DebugLevel)
+        ## --> PKG4 Main Header
+        finalizeBytesStructure(CONST_PKG4_MAIN_HEADER_FIELDS, CONST_PKG4_HEADER_ENDIAN, "PKG4 Main Header", "{}[{:2}]: ofs {:#05x} size {:3} key {:12} = {}", DebugLevel)
+        ## --> PKG4 File Entry
+        finalizeBytesStructure(CONST_PKG4_FILE_ENTRY_FIELDS, CONST_PKG4_HEADER_ENDIAN, "PKG4 File Entry", "{}[{:1}]: ofs {:#04x} size {:1} key {:12} = {}", DebugLevel)
+        ## --> PARAM.SFO Header
+        finalizeBytesStructure(CONST_PARAM_SFO_HEADER_FIELDS, CONST_PARAM_SFO_ENDIAN, "SFO Header", "{}[{:1}]: ofs {:#04x} size {:1} key {:12} = {}", DebugLevel)
+        ## --> PARAM.SFO Index Entry
+        finalizeBytesStructure(CONST_PARAM_SFO_INDEX_ENTRY_FIELDS, CONST_PARAM_SFO_ENDIAN, "SFO Index Entry", "{}[{:1}]: ofs {:#03x} size {:1} key {:12} = {}", DebugLevel)
+
+        ## Process paths and URLs
+        for Source in Arguments:
+            ## Initialize per-file variables
+            HeaderFields = None
+            ExtHeaderFields = None
+            MetaData = None
+            RetrieveEncryptedParamSfo = False
+            ItemEntries = None
+            FileTable = None
+            FileTableMap = None
+            SfoBytes = None
+            SfoValues = None
             #
-            if SfoTitleId and SfoTitleId.strip():
-                TitleId = SfoTitleId.strip()
+            PkgContentId = ""
+            PkgDrmType = -1
+            PkgContentType = -1
+            PkgTitleId = ""
+            PkgSfoOffset = -1
+            PkgSfoSize = -1
+            PkgTotalSize = -1
+            PkgMdType0A = False
+            PkgMdType0B = False
             #
-            if SfoContentId and SfoContentId.strip():
-                ContentId = SfoContentId.strip()
-                if not (SfoTitleId and SfoTitleId.strip()):
+            SfoContentId = ""
+            SfoTitleId = ""
+            SfoMinVer = 0.00
+            SfoCategory = ""
+            SfoVersion = 0.00
+            SfoAppVer = 0.00
+            SfoSdkVer = 0.00
+            SfoCreationDate = ""
+            #
+            SfoTitle = ""
+            SfoTitleRegional = ""
+            #
+            NpsType = "UNKNOWN"
+            #
+            PsxTitleId = ""
+            #
+            ContentId = ""
+            TitleId = ""
+            Region = ""
+            Languages = []
+
+            ## If source is a JSON file then determine the first package url from it
+            if Source.endswith(".json"):
+                dprint(">>>>> JSON Source:", Source)
+                if Source.startswith("http:") \
+                or Source.startswith("https:"):
+                    if DebugLevel >= 2:
+                        dprint("Opening source as URL data stream")
+                    try:
+                        DataStream = requests.get(Source, headers={"User-Agent": "Download/1.00 libhttp/6.00 (PlayStation 4)"})
+                    except:
+                        eprint("\nERROR: {}: Could not open URL (1) {}".format(sys.argv[0], Source))
+                        sys.exit(2)
+                    StreamData = DataStream.json()
+                else:
+                    if DebugLevel >= 2:
+                        dprint("Opening source as FILE data stream")
+                    try:
+                        DataStream = io.open(Source, mode="r", buffering=-1, encoding=None, errors=None, newline=None, closefd=True)
+                    except:
+                        eprint("\nERROR: {}: Could not open FILE {}".format(sys.argv[0], Source))
+                        sys.exit(2)
+                    StreamData = json.load(DataStream)
+                    DataStream.close()
+
+                ## Get PKG source from JSON data
+                if not 'pieces' in StreamData \
+                or not StreamData['pieces'][0] \
+                or not 'url' in StreamData['pieces'][0]:
+                    eprint("\nERROR: {}: JSON source does not look like PKG meta data (missing [pieces][0]) {}".format(sys.argv[0], Source))
+                    sys.exit(2)
+
+                Source = StreamData['pieces'][0]['url']
+
+            ## Open PKG source
+            if DebugLevel >= 1:
+                dprint(">>>>>>>>>> PKG Source:", Source)
+            DataStream = PkgReader(Source, DebugLevel)
+            FileSize = DataStream.getSize(DebugLevel)
+            if DebugLevel >= 2:
+                dprint("File Size:", FileSize)
+
+            ## Initialize headerbytes array
+            dprint(">>>>> PKG Main Header:")
+            HeaderBytes = bytearray()
+
+            ## Get file magic code/string and check for GAME PKG file
+            ## see http://www.psdevwiki.com/ps3/PKG_files#File_Header_2
+            ## see http://www.psdevwiki.com/ps4/PKG_files#File_Header
+            HeaderBytes.extend(DataStream.read(0, 4, DebugLevel))
+            PkgMagic = getInteger32BitBE(HeaderBytes, 0x00)
+            #
+            if PkgMagic == CONST_PKG3_MAGIC:
+                HeaderSize = CONST_PKG3_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"]
+                NpsType = "".join((NpsType, " (PS3/PSV/PSP/PSX/PSM)"))
+                dprint("Detected PS3/PSV/PSP/PSX/PSM game package")
+            elif PkgMagic == CONST_PKG4_MAGIC:
+                HeaderSize = CONST_PKG4_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"]
+                NpsType = "".join((NpsType, " (PS4)"))
+                dprint("Detected PS4 game package")
+            else:
+                DataStream.close(DebugLevel)
+                eprint("\nERROR: {}: Not a known GAME PKG file ({:#x} <> {:#x}|{:#x}) {}".format(sys.argv[0], PkgMagic, CONST_PKG3_MAGIC, CONST_PKG4_MAGIC, Source))
+                sys.exit(2)
+
+            ## Get rest of PKG main header from data stream
+            if DebugLevel >= 2:
+                dprint("Get PKG main header from offset {:#x} with size {}".format(0, HeaderSize))
+            HeaderBytes.extend(DataStream.read(4, HeaderSize - 4, DebugLevel))
+
+            ## Process GAME PKG main header data
+            ## --> PKG3
+            if PkgMagic == CONST_PKG3_MAGIC:
+                HeaderFields, ExtHeaderFields, MetaData = parsePkg3Header(HeaderBytes)
+                ## --> Size of package (=file size)
+                if "TOTALSIZE" in HeaderFields:
+                    PkgTotalSize = HeaderFields["TOTALSIZE"]
+                ## --> Package content id
+                if "CID" in HeaderFields:
+                    PkgContentId = HeaderFields["CID"]
+                ## --> param.sfo offset + size
+                if 0xE in MetaData:
+                    PkgSfoOffset = MetaData[0xE]["OFS"]
+                    PkgSfoSize = MetaData[0xE]["SIZE"]
+                ## --> DRM Type
+                if 0x1 in MetaData:
+                    PkgDrmType = MetaData[0x1]["VALUE"]
+                ## --> Content Type
+                if 0x2 in MetaData:
+                    PkgContentType = MetaData[0x2]["VALUE"]
+                ## --> Title ID
+                if 0x6 in MetaData:  ## Version + App Version / TitleID (on size 0xC)
+                    PkgTitleId = MetaData[0x6]["VALUE"]
+                ## --> Other flags for NPS Package Type
+                if 0xA in MetaData:
+                    PkgMdType0A = True
+                if 0xB in MetaData:
+                    PkgMdType0B = True
+                ## If PARAM.SFO not present in unencrypted data, then search in encrypted item entries
+                if PkgSfoOffset <= 0 \
+                and "PARAM.SFO" in HeaderFields \
+                and HeaderFields["PARAM.SFO"]:
+                    RetrieveEncryptedParamSfo = True
+                ## Process PKG3 encrypted item entries
+                if not HeaderFields["KEYINDEX"] is None \
+                and ( ExtractItemEntries \
+                      or RetrieveEncryptedParamSfo ):
+                    ItemEntries = parsePkg3ItemEntries(HeaderFields)
+                    #
+                    if RetrieveEncryptedParamSfo:
+                        ## Find PARAM.SFO in encrypted item entries
+                        for _i in range(len(ItemEntries)):
+                            Item = ItemEntries[_i]
+                            if "NAME" in Item \
+                            and Item["NAME"] \
+                            and Item["NAME"] == HeaderFields["PARAM.SFO"] \
+                            and Item["DATASIZE"] > 0:
+                                SfoBytes = retrievePkg3Item(HeaderFields, Item)
+                                break
+                        del Item
+            ## --> PKG4
+            elif PkgMagic == CONST_PKG4_MAGIC:
+                HeaderFields, FileTable, FileTableMap = parsePkg4Header(HeaderBytes)
+                ## --> Size of package (=file size)
+                if "PKGSIZE" in HeaderFields:
+                    PkgTotalSize = HeaderFields["PKGSIZE"]
+                ## --> Package content id
+                if "CID" in HeaderFields:
+                    PkgContentId = HeaderFields["CID"]
+                ## --> param.sfo offset + size
+                if CONST_PKG4_FILE_ENTRY_ID_PARAM_SFO in FileTableMap:
+                    FileEntry = FileTable[FileTableMap[CONST_PKG4_FILE_ENTRY_ID_PARAM_SFO]]
+                    PkgSfoOffset = FileEntry["DATAOFS"]
+                    PkgSfoSize = FileEntry["DATASIZE"]
+                ## --> DRM Type
+                if "DRMTYPE" in HeaderFields:
+                    PkgDrmType = HeaderFields["DRMTYPE"]
+                ## --> Content Type
+                if "CONTTYPE" in HeaderFields:
+                    PkgContentType = HeaderFields["CONTTYPE"]
+            #
+            if PkgTitleId and PkgTitleId.strip():
+                TitleId = PkgTitleId.strip()
+            #
+            if PkgContentId and PkgContentId.strip():
+                ContentId = PkgContentId.strip()
+                if not (PkgTitleId and PkgTitleId.strip()):
                     TitleId = ContentId[7:16]
 
-        ## Close data stream
-        DataStream.close(DebugLevel)
+            ## Retrieve PARAM.SFO from unencrypted data if present
+            if PkgSfoOffset > 0 \
+            and not SfoBytes:
+                if DebugLevel >= 2:
+                    dprint(">>>>> PARAM.SFO:")
+                ## Get PARAM.SFO from data stream
+                if DebugLevel >= 2:
+                    dprint("Get PARAM.SFO from offset {:#x} with size {}".format(PkgSfoOffset, PkgSfoSize))
+                SfoBytes = bytearray()
+                try:
+                    SfoBytes.extend(DataStream.read(PkgSfoOffset, PkgSfoSize, DebugLevel))
+                except:
+                    DataStream.close(DebugLevel)
+                    eprint("\nERROR: {}: Could not get PARAM.SFO at offset {:#x} with size {} from {}".format(sys.argv[0], PkgSfoOffset, PkgSfoSize, Source))
+                    sys.exit(2)
 
-        ## Determine some derived variables
-        ## a) Region and related languages
-        if ContentId and ContentId.strip():
-            Region, Languages = getRegion(ContentId[0])
-        ## b) International/English title
-        SfoTitle = ""
-        for Language in [ "01", "18" ]:
-            Key = "TITLE_" + Language
-            if SfoValues \
-            and Key in SfoValues:
-               if DebugLevel >= 2:
-                   dprint("Set international name to", Key)
-               SfoTitle = SfoValues[Key].strip()
-               break
-        if not SfoTitle \
-        and SfoValues \
-        and "TITLE" in SfoValues \
-        and SfoValues["TITLE"] \
-        and SfoValues["TITLE"].strip():
-            if DebugLevel >= 2:
-                dprint("Set international title to TITLE")
-            SfoTitle = SfoValues["TITLE"].strip()
-        ## --> Clean international/english title
-        if SfoTitle \
-        and not UncleanedTitle:
-            if ReplaceList:
-                for ReplaceChars in ReplaceList:
-                    if DebugLevel >= 2:
-                        dprint("Clean international title from", ReplaceChars[0])
-                    for _i in range(len(ReplaceChars[0])):
-                        ReplaceChar = ReplaceChars[0][_i]
-                        if ReplaceChars[1] == " ":
-                            SfoTitle = SfoTitle.replace(ReplaceChar + ":", ":")
-                        SfoTitle = SfoTitle.replace(ReplaceChar, ReplaceChars[1])
-            SfoTitle = re.sub(r"\s+", " ", SfoTitle, 0, re.UNICODE).strip()  ## also replaces \u3000
-            ## Condense demo information in title to "(DEMO)"
-            SfoTitle = SfoTitle.replace("demo ver.", "(DEMO)").replace("Demo Version", "(DEMO)").replace("Demo version", "(DEMO)").replace("DEMO Version", "(DEMO)").replace("DEMO version", "(DEMO)").replace("【体験版】", "(DEMO)").replace("(体験版)", "(DEMO)").replace("体験版", "(DEMO)").strip()
-            SfoTitle = re.sub(r"\(demo\)", r"(DEMO)", SfoTitle, 0, re.IGNORECASE|re.UNICODE)
-            SfoTitle = re.sub(r"(^|[^a-z(]{1})demo([^a-z)]{1}|$)", r"\1(DEMO)\2", SfoTitle, 0, re.IGNORECASE|re.UNICODE)
-        ## c) Regional title
-        SfoTitleRegional = ""
-        for Language in Languages:
-            Key = "TITLE_" + Language
-            if SfoValues \
-            and Key in SfoValues:
-               if DebugLevel >= 2:
-                   dprint("Set regional title to", Key)
-               SfoTitleRegional = SfoValues[Key].strip()
-               break
-        if not SfoTitleRegional \
-        and SfoValues \
-        and "TITLE" in SfoValues \
-        and SfoValues["TITLE"] \
-        and SfoValues["TITLE"].strip():
-            if DebugLevel >= 2:
-                dprint("Set regional title to TITLE")
-            SfoTitleRegional = SfoValues["TITLE"].strip()
-        ## --> Clean regional title
-        if SfoTitleRegional \
-        and not UncleanedTitle:
-            if ReplaceList:
-                for ReplaceChars in ReplaceList:
-                    if DebugLevel >= 2:
-                        dprint("Clean regional title from", ReplaceChars[0])
-                    for _i in range(len(ReplaceChars[0])):
-                        ReplaceChar = ReplaceChars[0][_i]
-                        if ReplaceChars[1] == " ":
-                            SfoTitleRegional = SfoTitleRegional.replace(ReplaceChar + ":", ":")
-                        SfoTitleRegional = SfoTitleRegional.replace(ReplaceChar, ReplaceChars[1])
-            SfoTitleRegional = re.sub(r"\s+", " ", SfoTitleRegional, 0, re.UNICODE).strip()  ## also replaces \u3000
+            ## Process PARAM.SFO if present
+            if SfoBytes:
+                ## Check for known PARAM.SFO data
+                SfoMagic = getInteger32BitLE(SfoBytes, 0)
+                if SfoMagic != 0x46535000:
+                    DataStream.close(DebugLevel)
+                    eprint("\nERROR: {}: Not a known PARAM.SFO structure ({:#x} <> 0x46535000) {}".format(sys.argv[0], SfoMagic, Source))
+                    sys.exit(2)
 
-        ## Determine NPS package type from data
-        if PkgContentType == 0x1 \
-        or PkgContentType == 0x6:
-            NpsType = "PSX GAME"  #md_type = 9
-            if PkgContentType == 0x6:
-                PsxTitleId = HeaderBytes[712:721].decode("utf-8")
-        elif PkgContentType == 0x4 \
-        or PkgContentType == 0xB:
-            if PkgMdType0B == True:
-                NpsType = "PS3 UPDATE"
-            else:
-                NpsType = "PS3 DLC"  #md_type = 9 | Also PS3 updates : md_type = 11
-        elif PkgContentType == 0x5:
-            NpsType = "PS3 GAME"  #md_type = 5
-        elif PkgContentType == 0x7:
-            if PkgMdType0B == True:
-                NpsType = "PSP DLC"
-            else:
-                NpsType = "PSP GAME"  #md_type = 9 | Also PSP DLCS : md_type = 10
-        elif PkgContentType == 0x9:
-            NpsType = "PSP or PS3 THEME"  #md_type = 9 | Also PS3 THEMES : md_type = 9
-        elif PkgContentType == 0xD:
-            NpsType = "PS3 AVATAR"  #md_type = 9
-        elif PkgContentType == 0x15:
-            NpsType = "VITA APP"  #md_type = 18
-            if SfoCategory == "gp":
-                NpsType = "VITA UPDATE"
-        elif PkgContentType == 0x16:
-            NpsType = "VITA DLC"  #md_type = 17
-        elif PkgContentType == 0x1F:
-            NpsType = "VITA THEME"  #md_type = 17
-        elif PkgContentType == 0x18:
-    	    NpsType = "PSM GAME"  #md_type = 16
-        else:
-            eprint("\nERROR: PKG content type {0}/{0:#0x} not supported. {1}".format(PkgContentType, Source))
+                ## Process PARAM.SFO data
+                SfoValues = parseSfo(SfoBytes)
+                ## -->
+                if "TITLE_ID" in SfoValues:
+                    SfoTitleId = SfoValues["TITLE_ID"]
+                ## -->
+                if "CONTENT_ID" in SfoValues:
+                    SfoContentId = SfoValues["CONTENT_ID"]
+                ## -->
+                if "PS3_SYSTEM_VER" in SfoValues:
+                    SfoMinVer = float(SfoValues["PS3_SYSTEM_VER"])
+                ## -->
+                if "PSP2_DISP_VER" in SfoValues:
+                    SfoMinVer = float(SfoValues["PSP2_DISP_VER"])
+                ## -->
+                if "CATEGORY" in SfoValues:
+                    SfoCategory = SfoValues["CATEGORY"]
+                ## -->
+                if "VERSION" in SfoValues:
+                    SfoVersion = float(SfoValues["VERSION"])
+                ## -->
+                if "APP_VER" in SfoValues:
+                    SfoAppVer = float(SfoValues["APP_VER"])
+                ## -->
+                if "PUBTOOLINFO" in SfoValues:
+                    try:
+                        SfoSdkVer = int(SfoValues["PUBTOOLINFO"][24:32]) / 1000000
+                        SfoCreationDate = SfoValues["PUBTOOLINFO"][7:15]
+                    except:
+                        pass
+                #
+                if SfoTitleId and SfoTitleId.strip():
+                    TitleId = SfoTitleId.strip()
+                #
+                if SfoContentId and SfoContentId.strip():
+                    ContentId = SfoContentId.strip()
+                    if not (SfoTitleId and SfoTitleId.strip()):
+                        TitleId = ContentId[7:16]
 
-        if OutputFormat == 1:  ## Shell Variable Output
-            print("PSN_PKG_SIZE='{}'".format(PkgTotalSize))
-            print("PSN_PKG_NPS_TYPE='{}'".format(NpsType))
-            if TitleId and TitleId.strip():
-                print("PSN_PKG_TITLEID='{}'".format(TitleId))
-            else:
-                print("unset PSN_PKG_TITLEID")
+            ## Close data stream
+            DataStream.close(DebugLevel)
+
+            ## Determine some derived variables
+            ## a) Region and related languages
             if ContentId and ContentId.strip():
-                print("PSN_PKG_CONTENTID='{}'".format(ContentId))
-                print("PSN_PKG_REGION='{}'".format(Region.replace("(HKG)","").replace("(KOR)","")))
+                Region, Languages = getRegion(ContentId[0])
+            ## b) International/English title
+            SfoTitle = ""
+            for Language in [ "01", "18" ]:
+                Key = "TITLE_" + Language
+                if SfoValues \
+                and Key in SfoValues:
+                   if DebugLevel >= 2:
+                       dprint("Set international name to", Key)
+                   SfoTitle = SfoValues[Key].strip()
+                   break
+            if not SfoTitle \
+            and SfoValues \
+            and "TITLE" in SfoValues \
+            and SfoValues["TITLE"] \
+            and SfoValues["TITLE"].strip():
+                if DebugLevel >= 2:
+                    dprint("Set international title to TITLE")
+                SfoTitle = SfoValues["TITLE"].strip()
+            ## --> Clean international/english title
+            if SfoTitle \
+            and not UncleanedTitle:
+                if ReplaceList:
+                    for ReplaceChars in ReplaceList:
+                        if DebugLevel >= 2:
+                            dprint("Clean international title from", ReplaceChars[0])
+                        for _i in range(len(ReplaceChars[0])):
+                            ReplaceChar = ReplaceChars[0][_i]
+                            if ReplaceChars[1] == " ":
+                                SfoTitle = SfoTitle.replace(ReplaceChar + ":", ":")
+                            SfoTitle = SfoTitle.replace(ReplaceChar, ReplaceChars[1])
+                SfoTitle = re.sub(r"\s+", " ", SfoTitle, 0, re.UNICODE).strip()  ## also replaces \u3000
+                ## Condense demo information in title to "(DEMO)"
+                SfoTitle = SfoTitle.replace("demo ver.", "(DEMO)").replace("Demo Version", "(DEMO)").replace("Demo version", "(DEMO)").replace("DEMO Version", "(DEMO)").replace("DEMO version", "(DEMO)").replace("【体験版】", "(DEMO)").replace("(体験版)", "(DEMO)").replace("体験版", "(DEMO)").strip()
+                SfoTitle = re.sub(r"\(demo\)", r"(DEMO)", SfoTitle, 0, re.IGNORECASE|re.UNICODE)
+                SfoTitle = re.sub(r"(^|[^a-z(]{1})demo([^a-z)]{1}|$)", r"\1(DEMO)\2", SfoTitle, 0, re.IGNORECASE|re.UNICODE)
+            ## c) Regional title
+            SfoTitleRegional = ""
+            for Language in Languages:
+                Key = "TITLE_" + Language
+                if SfoValues \
+                and Key in SfoValues:
+                   if DebugLevel >= 2:
+                       dprint("Set regional title to", Key)
+                   SfoTitleRegional = SfoValues[Key].strip()
+                   break
+            if not SfoTitleRegional \
+            and SfoValues \
+            and "TITLE" in SfoValues \
+            and SfoValues["TITLE"] \
+            and SfoValues["TITLE"].strip():
+                if DebugLevel >= 2:
+                    dprint("Set regional title to TITLE")
+                SfoTitleRegional = SfoValues["TITLE"].strip()
+            ## --> Clean regional title
+            if SfoTitleRegional \
+            and not UncleanedTitle:
+                if ReplaceList:
+                    for ReplaceChars in ReplaceList:
+                        if DebugLevel >= 2:
+                            dprint("Clean regional title from", ReplaceChars[0])
+                        for _i in range(len(ReplaceChars[0])):
+                            ReplaceChar = ReplaceChars[0][_i]
+                            if ReplaceChars[1] == " ":
+                                SfoTitleRegional = SfoTitleRegional.replace(ReplaceChar + ":", ":")
+                            SfoTitleRegional = SfoTitleRegional.replace(ReplaceChar, ReplaceChars[1])
+                SfoTitleRegional = re.sub(r"\s+", " ", SfoTitleRegional, 0, re.UNICODE).strip()  ## also replaces \u3000
+
+            ## Determine NPS package type from data
+            if PkgContentType == 0x1 \
+            or PkgContentType == 0x6:
+                NpsType = "PSX GAME"  #md_type = 9
+                if PkgContentType == 0x6:
+                    PsxTitleId = HeaderBytes[712:721].decode("utf-8", errors="ignore")
+            elif PkgContentType == 0x4 \
+            or PkgContentType == 0xB:
+                if PkgMdType0B == True:
+                    NpsType = "PS3 UPDATE"
+                else:
+                    NpsType = "PS3 DLC"  #md_type = 9 | Also PS3 updates : md_type = 11
+            elif PkgContentType == 0x5:
+                NpsType = "PS3 GAME"  #md_type = 5
+            elif PkgContentType == 0x7:
+                if PkgMdType0B == True:
+                    NpsType = "PSP DLC"
+                else:
+                    NpsType = "PSP GAME"  #md_type = 9 | Also PSP DLCS : md_type = 10
+            elif PkgContentType == 0x9:
+                NpsType = "PSP or PS3 THEME"  #md_type = 9 | Also PS3 THEMES : md_type = 9
+            elif PkgContentType == 0xD:
+                NpsType = "PS3 AVATAR"  #md_type = 9
+            elif PkgContentType == 0x15:
+                NpsType = "VITA APP"  #md_type = 18
+                if SfoCategory == "gp":
+                    NpsType = "VITA UPDATE"
+            elif PkgContentType == 0x16:
+                NpsType = "VITA DLC"  #md_type = 17
+            elif PkgContentType == 0x1F:
+                NpsType = "VITA THEME"  #md_type = 17
+            elif PkgContentType == 0x18:
+        	    NpsType = "PSM GAME"  #md_type = 16
             else:
-                print("unset PSN_PKG_CONTENTID")
-                print("unset PSN_PKG_REGION")
-            if SfoTitle:
-                print("PSN_PKG_SFO_TITLE=\"\\\"{}\\\"\"".format(SfoTitle.replace("\"", "\\\"\\\"")))
-            else:
-                print("unset PSN_PKG_SFO_TITLE")
-            if SfoTitleRegional:
-                print("PSN_PKG_SFO_TITLE_REGION=\"\\\"{}\\\"\"".format(SfoTitleRegional.replace("\"", "\\\"\\\"")))
-            else:
-                print("unset PSN_PKG_SFO_TITLE_REGION")
-            if SfoMinVer >= 0:
-                print("PSN_PKG_SFO_FW_VER='{:.2f}'".format(SfoMinVer))
-            else:
-                print("unset PSN_PKG_SFO_FW_VER")
-            if SfoVersion >= 0:
-                print("PSN_PKG_SFO_VERSION='{:.2f}'".format(SfoVersion))
-            else:
-                print("unset PSN_PKG_SFO_VERSION")
-            if SfoAppVer >= 0:
-                print("PSN_PKG_SFO_APP_VER='{:.2f}'".format(SfoAppVer))
-            else:
-                print("unset PSN_PKG_SFO_APP_VER")
-            if SfoSdkVer >= 0:
-                print("PSN_PKG_SFO_SDK_VER='{:.2f}'".format(SfoSdkVer))
-            else:
-                print("unset PSN_PKG_SFO_SDK_VER")
-            if SfoCategory and SfoCategory.strip():
-                print("PSN_PKG_SFO_CATEGORY='{}'".format(SfoCategory))
-            else:
-                print("unset PSN_PKG_SFO_CATEGORY")
-            if SfoCreationDate and SfoCreationDate.strip():
-                print("PSN_PKG_SFO_CREATION='{}'".format(SfoCreationDate))
-            else:
-                print("unset PSN_PKG_SFO_CREATION")
-            if PsxTitleId and PsxTitleId.strip():
-                print("PSN_PKG_PSXTITLEID='{}'".format(PsxTitleId))
-            else:
-                print("unset PSN_PKG_PSXTITLEID")
-            if FileSize:
-                print("PSN_PKG_FILESIZE='{}'".format(FileSize))
-            else:
-                print("unset PSN_PKG_FILESIZE")
-        elif OutputFormat == 99:  ## Analysis Output
-            print(">>> PKG Source:", Source)
-            print("File Size:", FileSize)
-            if PkgMagic == CONST_PKG3_MAGIC:
-                dprintFieldsDict(HeaderFields, "headerfields[{KEY:14}|{INDEX:2}]", 2, None, print)
-                if ExtHeaderFields:
-                    dprintFieldsDict(ExtHeaderFields, "extheaderfields[{KEY:14}|{INDEX:2}]", 2, None, print)
-                dprintFieldsDict(MetaData, "metadata[{KEY:#04x}]", 2, None, print)
-                if ItemEntries:
-                    FormatString = "".join(("{:", unicode(len(unicode(HeaderFields["ITEMCNT"]))), "}"))
-                    for _i in range(len(ItemEntries)):
-                        print("".join(("itementries[", FormatString, "]: Ofs {:#012x} Size {:12} Key Index {} {}")).format(_i, ItemEntries[_i]["DATAOFS"], ItemEntries[_i]["DATASIZE"], ItemEntries[_i]["KEYINDEX"],"".join(("Name \"", ItemEntries[_i]["NAME"], "\"")) if "NAME" in ItemEntries[_i] else ""))
-            elif PkgMagic == CONST_PKG4_MAGIC:
-                dprintFieldsDict(HeaderFields, "headerfields[{KEY:14}|{INDEX:2}]", 2, None, print)
-                FormatString = "".join(("{:", unicode(len(unicode(HeaderFields["FILECNT"]))), "}"))
-                for _i in range(len(FileTable)):
-                    print("".join(("filetable[", FormatString, "]: ID {:#06x} Ofs {:#012x} Size {:12} {}")).format(_i, FileTable[_i]["FILEID"], FileTable[_i]["DATAOFS"], FileTable[_i]["DATASIZE"], "".join(("Name \"", FileTable[_i]["NAME"], "\"")) if "NAME" in FileTable[_i] else ""))
-                dprintFieldsDict(FileTableMap, "filetablemap[{KEY:#06x}]", 2, None, print)
-            if SfoValues:
-                dprintFieldsDict(SfoValues, "sfovalues[{KEY:20}]", 2, None, print)
-        else:  ## Generic Human Output
-            print("\n")
-            print("{:13} {}".format("NPS Type:", NpsType))
-            if TitleId and TitleId.strip():
-                print("{:13} {}".format("Title ID:", TitleId))
-            if SfoTitle:
-                print("{:13} {}".format("Title:", SfoTitle))
-            if SfoTitleRegional:
-                print("{:13} {}".format("Title Region:", SfoTitleRegional))
-            if ContentId and ContentId.strip():
-                print("{:13} {}".format("Region:", Region))
-            if SfoMinVer >= 0:
-                print("{:13} {:.2f}".format("Min FW:", SfoMinVer))
-            if SfoSdkVer >= 0:
-                print("{:13} {:.2f}".format("SDK Ver:", SfoSdkVer))
-            if SfoCreationDate and SfoCreationDate.strip():
-                print("{:13} {}".format("c_date:", datetime.strptime(SfoCreationDate, "%Y%m%d").strftime("%Y.%m.%d")))
-            if SfoVersion >= 0:
-                print("{:13} {:.2f}".format("Version:", SfoVersion))
-            if SfoAppVer >= 0:
-                print("{:13} {:.2f}".format("App Ver:", SfoAppVer))
-            if PsxTitleId and PsxTitleId.strip():
-                print("{:13} {}".format("PSX Title ID:", PsxTitleId))
-            if ContentId and ContentId.strip():
-                print("{:13} {}".format("Content ID:", ContentId))
-                if SfoContentId and SfoContentId.strip() \
-                and PkgContentId.strip() != SfoContentId.strip():
-                    print("{:13} {}".format("PKG Hdr CID:", PkgContentId))
-            print("{:13} {}".format("Size:", PkgTotalSize))
-            print("{:13} {}".format("Pretty Size:", prettySize(PkgTotalSize)))
-            if FileSize:
-                print("{:13} {}".format("File Size:", FileSize))
-            print("\n")
+                eprint("\nERROR: PKG content type {0}/{0:#0x} not supported. {1}".format(PkgContentType, Source))
+
+            if OutputFormat == 1:  ## Shell Variable Output
+                print("PSN_PKG_SIZE='{}'".format(PkgTotalSize))
+                print("PSN_PKG_NPS_TYPE='{}'".format(NpsType))
+                if TitleId and TitleId.strip():
+                    print("PSN_PKG_TITLEID='{}'".format(TitleId))
+                else:
+                    print("unset PSN_PKG_TITLEID")
+                if ContentId and ContentId.strip():
+                    print("PSN_PKG_CONTENTID='{}'".format(ContentId))
+                    print("PSN_PKG_REGION='{}'".format(Region.replace("(HKG)","").replace("(KOR)","")))
+                else:
+                    print("unset PSN_PKG_CONTENTID")
+                    print("unset PSN_PKG_REGION")
+                if SfoTitle:
+                    print("PSN_PKG_SFO_TITLE=\"\\\"{}\\\"\"".format(SfoTitle.replace("\"", "\\\"\\\"")))
+                else:
+                    print("unset PSN_PKG_SFO_TITLE")
+                if SfoTitleRegional:
+                    print("PSN_PKG_SFO_TITLE_REGION=\"\\\"{}\\\"\"".format(SfoTitleRegional.replace("\"", "\\\"\\\"")))
+                else:
+                    print("unset PSN_PKG_SFO_TITLE_REGION")
+                if SfoMinVer >= 0:
+                    print("PSN_PKG_SFO_FW_VER='{:.2f}'".format(SfoMinVer))
+                else:
+                    print("unset PSN_PKG_SFO_FW_VER")
+                if SfoVersion >= 0:
+                    print("PSN_PKG_SFO_VERSION='{:.2f}'".format(SfoVersion))
+                else:
+                    print("unset PSN_PKG_SFO_VERSION")
+                if SfoAppVer >= 0:
+                    print("PSN_PKG_SFO_APP_VER='{:.2f}'".format(SfoAppVer))
+                else:
+                    print("unset PSN_PKG_SFO_APP_VER")
+                if SfoSdkVer >= 0:
+                    print("PSN_PKG_SFO_SDK_VER='{:.2f}'".format(SfoSdkVer))
+                else:
+                    print("unset PSN_PKG_SFO_SDK_VER")
+                if SfoCategory and SfoCategory.strip():
+                    print("PSN_PKG_SFO_CATEGORY='{}'".format(SfoCategory))
+                else:
+                    print("unset PSN_PKG_SFO_CATEGORY")
+                if SfoCreationDate and SfoCreationDate.strip():
+                    print("PSN_PKG_SFO_CREATION='{}'".format(SfoCreationDate))
+                else:
+                    print("unset PSN_PKG_SFO_CREATION")
+                if PsxTitleId and PsxTitleId.strip():
+                    print("PSN_PKG_PSXTITLEID='{}'".format(PsxTitleId))
+                else:
+                    print("unset PSN_PKG_PSXTITLEID")
+                if FileSize:
+                    print("PSN_PKG_FILESIZE='{}'".format(FileSize))
+                else:
+                    print("unset PSN_PKG_FILESIZE")
+            elif OutputFormat == 99:  ## Analysis Output
+                print(">>> PKG Source:", Source)
+                print("File Size:", FileSize)
+                if PkgMagic == CONST_PKG3_MAGIC:
+                    dprintFieldsDict(HeaderFields, "headerfields[{KEY:14}|{INDEX:2}]", 2, None, print)
+                    if ExtHeaderFields:
+                        dprintFieldsDict(ExtHeaderFields, "extheaderfields[{KEY:14}|{INDEX:2}]", 2, None, print)
+                    dprintFieldsDict(MetaData, "metadata[{KEY:#04x}]", 2, None, print)
+                    if ItemEntries:
+                        FormatString = "".join(("{:", unicode(len(unicode(HeaderFields["ITEMCNT"]))), "}"))
+                        for _i in range(len(ItemEntries)):
+                            print("".join(("itementries[", FormatString, "]: Ofs {:#012x} Size {:12} Key Index {} {}")).format(_i, ItemEntries[_i]["DATAOFS"], ItemEntries[_i]["DATASIZE"], ItemEntries[_i]["KEYINDEX"],"".join(("Name \"", ItemEntries[_i]["NAME"], "\"")) if "NAME" in ItemEntries[_i] else ""))
+                elif PkgMagic == CONST_PKG4_MAGIC:
+                    dprintFieldsDict(HeaderFields, "headerfields[{KEY:14}|{INDEX:2}]", 2, None, print)
+                    FormatString = "".join(("{:", unicode(len(unicode(HeaderFields["FILECNT"]))), "}"))
+                    for _i in range(len(FileTable)):
+                        print("".join(("filetable[", FormatString, "]: ID {:#06x} Ofs {:#012x} Size {:12} {}")).format(_i, FileTable[_i]["FILEID"], FileTable[_i]["DATAOFS"], FileTable[_i]["DATASIZE"], "".join(("Name \"", FileTable[_i]["NAME"], "\"")) if "NAME" in FileTable[_i] else ""))
+                    dprintFieldsDict(FileTableMap, "filetablemap[{KEY:#06x}]", 2, None, print)
+                if SfoValues:
+                    dprintFieldsDict(SfoValues, "sfovalues[{KEY:20}]", 2, None, print)
+            else:  ## Generic Human Output
+                print("\n")
+                print("{:13} {}".format("NPS Type:", NpsType))
+                if TitleId and TitleId.strip():
+                    print("{:13} {}".format("Title ID:", TitleId))
+                if SfoTitle:
+                    print("{:13} {}".format("Title:", SfoTitle))
+                if SfoTitleRegional:
+                    print("{:13} {}".format("Title Region:", SfoTitleRegional))
+                if ContentId and ContentId.strip():
+                    print("{:13} {}".format("Region:", Region))
+                if SfoMinVer >= 0:
+                    print("{:13} {:.2f}".format("Min FW:", SfoMinVer))
+                if SfoSdkVer >= 0:
+                    print("{:13} {:.2f}".format("SDK Ver:", SfoSdkVer))
+                if SfoCreationDate and SfoCreationDate.strip():
+                    print("{:13} {}".format("c_date:", datetime.strptime(SfoCreationDate, "%Y%m%d").strftime("%Y.%m.%d")))
+                if SfoVersion >= 0:
+                    print("{:13} {:.2f}".format("Version:", SfoVersion))
+                if SfoAppVer >= 0:
+                    print("{:13} {:.2f}".format("App Ver:", SfoAppVer))
+                if PsxTitleId and PsxTitleId.strip():
+                    print("{:13} {}".format("PSX Title ID:", PsxTitleId))
+                if ContentId and ContentId.strip():
+                    print("{:13} {}".format("Content ID:", ContentId))
+                    if SfoContentId and SfoContentId.strip() \
+                    and PkgContentId.strip() != SfoContentId.strip():
+                        print("{:13} {}".format("PKG Hdr CID:", PkgContentId))
+                print("{:13} {}".format("Size:", PkgTotalSize))
+                print("{:13} {}".format("Pretty Size:", prettySize(PkgTotalSize)))
+                if FileSize:
+                    print("{:13} {}".format("File Size:", FileSize))
+                print("\n")
+    except:
+        print_exc_plus()
