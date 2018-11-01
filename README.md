@@ -17,7 +17,7 @@ Extract package information from header and PARAM.SFO of PS3/PSX/PSP/PSV/PSM and
 * Modular and flexible code for easy enhancement and/or extensions (of course there's always something hard-coded left)
 
 For options execute: PSN_get_pkg_info -h<br>
-Use at your own risk!
+Use at your own risk!<br>
 If you state URLs then only the necessary bytes are downloaded into memory.
 
 
@@ -26,8 +26,8 @@ If you state URLs then only the necessary bytes are downloaded into memory.
   * crypto
   * requests (normally already present)
 
-On Windows try "pip install <modulename>".<br>
-On Linux install the corresponding packages, e.g. Debian python-<modulename> or python3-<modulename>.
+On Windows try "pip install &lt;modulename&gt;".<br>
+On Linux install the corresponding packages, e.g. Debian python-&lt;modulename&gt; or python3-&lt;modulename&gt;.
 
 
 This program is free software: you can redistribute it and/or modify
