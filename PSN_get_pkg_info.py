@@ -1717,10 +1717,13 @@ if __name__ == "__main__":
                 ## -->
                 if "CONTENT_ID" in SfoValues:
                     SfoContentId = SfoValues["CONTENT_ID"]
-                ## -->
+                ## --> Firmware PS4
+                if "SYSTEM_VER" in SfoValues:
+                    SfoMinVer = float("{:02x}.{:02x}".format((SfoValues["SYSTEM_VER"] >> 24) & 0xff, (SfoValues["SYSTEM_VER"] >> 16) & 0xff))
+                ## --> Firmware PS3
                 if "PS3_SYSTEM_VER" in SfoValues:
                     SfoMinVer = float(SfoValues["PS3_SYSTEM_VER"])
-                ## -->
+                ## --> Firmware PS Vita
                 if "PSP2_DISP_VER" in SfoValues:
                     SfoMinVer = float(SfoValues["PSP2_DISP_VER"])
                 ## -->
