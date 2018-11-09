@@ -43,7 +43,7 @@ As Python 2 is the default on Debian and you may want use this, then install apt
 
 1. Install Visual C++ Build Tools<br>
    Checked with Visual Studio 2017.
-   * Get it from the [Visual Studio download page](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2017) (link as of 2018-11)
+   * Get the Build Tools from the [Visual Studio download page](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2017) (link as of 2018-11)
    * Install Visual C++ Build Tools with additional standard components
      * Windows 10 SDK
      * Visual C++ Tools for CMake
@@ -54,7 +54,7 @@ As Python 2 is the default on Debian and you may want use this, then install apt
    * Update PIP first: `python -m pip install --upgrade pip`
    * Install pycrypto module<br>
      pycrypto has to compile some code due to legal restrictions on cryptography, so this is why the VC++ Build Tools had to be installed and the VS Developer Command Prompt had to be started.<br>
-     There's a small issue with the pycrypto source, so as a workaround we have to include the correct header by setting the environment variable CL.<br>
+     There's a small [issue with the pycrypto source](https://github.com/dlitz/pycrypto/issues/218), so as a workaround we have to include the correct header by setting the environment variable CL.<br>
      `set CL=-FI"%VCToolsInstallDir%\include\stdint.h"`<br>
      `pip install pycrypto`
    * Install requests module: `pip install requests`
