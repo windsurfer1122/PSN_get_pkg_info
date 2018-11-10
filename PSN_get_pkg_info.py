@@ -5,29 +5,27 @@
 ###
 ### PSN_get_pky_info.py (c) 2018 by "windsurfer1122"
 ### Extract package information from header and PARAM.SFO of PS3/PSX/PSP/PSV/PSM and PS4 packages.
-###
-### Primary Goals:
-### * One-for-all solution to retrieve all header data and PARAM.SFO data from PSN packages
-### * Decryption of encrypted data to get all data
-### * Support of all known package types: PS3/PSX/PSP, PSV/PSM, PS4
-### * Easy enhancement of interpreting data (=done at the very end with all data at hand)
-### * Support multiple output formats
-### * Support multiple debug verbosity levels
-###
-### Secondary Goals:
-### * Easy to maintain and no compiler necessary (=interpreter language)
-### * Cross platform support
-###   * Decision: Python 3
-###
-### Other Goals:
-### * Modular and flexible code for easy enhancement and/or extensions (of course there's always something hard-coded left)
-### * Compatible with Python 2 (target version 2.7)
-###   * Identical output
-###   * Forward-compatible solutions preferred
-###
-### For options execute: PSN_get_pkg_info.py -h and read the README.md
 ### Use at your own risk!
 ###
+### For options execute: PSN_get_pkg_info.py -h
+###
+### git master repository at https://github.com/windsurfer1122
+### Read README.md for more information including Python requirements and more
+###
+### Workarounds for Python 2 (see: http://python-future.org/compatible_idioms.html)
+### - use of struct.unpack() instead of int.from_bytes()
+### - convert byte string of struct.pack() to bytes
+### - use future print function
+### - use future unicode literals
+###
+### Adopted PEP8 Coding Style:
+### * [joined_]lower for attributes, variables
+### * ALL_CAPS for constants
+### * StudlyCaps for classes
+### * (differs to PEP8) mixedCase for functions, methods
+### * (differs to PEP8) StudlyCaps global variables
+###
+
 ###
 ### This program is free software: you can redistribute it and/or modify
 ### it under the terms of the GNU General Public License as published by
@@ -41,43 +39,6 @@
 ###
 ### You should have received a copy of the GNU General Public License
 ### along with this program.  If not, see <https://www.gnu.org/licenses/>.
-###
-###
-### git master repository at https://github.com/windsurfer1122
-###
-###
-### Credits:
-### * AnalogMan
-### * https://playstationdev.wiki/ (previously https://vitadevwiki.com/ & https://www.pspdevwiki.com/)
-### * http://www.psdevwiki.com/
-### * mmozeiko
-### * st4rk
-### * qwikrazor87
-###
-
-###
-### Python Related Information
-###
-### Using a HTTP Proxy: export HTTP_PROXY="http://192.168.0.1:3128"; export HTTPS_PROXY="http://192.168.0.1:1080";
-###
-### Python 3 on Debian:
-### May need to install apt packages python3-requests python3-crypto, as Python 2 is default on Debian as of version 8
-###
-### Workarounds for Python 2 (see: http://python-future.org/compatible_idioms.html)
-### - use of struct.unpack() instead of int.from_bytes()
-### - convert byte string of struct.pack() to bytes
-### - use future print function
-### - use future unicode literals
-###
-### Python 2 on Debian:
-### May need to install apt package python-future python-crypto, as Python 2 is default on Debian as of version 8
-###
-### Adopted PEP8 Coding Style:
-### * [joined_]lower for attributes, variables
-### * ALL_CAPS for constants
-### * StudlyCaps for classes
-### * (differs to PEP8) mixedCase for functions, methods
-### * (differs to PEP8) StudlyCaps global variables
 ###
 
 ### Python 2 workarounds:
@@ -105,8 +66,8 @@ import json
 import binascii
 import traceback
 
-from Crypto.Cipher import AES
-from Crypto.Util import Counter
+from Cryptodome.Cipher import AES
+from Cryptodome.Util import Counter
 
 from math import log
 from datetime import datetime
@@ -598,22 +559,23 @@ class PkgAesCtrCounter():
         elif isinstance(iv, bytes) \
         or isinstance(iv, bytearray):
             self._iv = convertBytesToIntegerValue(iv)
-        self._reset()
-    def _reset(self):
-        if hasattr(self, "_ctr"):
-            del self._ctr
+        self._block_offset = -1
+
+    def _setOffset(self, offset):
+        if offset == self._block_offset:
+            return
+        #
+        startcounter = self._iv
+        self._block_offset = 0
+        for _i in range(offset // AES.block_size):
+            startcounter += 1
+            self._block_offset += AES.block_size
+        #
         if hasattr(self, "_aes"):
             del self._aes
-        self._ctr = Counter.new(AES.key_size[0] * 8, initial_value=self._iv)  ## Key length 16 bytes = 128 bits
-        self._aes = AES.new(self._key, AES.MODE_CTR, counter=self._ctr)
-        self._block_offset = 0
-    def _setOffset(self, offset):
-        if offset < self._block_offset:
-            self._reset()
-        if offset > self._block_offset:
-            for _i in range((offset - self._block_offset) // AES.block_size):
-                self._ctr()
-                self._block_offset += AES.block_size
+        counter = Counter.new(AES.key_size[0] * 8, initial_value=startcounter)  ## Key length 16 bytes = 128 bits
+        self._aes = AES.new(self._key, AES.MODE_CTR, counter=counter)
+
     def decrypt(self, offset, data):
         self._setOffset(offset)
         self._block_offset += len(data)

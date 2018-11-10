@@ -1,14 +1,14 @@
 # PSN_get_pkg_info.py - To Do List
 
 ## To Do
-- [ ] Switch from pycrypto to pycryptodome
-  * pycrypto has not been maintained since 2014
 - [ ] Recognize more package types
   * PSP: PKG content type 15/0xf not supported. PSP/Minis/PC Engine/Neo Geo
     *  UP4128/NPUZ00242_00/GSknEkVAKwcEGLQVjxbSnOJFFvmtRYSsfCfCkCURuVKgBrKDJuNgrbmUyadjTzIYTQglsNZTWaMfIjacotTAArwGtyPWSIZTOVMVy.pkg (Game Mini)
     *  UP4128/NPUZ00193_00/NTPIvymtsQUIyYqhGucTmnidjuSdWhcnpFEBZwFDfkkAbpUnBrBOvueSpAAKWFapwYWvuFUvbhiqWeaufJShHxBwrzwfcBhTXXOxT.pkg (Game Mini)
     * JP0805/NPJJ30059_00/hGkJbqgmXJYjRBTOmUmPvqrLwUhFBiHNNSiAeBuaezdPyvmyVlzYvKgYuoBBOdEFEltRyPeWSKluetJvVrbuPSQiAZgSSKKEjeyTF.pkg (PC Engine)
     * JP0576/NPJH70002_00/EpdkZDkoEKlZtxUVKzdIqeCuFXiSzhjrWwNoANeOHvFjLnPsydXwtAtYfLbklqLMBlQEHaoxtEqsRnRLCUTLvklkSEJgtQNWMWtMB.pkg (Neo Geo)
+- [x] Switch from pycrypto to pycryptodomex
+  * pycrypto has not been maintained since 2014
 - [x] Find package that uses PKG3 Key #03
   * None found in known PS3/PSX/PSP/PSV/PSM packages
   * Extracted all data via -f 99 to separate text files and grep'ed through them
