@@ -1752,7 +1752,7 @@ if __name__ == "__main__":
                             SfoTitle = SfoTitle.replace(ReplaceChar, ReplaceChars[1])
                 SfoTitle = re.sub(r"\s+", " ", SfoTitle, 0, re.UNICODE).strip()  ## also replaces \u3000
                 ## Condense demo information in title to "(DEMO)"
-                SfoTitle = SfoTitle.replace("demo ver.", "(DEMO)").replace("Demo Version", "(DEMO)").replace("Demo version", "(DEMO)").replace("DEMO Version", "(DEMO)").replace("DEMO version", "(DEMO)").replace("【体験版】", "(DEMO)").replace("(体験版)", "(DEMO)").replace("体験版", "(DEMO)").strip()
+                SfoTitle = SfoTitle.replace("demo ver.", "(DEMO)").replace("(Demo Version)", "(DEMO)").replace("Demo Version", "(DEMO)").replace("Demo version", "(DEMO)").replace("DEMO Version", "(DEMO)").replace("DEMO version", "(DEMO)").replace("【体験版】", "(DEMO)").replace("(体験版)", "(DEMO)").replace("体験版", "(DEMO)").strip()
                 SfoTitle = re.sub(r"\(demo\)", r"(DEMO)", SfoTitle, 0, re.IGNORECASE|re.UNICODE)
                 SfoTitle = re.sub(r"(^|[^a-z(]{1})demo([^a-z)]{1}|$)", r"\1(DEMO)\2", SfoTitle, 0, re.IGNORECASE|re.UNICODE)
             ## c) Regional title
