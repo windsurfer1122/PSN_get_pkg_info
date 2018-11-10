@@ -59,6 +59,7 @@ As Python 2 is the default on Debian and you may want use this, then install apt
      `pip install pycrypto`
    * Install requests module: `pip install requests`
    * Install cryptography module: `pip install cryptography`
+   * Install pycrypto replacement pycryptodome module: `pip install pycryptodome` (will be used soon)
    * Exit VS Developer Command Prompt: `exit`
 
 The Visual C++ Build Tools may be deinstalled now, but it's recommended to keep them installed to be able to upgrade pycrypto when necessary.
