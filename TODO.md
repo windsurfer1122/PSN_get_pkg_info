@@ -22,3 +22,5 @@
     https://github.com/xvortex/ps4-dumper-vtx/blob/master/source/dump.c
     https://github.com/n1ghty/pkg_tools/blob/master/lib/pkg_parser.py
   * ~~Correct HTTP headers (difficult, PKG type only known when already accessed)~~
+- [ ] -x/--extract function from pkg2zip
+- [ ] --raw from pkg2dec

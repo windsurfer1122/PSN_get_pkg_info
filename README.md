@@ -28,8 +28,8 @@ If you state URLs then only the necessary bytes are downloaded into memory.
 
 ### Installing on Debian
 1. Most Python modules can be installed via apt.<br>
-Install Python 3 modules via the following apt packages: python3-requests python3-cryptography.<br>
-As Python 2 is the default on Debian and this version should be used, then install apt packages: python-future python-requests python-cryptography
+Install Python 3 modules via the following apt packages: python3-requests.<br>
+As Python 2 is the default on Debian and this version should be used, then install apt packages: python-future python-requests.
 
 1. Install pycryptodomex module via pip<br>
    Python 3: `python3 -m pip install pycryptodomex`<br>
@@ -51,7 +51,6 @@ As Python 2 is the default on Debian and this version should be used, then insta
    * Update PIP first: `python -m pip install --upgrade pip`
    * Install requests module: `pip install requests`
    * Install pycryptodomex module: `pip install pycryptodomex`
-   * Install cryptography module: `pip install cryptography`
    * Exit Command Prompt: `exit`
 
 Executing python scripts can be done via Windows Explorer or a Command Prompt. Normally no elevation is necessary for script execution, except when the python script wants to change something in the system internals.

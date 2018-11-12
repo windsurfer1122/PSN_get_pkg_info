@@ -92,8 +92,8 @@ def dprint(*args, **kwargs):  ## debug print
 ## https://stackoverflow.com/questions/27674602/hide-traceback-unless-a-debug-flag-is-set
 def print_exc_plus():
     """
-    Print the usual traceback information, followed by a listing of all the
-    local variables in each frame.
+    Print the usual traceback information, followed by a listing of
+    important variables in each frame.
     """
     tb = sys.exc_info()[2]
     stack = []
@@ -155,6 +155,12 @@ except:
 
 
 ## Generic definitions
+OutputFormatsKnown = {
+   0: "Human-readable Output [default]",
+   1: "Linux Shell Variable Output",
+   99: "Analysis Output",
+}
+#
 CONST_FMT_BIG_ENDIAN = ">"
 CONST_FMT_LITTLE_ENDIAN = "<"
 CONST_FMT_UINT64, CONST_FMT_UINT32, CONST_FMT_UINT16, CONST_FMT_UINT8 = 'Q', 'L', 'H', 'B'
@@ -554,6 +560,7 @@ class PkgReader():
 class PkgAesCtrCounter():
     def __init__(self, key, iv):
         self._key = key
+        self._key_size = AES.key_size[0] * 8  ## Key length 16 bytes = 128 bits
         if isinstance(iv, int):
             self._iv = iv
         elif isinstance(iv, bytes) \
@@ -567,13 +574,14 @@ class PkgAesCtrCounter():
         #
         startcounter = self._iv
         self._block_offset = 0
-        for _i in range(offset // AES.block_size):
-            startcounter += 1
-            self._block_offset += AES.block_size
+        count = offset // AES.block_size
+        if count > 0:
+            startcounter += count
+            self._block_offset += count * AES.block_size
         #
         if hasattr(self, "_aes"):
             del self._aes
-        counter = Counter.new(AES.key_size[0] * 8, initial_value=startcounter)  ## Key length 16 bytes = 128 bits
+        counter = Counter.new(self._key_size, initial_value=startcounter)
         self._aes = AES.new(self._key, AES.MODE_CTR, counter=counter)
 
     def decrypt(self, offset, data):
@@ -1357,9 +1365,9 @@ def parseSfo(sfobytes):
 def showUsage():
     eprint("Usage: {} [options] <URL or path to PKG file> [<URL|PATH> ...]".format(sys.argv[0]))
     eprint("  -h/--help       Show this help")
-    eprint("  -f/--format=<n> Format of output via code")
-    eprint("                    0 = Generic output [default]")
-    eprint("                    1 = sh env vars")
+    eprint("  -f/--format=<n> Format of output via code (multiple allowed)")
+    for key in OutputFormatsKnown:
+        eprint("                    {:#2} = {}".format(key, OutputFormatsKnown[key]))
     eprint("  -d/--debug=<n>  Debug verbosity level")
     eprint("                    0 = No debug info [default]")
     eprint("                    1 = Show parsed results only")
@@ -1369,6 +1377,10 @@ def showUsage():
     eprint("                  multiple white spaces incl. new line to a single space.")
     eprint("                  Default is to clean up by replacing {}".format(ReplaceList))
     eprint("                  and condensing demo information to just \"(DEMO)\".")
+    eprint("  --itementries   Always decrypt item entries on PS3/PSX/PSP/PSV/PSM packages.")
+    eprint("                  Useful for analysis.")
+    eprint("  --unknown       Print unknown file ids on PS4 packages.")
+    eprint("                  Useful for analysis.")
 
 
 ## Global code
@@ -1378,7 +1390,7 @@ if __name__ == "__main__":
         ## Global Debug [Verbosity] Level: can be set via '-d'/'--debug='
         DebugLevel = 0
         ## Output Format: can be set via '-f'/'--format='
-        OutputFormat = 0
+        OutputFormats = collections.OrderedDict()
         ReplaceList = [ ["™®☆◆", " "], ["—–", "-"], ]
         UncleanedTitle = False
         ExtractUnknown = False
@@ -1407,21 +1419,34 @@ if __name__ == "__main__":
             elif Option in ("-f", "--format"):
                 try:
                     OutputFormat = int(OptionValue)
-                    if OutputFormat < 0:
-                        eprint("Option {}: value {} is not valid".format(Option, OptionValue))
-                        ExitCode = 2
                 except:
                     eprint("Option {}: value {} is not a number".format(Option, OptionValue))
                     ExitCode = 2
+                    continue
+                if OutputFormat < 0:
+                    eprint("Option {}: value {} is not valid".format(Option, OptionValue))
+                    ExitCode = 2
+                    continue
+                if not OutputFormat in OutputFormatsKnown:
+                    eprint("Option {}: unknown output format {}".format(Option, OptionValue))
+                    ExitCode = 2
+                    continue
+                if OutputFormat in OutputFormats:
+                    eprint("Option {}: duplicate output format {}".format(Option, OptionValue))
+                    ExitCode = 2
+                    continue
+                OutputFormats[OutputFormat] = True
             elif Option in ("-d", "--debug"):
                 try:
                     DebugLevel = int(OptionValue)
-                    if DebugLevel < 0:
-                        eprint("Option {}: value {} is not valid".format(Option, OptionValue))
-                        ExitCode = 2
                 except:
                     eprint("Option {}: value {} is not a number".format(Option, OptionValue))
                     ExitCode = 2
+                    continue
+                if DebugLevel < 0:
+                    eprint("Option {}: value {} is not valid".format(Option, OptionValue))
+                    ExitCode = 2
+                    continue
             else:
                 eprint("Option {} is unhandled in program".format(Option, OptionValue))
                 ExitCode = 2
@@ -1435,6 +1460,10 @@ if __name__ == "__main__":
         or ExitCode:
             showUsage()
             sys.exit(ExitCode)
+
+        ## Fallback to default output format if none stated
+        if len(OutputFormats) == 0:
+            OutputFormats[0] = True
 
         ## Enrich structure format arrays
         ## --> PKG3 Main Header
@@ -1551,8 +1580,8 @@ if __name__ == "__main__":
             #
             if PkgMagic == CONST_PKG3_MAGIC:
                 HeaderSize = CONST_PKG3_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"]
-                NpsType = "".join((NpsType, " (PS3/PSV/PSP/PSX/PSM)"))
-                dprint("Detected PS3/PSV/PSP/PSX/PSM game package")
+                NpsType = "".join((NpsType, " (PS3/PSX/PSP/PSV/PSM)"))
+                dprint("Detected PS3/PSX/PSP/PSV/PSM game package")
             elif PkgMagic == CONST_PKG4_MAGIC:
                 HeaderSize = CONST_PKG4_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"]
                 NpsType = "".join((NpsType, " (PS4)"))
@@ -1823,111 +1852,114 @@ if __name__ == "__main__":
             else:
                 eprint("\nERROR: PKG content type {0}/{0:#0x} not supported. {1}".format(PkgContentType, Source))
 
-            if OutputFormat == 1:  ## Shell Variable Output
-                print("PSN_PKG_SIZE='{}'".format(PkgTotalSize))
-                print("PSN_PKG_NPS_TYPE='{}'".format(NpsType))
-                if TitleId and TitleId.strip():
-                    print("PSN_PKG_TITLEID='{}'".format(TitleId))
-                else:
-                    print("unset PSN_PKG_TITLEID")
-                if ContentId and ContentId.strip():
-                    print("PSN_PKG_CONTENTID='{}'".format(ContentId))
-                    print("PSN_PKG_REGION='{}'".format(Region.replace("(HKG)","").replace("(KOR)","")))
-                else:
-                    print("unset PSN_PKG_CONTENTID")
-                    print("unset PSN_PKG_REGION")
-                if SfoTitle:
-                    print("PSN_PKG_SFO_TITLE=\"\\\"{}\\\"\"".format(SfoTitle.replace("\"", "\\\"\\\"")))
-                else:
-                    print("unset PSN_PKG_SFO_TITLE")
-                if SfoTitleRegional:
-                    print("PSN_PKG_SFO_TITLE_REGION=\"\\\"{}\\\"\"".format(SfoTitleRegional.replace("\"", "\\\"\\\"")))
-                else:
-                    print("unset PSN_PKG_SFO_TITLE_REGION")
-                if SfoMinVer >= 0:
-                    print("PSN_PKG_SFO_FW_VER='{:.2f}'".format(SfoMinVer))
-                else:
-                    print("unset PSN_PKG_SFO_FW_VER")
-                if SfoVersion >= 0:
-                    print("PSN_PKG_SFO_VERSION='{:.2f}'".format(SfoVersion))
-                else:
-                    print("unset PSN_PKG_SFO_VERSION")
-                if SfoAppVer >= 0:
-                    print("PSN_PKG_SFO_APP_VER='{:.2f}'".format(SfoAppVer))
-                else:
-                    print("unset PSN_PKG_SFO_APP_VER")
-                if SfoSdkVer >= 0:
-                    print("PSN_PKG_SFO_SDK_VER='{:.2f}'".format(SfoSdkVer))
-                else:
-                    print("unset PSN_PKG_SFO_SDK_VER")
-                if SfoCategory and SfoCategory.strip():
-                    print("PSN_PKG_SFO_CATEGORY='{}'".format(SfoCategory))
-                else:
-                    print("unset PSN_PKG_SFO_CATEGORY")
-                if SfoCreationDate and SfoCreationDate.strip():
-                    print("PSN_PKG_SFO_CREATION='{}'".format(SfoCreationDate))
-                else:
-                    print("unset PSN_PKG_SFO_CREATION")
-                if PsxTitleId and PsxTitleId.strip():
-                    print("PSN_PKG_PSXTITLEID='{}'".format(PsxTitleId))
-                else:
-                    print("unset PSN_PKG_PSXTITLEID")
-                if FileSize:
-                    print("PSN_PKG_FILESIZE='{}'".format(FileSize))
-                else:
-                    print("unset PSN_PKG_FILESIZE")
-            elif OutputFormat == 99:  ## Analysis Output
-                print(">>> PKG Source:", Source)
-                print("File Size:", FileSize)
-                if PkgMagic == CONST_PKG3_MAGIC:
-                    dprintFieldsDict(HeaderFields, "headerfields[{KEY:14}|{INDEX:2}]", 2, None, print)
-                    if ExtHeaderFields:
-                        dprintFieldsDict(ExtHeaderFields, "extheaderfields[{KEY:14}|{INDEX:2}]", 2, None, print)
-                    dprintFieldsDict(MetaData, "metadata[{KEY:#04x}]", 2, None, print)
-                    if ItemEntries:
-                        FormatString = "".join(("{:", unicode(len(unicode(HeaderFields["ITEMCNT"]))), "}"))
-                        for _i in range(len(ItemEntries)):
-                            print("".join(("itementries[", FormatString, "]: Ofs {:#012x} Size {:12} Key Index {} {}")).format(_i, ItemEntries[_i]["DATAOFS"], ItemEntries[_i]["DATASIZE"], ItemEntries[_i]["KEYINDEX"],"".join(("Name \"", ItemEntries[_i]["NAME"], "\"")) if "NAME" in ItemEntries[_i] else ""))
-                elif PkgMagic == CONST_PKG4_MAGIC:
-                    dprintFieldsDict(HeaderFields, "headerfields[{KEY:14}|{INDEX:2}]", 2, None, print)
-                    FormatString = "".join(("{:", unicode(len(unicode(HeaderFields["FILECNT"]))), "}"))
-                    for _i in range(len(FileTable)):
-                        print("".join(("filetable[", FormatString, "]: ID {:#06x} Ofs {:#012x} Size {:12} {}")).format(_i, FileTable[_i]["FILEID"], FileTable[_i]["DATAOFS"], FileTable[_i]["DATASIZE"], "".join(("Name \"", FileTable[_i]["NAME"], "\"")) if "NAME" in FileTable[_i] else ""))
-                    dprintFieldsDict(FileTableMap, "filetablemap[{KEY:#06x}]", 2, None, print)
-                if SfoValues:
-                    dprintFieldsDict(SfoValues, "sfovalues[{KEY:20}]", 2, None, print)
-            else:  ## Generic Human Output
-                print("\n")
-                print("{:13} {}".format("NPS Type:", NpsType))
-                if TitleId and TitleId.strip():
-                    print("{:13} {}".format("Title ID:", TitleId))
-                if SfoTitle:
-                    print("{:13} {}".format("Title:", SfoTitle))
-                if SfoTitleRegional:
-                    print("{:13} {}".format("Title Region:", SfoTitleRegional))
-                if ContentId and ContentId.strip():
-                    print("{:13} {}".format("Region:", Region))
-                if SfoMinVer >= 0:
-                    print("{:13} {:.2f}".format("Min FW:", SfoMinVer))
-                if SfoSdkVer >= 0:
-                    print("{:13} {:.2f}".format("SDK Ver:", SfoSdkVer))
-                if SfoCreationDate and SfoCreationDate.strip():
-                    print("{:13} {}".format("c_date:", datetime.strptime(SfoCreationDate, "%Y%m%d").strftime("%Y.%m.%d")))
-                if SfoVersion >= 0:
-                    print("{:13} {:.2f}".format("Version:", SfoVersion))
-                if SfoAppVer >= 0:
-                    print("{:13} {:.2f}".format("App Ver:", SfoAppVer))
-                if PsxTitleId and PsxTitleId.strip():
-                    print("{:13} {}".format("PSX Title ID:", PsxTitleId))
-                if ContentId and ContentId.strip():
-                    print("{:13} {}".format("Content ID:", ContentId))
-                    if SfoContentId and SfoContentId.strip() \
-                    and PkgContentId.strip() != SfoContentId.strip():
-                        print("{:13} {}".format("PKG Hdr CID:", PkgContentId))
-                print("{:13} {}".format("Size:", PkgTotalSize))
-                print("{:13} {}".format("Pretty Size:", prettySize(PkgTotalSize)))
-                if FileSize:
-                    print("{:13} {}".format("File Size:", FileSize))
-                print("\n")
+            for OutputFormat in OutputFormats:
+                if OutputFormat == 0:  ## Human-readable Output
+                    print("\n")
+                    print("{:13} {}".format("NPS Type:", NpsType))
+                    if TitleId and TitleId.strip():
+                        print("{:13} {}".format("Title ID:", TitleId))
+                    if SfoTitle:
+                        print("{:13} {}".format("Title:", SfoTitle))
+                    if SfoTitleRegional:
+                        print("{:13} {}".format("Title Region:", SfoTitleRegional))
+                    if ContentId and ContentId.strip():
+                        print("{:13} {}".format("Region:", Region))
+                    if SfoMinVer >= 0:
+                        print("{:13} {:.2f}".format("Min FW:", SfoMinVer))
+                    if SfoSdkVer >= 0:
+                        print("{:13} {:.2f}".format("SDK Ver:", SfoSdkVer))
+                    if SfoCreationDate and SfoCreationDate.strip():
+                        print("{:13} {}".format("c_date:", datetime.strptime(SfoCreationDate, "%Y%m%d").strftime("%Y.%m.%d")))
+                    if SfoVersion >= 0:
+                        print("{:13} {:.2f}".format("Version:", SfoVersion))
+                    if SfoAppVer >= 0:
+                        print("{:13} {:.2f}".format("App Ver:", SfoAppVer))
+                    if PsxTitleId and PsxTitleId.strip():
+                        print("{:13} {}".format("PSX Title ID:", PsxTitleId))
+                    if ContentId and ContentId.strip():
+                        print("{:13} {}".format("Content ID:", ContentId))
+                        if SfoContentId and SfoContentId.strip() \
+                        and PkgContentId.strip() != SfoContentId.strip():
+                            print("{:13} {}".format("PKG Hdr CID:", PkgContentId))
+                    print("{:13} {}".format("Size:", PkgTotalSize))
+                    print("{:13} {}".format("Pretty Size:", prettySize(PkgTotalSize)))
+                    if FileSize:
+                        print("{:13} {}".format("File Size:", FileSize))
+                    print("\n")
+                elif OutputFormat == 1:  ## Linux Shell Variable Output
+                    print("PSN_PKG_SIZE='{}'".format(PkgTotalSize))
+                    print("PSN_PKG_NPS_TYPE='{}'".format(NpsType))
+                    if TitleId and TitleId.strip():
+                        print("PSN_PKG_TITLEID='{}'".format(TitleId))
+                    else:
+                        print("unset PSN_PKG_TITLEID")
+                    if ContentId and ContentId.strip():
+                        print("PSN_PKG_CONTENTID='{}'".format(ContentId))
+                        print("PSN_PKG_REGION='{}'".format(Region.replace("(HKG)","").replace("(KOR)","")))
+                    else:
+                        print("unset PSN_PKG_CONTENTID")
+                        print("unset PSN_PKG_REGION")
+                    if SfoTitle:
+                        print("PSN_PKG_SFO_TITLE=\"\\\"{}\\\"\"".format(SfoTitle.replace("\"", "\\\"\\\"")))
+                    else:
+                        print("unset PSN_PKG_SFO_TITLE")
+                    if SfoTitleRegional:
+                        print("PSN_PKG_SFO_TITLE_REGION=\"\\\"{}\\\"\"".format(SfoTitleRegional.replace("\"", "\\\"\\\"")))
+                    else:
+                        print("unset PSN_PKG_SFO_TITLE_REGION")
+                    if SfoMinVer >= 0:
+                        print("PSN_PKG_SFO_FW_VER='{:.2f}'".format(SfoMinVer))
+                    else:
+                        print("unset PSN_PKG_SFO_FW_VER")
+                    if SfoVersion >= 0:
+                        print("PSN_PKG_SFO_VERSION='{:.2f}'".format(SfoVersion))
+                    else:
+                        print("unset PSN_PKG_SFO_VERSION")
+                    if SfoAppVer >= 0:
+                        print("PSN_PKG_SFO_APP_VER='{:.2f}'".format(SfoAppVer))
+                    else:
+                        print("unset PSN_PKG_SFO_APP_VER")
+                    if SfoSdkVer >= 0:
+                        print("PSN_PKG_SFO_SDK_VER='{:.2f}'".format(SfoSdkVer))
+                    else:
+                        print("unset PSN_PKG_SFO_SDK_VER")
+                    if SfoCategory and SfoCategory.strip():
+                        print("PSN_PKG_SFO_CATEGORY='{}'".format(SfoCategory))
+                    else:
+                        print("unset PSN_PKG_SFO_CATEGORY")
+                    if SfoCreationDate and SfoCreationDate.strip():
+                        print("PSN_PKG_SFO_CREATION='{}'".format(SfoCreationDate))
+                    else:
+                        print("unset PSN_PKG_SFO_CREATION")
+                    if PsxTitleId and PsxTitleId.strip():
+                        print("PSN_PKG_PSXTITLEID='{}'".format(PsxTitleId))
+                    else:
+                        print("unset PSN_PKG_PSXTITLEID")
+                    if FileSize:
+                        print("PSN_PKG_FILESIZE='{}'".format(FileSize))
+                    else:
+                        print("unset PSN_PKG_FILESIZE")
+                elif OutputFormat == 99:  ## Analysis Output
+                    print(">>> PKG Source:", Source)
+                    print("File Size:", FileSize)
+                    if PkgMagic == CONST_PKG3_MAGIC:
+                        dprintFieldsDict(HeaderFields, "headerfields[{KEY:14}|{INDEX:2}]", 2, None, print)
+                        if ExtHeaderFields:
+                            dprintFieldsDict(ExtHeaderFields, "extheaderfields[{KEY:14}|{INDEX:2}]", 2, None, print)
+                        dprintFieldsDict(MetaData, "metadata[{KEY:#04x}]", 2, None, print)
+                        if ItemEntries:
+                            FormatString = "".join(("{:", unicode(len(unicode(HeaderFields["ITEMCNT"]))), "}"))
+                            for _i in range(len(ItemEntries)):
+                                print("".join(("itementries[", FormatString, "]: Ofs {:#012x} Size {:12} Key Index {} {}")).format(_i, ItemEntries[_i]["DATAOFS"], ItemEntries[_i]["DATASIZE"], ItemEntries[_i]["KEYINDEX"],"".join(("Name \"", ItemEntries[_i]["NAME"], "\"")) if "NAME" in ItemEntries[_i] else ""))
+                    elif PkgMagic == CONST_PKG4_MAGIC:
+                        dprintFieldsDict(HeaderFields, "headerfields[{KEY:14}|{INDEX:2}]", 2, None, print)
+                        FormatString = "".join(("{:", unicode(len(unicode(HeaderFields["FILECNT"]))), "}"))
+                        for _i in range(len(FileTable)):
+                            print("".join(("filetable[", FormatString, "]: ID {:#06x} Ofs {:#012x} Size {:12} {}")).format(_i, FileTable[_i]["FILEID"], FileTable[_i]["DATAOFS"], FileTable[_i]["DATASIZE"], "".join(("Name \"", FileTable[_i]["NAME"], "\"")) if "NAME" in FileTable[_i] else ""))
+                        dprintFieldsDict(FileTableMap, "filetablemap[{KEY:#06x}]", 2, None, print)
+                    if SfoValues:
+                        dprintFieldsDict(SfoValues, "sfovalues[{KEY:20}]", 2, None, print)
+    except SystemExit:
+        raise  ## re-raise/throw up (let Python handle it)
     except:
         print_exc_plus()
