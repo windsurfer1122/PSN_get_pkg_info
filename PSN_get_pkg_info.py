@@ -498,7 +498,7 @@ def calculateAesAlignedOffsetAndSize(offset, size):
 
 
 class PkgReader():
-    def __init__(self, source, debug_level=0):
+    def __init__(self, source, headers, debug_level=0):
         self._source = source
         self._size = None
 
@@ -514,8 +514,7 @@ class PkgReader():
             except:
                 eprint("\nERROR: {}: Could not create HTTP/S session for PKG URL".format(sys.argv[0]))
                 sys.exit(2)
-            self._data_stream.headers = {"User-Agent": "libhttp/3.69 (PS Vita)"}
-            ##TODO: PS4: "Download/1.00 libhttp/6.00 (PlayStation 4)"
+            self._data_stream.headers = headers
             response = self._data_stream.head(self._source)
             if debug_level >= 2:
                 dprint(response)
@@ -1526,16 +1525,19 @@ if __name__ == "__main__":
             TitleId = ""
             Region = ""
             Languages = []
+            #
+            Headers = {"User-Agent": "Mozilla/5.0 (PLAYSTATION 3; 4.83)"}  ## Default to PS3 headers (fits PS3/PSX/PSP/PSV packages, but not PSM packages for PSV)
 
             ## If source is a JSON file then determine the first package url from it
             if Source.endswith(".json"):
-                dprint(">>>>> JSON Source:", Source)
+                print("# >>>>>>>>>> JSON Source:", Source)
+                Headers = {"User-Agent": "Download/1.00 libhttp/6.02 (PlayStation 4)"}  ## Switch to PS4 headers
                 if Source.startswith("http:") \
                 or Source.startswith("https:"):
                     if DebugLevel >= 2:
                         dprint("Opening source as URL data stream")
                     try:
-                        DataStream = requests.get(Source, headers={"User-Agent": "Download/1.00 libhttp/6.00 (PlayStation 4)"})
+                        DataStream = requests.get(Source, headers=Headers)
                     except:
                         eprint("\nERROR: {}: Could not open URL (1) {}".format(sys.argv[0], Source))
                         sys.exit(2)
@@ -1561,9 +1563,8 @@ if __name__ == "__main__":
                 Source = StreamData['pieces'][0]['url']
 
             ## Open PKG source
-            if DebugLevel >= 1:
-                dprint(">>>>>>>>>> PKG Source:", Source)
-            DataStream = PkgReader(Source, DebugLevel)
+            print("# >>>>>>>>>> PKG Source:", Source)
+            DataStream = PkgReader(Source, Headers, DebugLevel)
             FileSize = DataStream.getSize(DebugLevel)
             if DebugLevel >= 2:
                 dprint("File Size:", FileSize)
@@ -1854,7 +1855,7 @@ if __name__ == "__main__":
 
             for OutputFormat in OutputFormats:
                 if OutputFormat == 0:  ## Human-readable Output
-                    print("\n")
+                    print()
                     print("{:13} {}".format("NPS Type:", NpsType))
                     if TitleId and TitleId.strip():
                         print("{:13} {}".format("Title ID:", TitleId))
@@ -1885,7 +1886,7 @@ if __name__ == "__main__":
                     print("{:13} {}".format("Pretty Size:", prettySize(PkgTotalSize)))
                     if FileSize:
                         print("{:13} {}".format("File Size:", FileSize))
-                    print("\n")
+                    print()
                 elif OutputFormat == 1:  ## Linux Shell Variable Output
                     print("PSN_PKG_SIZE='{}'".format(PkgTotalSize))
                     print("PSN_PKG_NPS_TYPE='{}'".format(NpsType))
@@ -1940,7 +1941,6 @@ if __name__ == "__main__":
                     else:
                         print("unset PSN_PKG_FILESIZE")
                 elif OutputFormat == 99:  ## Analysis Output
-                    print(">>> PKG Source:", Source)
                     print("File Size:", FileSize)
                     if PkgMagic == CONST_PKG3_MAGIC:
                         dprintFieldsDict(HeaderFields, "headerfields[{KEY:14}|{INDEX:2}]", 2, None, print)
