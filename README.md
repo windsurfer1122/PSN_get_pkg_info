@@ -6,6 +6,7 @@ Extract package information from header and PARAM.SFO of PS3/PSX/PSP/PSV/PSM and
 * Decryption of PS3 encrypted data to get all data
 * Support of all known package types: PS3/PSX/PSP, PSV/PSM, PS4
 * Easy enhancement of interpreting data (=done at the very end with all data at hand)
+* Support http download streaming to avoid harddisk usage
 * Support multiple output formats
 * Support multiple debug verbosity levels
 * Easy to maintain and no compiler necessary (=interpreter language)
@@ -28,12 +29,12 @@ If you state URLs then only the necessary bytes are downloaded into memory.
 
 ### Installing on Debian
 1. Most Python modules can be installed via apt.<br>
-Install Python 3 modules via the following apt packages: python3-requests.<br>
-As Python 2 is the default on Debian and this version should be used, then install apt packages: python-future python-requests.
+Install Python 3 modules via the following apt packages: python3-requests python3-cryptography.<br>
+As Python 2 is the default on Debian and this version should be used, then install apt packages: python-future python-requests python-cryptography.
 
 1. Install pycryptodomex module via pip<br>
-   Python 3: `python3 -m pip install pycryptodomex`<br>
-   Python 2: `python -m pip install pycryptodomex`
+   Python 3: `pip3 install pycryptodomex`<br>
+   Python 2: `pip2 install pycryptodomex`
 
 ### Installing on Windows
 1. Install Python<br>
@@ -51,6 +52,7 @@ As Python 2 is the default on Debian and this version should be used, then insta
    * Update PIP first: `python -m pip install --upgrade pip`
    * Install requests module: `pip install requests`
    * Install pycryptodomex module: `pip install pycryptodomex`
+   * Install cryptography module: `pip install cryptography`
    * Exit Command Prompt: `exit`
 
 Executing python scripts can be done via Windows Explorer or a Command Prompt. Normally no elevation is necessary for script execution, except when the python script wants to change something in the system internals.
