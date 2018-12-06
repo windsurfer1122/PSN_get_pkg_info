@@ -66,9 +66,9 @@ import json
 import binascii
 import traceback
 
-from Cryptodome.Cipher import AES
-from Cryptodome.Util import Counter
-from Cryptodome.Hash import HMAC, SHA256
+import Cryptodome.Cipher.AES
+import Cryptodome.Util.Counter
+import Cryptodome.Hash
 
 from math import log
 from datetime import datetime
@@ -191,8 +191,8 @@ CONST_PKG3_MAIN_HEADER_FIELDS = collections.OrderedDict([ \
     ( "DATASIZE",  { "FORMAT": "Q", "DEBUG": 1, "DESC": "Data Size", }, ),
     ( "CID",       { "FORMAT": "s", "SIZE": CONST_CONTENT_ID_SIZE, "CONV": 0x0204, "DEBUG": 1, "DESC": "Content ID", }, ),
     ( "PADDING1",  { "FORMAT": "s", "SIZE": 12, "DEBUG": 3, "DESC": "Padding", "SKIP": True, }, ),
-    ( "DIGEST",    { "FORMAT": "s", "SIZE": 16, "DEBUG": 1, "DESC": "Digest", }, ),
-    ( "DATARIV",   { "FORMAT": "s", "SIZE": 16, "DEBUG": 1, "DESC": "Data RIV", }, ),
+    ( "DIGEST",    { "FORMAT": "s", "SIZE": 16, "DEBUG": 1, "DESC": "Digest", "SEP": "", }, ),
+    ( "DATARIV",   { "FORMAT": "s", "SIZE": 16, "DEBUG": 1, "DESC": "Data RIV", "SEP": "", }, ),
     #
     ( "KEYINDEX",  { "VIRTUAL": 1, "DEBUG": 1, "DESC": "Key Index for Decryption of Item Entries Table", }, ),
     ( "PARAM.SFO", { "VIRTUAL": -1, "DEBUG": 1, "DESC": "PARAM.SFO Item Name", }, ),
@@ -477,26 +477,26 @@ def getInteger64BitBE(data, offset):
     return struct.unpack(">Q", data[offset:offset+8])[0]
 
 
-def convertBytesToHexString(data, format=""):
+def convertBytesToHexString(data, format="", sep=" "):
     if isinstance(data, int):
         data = struct.pack(format, data)
     ## Python 2 workaround: convert str to bytes
     if isinstance(data, str):
         data = bytes(data)
     #
-    return " ".join(["%02x" % b for b in data])
+    return sep.join(["%02x" % b for b in data])
 
 
 def convertBytesToIntegerValue(data):
     return int(binascii.hexlify(data), 16)
 
 def calculateAesAlignedOffsetAndSize(offset, size):
-    aligned_offset_delta = offset & ( AES.block_size - 1 )
+    aligned_offset_delta = offset & ( Cryptodome.Cipher.AES.block_size - 1 )
     aligned_offset = offset - aligned_offset_delta
 
-    aligned_size_delta = size & ( AES.block_size - 1 )
+    aligned_size_delta = size & ( Cryptodome.Cipher.AES.block_size - 1 )
     if aligned_size_delta > 0:
-        aligned_size_delta = AES.block_size - aligned_size_delta
+        aligned_size_delta = Cryptodome.Cipher.AES.block_size - aligned_size_delta
     aligned_size_delta += aligned_offset_delta
     aligned_size = size + aligned_size_delta
 
@@ -565,7 +565,7 @@ class PkgReader():
 class PkgAesCtrCounter():
     def __init__(self, key, iv):
         self._key = key
-        self._key_size = AES.key_size[0] * 8  ## Key length 16 bytes = 128 bits
+        self._key_size = Cryptodome.Cipher.AES.key_size[0] * 8  ## Key length 16 bytes = 128 bits
         if isinstance(iv, int):
             self._iv = iv
         elif isinstance(iv, bytes) \
@@ -579,15 +579,15 @@ class PkgAesCtrCounter():
         #
         startcounter = self._iv
         self._block_offset = 0
-        count = offset // AES.block_size
+        count = offset // Cryptodome.Cipher.AES.block_size
         if count > 0:
             startcounter += count
-            self._block_offset += count * AES.block_size
+            self._block_offset += count * Cryptodome.Cipher.AES.block_size
         #
         if hasattr(self, "_aes"):
             del self._aes
-        counter = Counter.new(self._key_size, initial_value=startcounter)
-        self._aes = AES.new(self._key, AES.MODE_CTR, counter=counter)
+        counter = Cryptodome.Util.Counter.new(self._key_size, initial_value=startcounter)
+        self._aes = Cryptodome.Cipher.AES.new(self._key, Cryptodome.Cipher.AES.MODE_CTR, counter=counter)
 
     def decrypt(self, offset, data):
         self._setOffset(offset)
@@ -666,7 +666,11 @@ def dprintBytesStructure(CONST_STRUCTURE_FIELDS, CONST_STRUCTURE_ENDIAN, tempfie
         #
         if parent_debug_level >= field_debug_level:
             fieldformat = fielddef["FORMAT"]
-            output = formatstring.format(fielddef["INDEX"], fielddef["OFFSET"], fielddef["SIZE"], fielddef["DESC"], convertBytesToHexString(tempfields[fielddef["INDEX"]], "".join((CONST_STRUCTURE_ENDIAN, fieldformat))))
+            if "SEP" in fielddef:
+                sep = fielddef["SEP"]
+            else:
+                sep = " "
+            output = formatstring.format(fielddef["INDEX"], fielddef["OFFSET"], fielddef["SIZE"], fielddef["DESC"], convertBytesToHexString(tempfields[fielddef["INDEX"]], format="".join((CONST_STRUCTURE_ENDIAN, fieldformat)), sep=sep))
             #
             if "CONV" in fielddef:
                 if fielddef["CONV"] == 0x0004 \
@@ -677,7 +681,7 @@ def dprintBytesStructure(CONST_STRUCTURE_FIELDS, CONST_STRUCTURE_ENDIAN, tempfie
             and ( fieldformat == "L" \
                   or fieldformat == "H" \
                   or fieldformat == "Q" ) :
-                output = "".join((output, " => ", convertBytesToHexString(tempfields[fielddef["INDEX"]], "".join((CONST_FMT_BIG_ENDIAN, fieldformat)))))
+                output = "".join((output, " => ", convertBytesToHexString(tempfields[fielddef["INDEX"]], format="".join((CONST_FMT_BIG_ENDIAN, fieldformat)), sep=sep)))
             #
             dprint(output)
 
@@ -705,7 +709,12 @@ def dprintField(key, field, fielddef, formatstring, parent_debug_level, parent_p
             value = "{0} = {0:#x}".format(field)
         elif isinstance(field, bytes) \
         or isinstance(field, bytearray):
-            value = convertBytesToHexString(field)
+            if fielddef \
+            and "SEP" in fielddef:
+                sep = fielddef["SEP"]
+            else:
+                sep = " "
+            value = convertBytesToHexString(field, sep=sep)
         else:
             value = field
         #
@@ -1048,10 +1057,10 @@ def parsePkg3Header(headerbytes):
     headerfields["AES_CTR"] = {}
     for key in CONST_PKG3_CONTENT_KEYS:
         if function_debug_level >= 2:
-            dprint("Content Key #{}: {}".format(key, convertBytesToHexString(CONST_PKG3_CONTENT_KEYS[key]["KEY"])))
+            dprint("Content Key #{}: {}".format(key, convertBytesToHexString(CONST_PKG3_CONTENT_KEYS[key]["KEY"], sep="")))
         if "DERIVE" in CONST_PKG3_CONTENT_KEYS[key] \
         and CONST_PKG3_CONTENT_KEYS[key]["DERIVE"]:
-            aes = AES.new(CONST_PKG3_CONTENT_KEYS[key]["KEY"], AES.MODE_ECB)
+            aes = Cryptodome.Cipher.AES.new(CONST_PKG3_CONTENT_KEYS[key]["KEY"], Cryptodome.Cipher.AES.MODE_ECB)
             pkg_key = aes.encrypt(headerfields["DATARIV"])
             ## Python 2 workaround: convert str to bytes
             if isinstance(pkg_key, str):
@@ -1059,7 +1068,7 @@ def parsePkg3Header(headerbytes):
             headerfields["AES_CTR"][key] = PkgAesCtrCounter(pkg_key, headerfields["DATARIV"])
             del aes
             if function_debug_level >= 2:
-                dprint("Derived Key #{} from IV encrypted with Content Key: {}".format(key, convertBytesToHexString(pkg_key)))
+                dprint("Derived Key #{} from IV encrypted with Content Key: {}".format(key, convertBytesToHexString(pkg_key, sep="")))
             del pkg_key
         else:
             headerfields["AES_CTR"][key] = PkgAesCtrCounter(CONST_PKG3_CONTENT_KEYS[key]["KEY"], headerfields["DATARIV"])
@@ -1183,7 +1192,7 @@ def parsePkg3ItemEntries(headerfields):
     for _i in range(headerfields["ITEMCNT"]):  ## 0 to <item count - 1>
         tempfields = struct.unpack(CONST_PKG3_ITEM_ENTRY_FIELDS["STRUCTURE_UNPACK"], tempbytes[offset:offset+CONST_PKG3_ITEM_ENTRY_FIELDS["STRUCTURE_SIZE"]])
         if function_debug_level >= 2:
-            dprintBytesStructure(CONST_PKG3_ITEM_ENTRY_FIELDS, CONST_PKG3_HEADER_ENDIAN, tempfields, "".join(("PKG3 Body Item Entry[", itemcntformatstring.format(_i),"][{:1}]: [", "{:#06x}+".format(headerfields["DATAOFS"] + offset), "{:#04x}|{:1}] {} = {}")), function_debug_level)
+            dprintBytesStructure(CONST_PKG3_ITEM_ENTRY_FIELDS, CONST_PKG3_HEADER_ENDIAN, tempfields, "".join(("PKG3 Body Item Entry[", itemcntformatstring.format(_i), "][{:1}]: [", "{:#06x}+".format(headerfields["DATAOFS"] + offset), "{:#04x}|{:1}] {} = {}")), function_debug_level)
         tempfields = convertFieldsToOrdDict(CONST_PKG3_ITEM_ENTRY_FIELDS, tempfields)
         tempfields["INDEX"] = _i
         tempfields["KEYINDEX"] = ( tempfields["FLAGS"] >> 28 ) & 0x7
@@ -1320,7 +1329,7 @@ def parseSfo(sfobytes):
     for _i in range(headerfields["COUNT"]):  ## 0 to <count - 1>
         tempfields = struct.unpack(CONST_PARAM_SFO_INDEX_ENTRY_FIELDS["STRUCTURE_UNPACK"], tempbytes[offset:offset+CONST_PARAM_SFO_INDEX_ENTRY_FIELDS["STRUCTURE_SIZE"]])
         if function_debug_level >= 3:
-            dprintBytesStructure(CONST_PARAM_SFO_INDEX_ENTRY_FIELDS, CONST_PARAM_SFO_ENDIAN, tempfields, "".join(("SFO Index Entry[", cntformatstring.format(_i),"][{:1}]: [{:#03x}|{:1}] {} = {}")), function_debug_level)
+            dprintBytesStructure(CONST_PARAM_SFO_INDEX_ENTRY_FIELDS, CONST_PARAM_SFO_ENDIAN, tempfields, "".join(("SFO Index Entry[", cntformatstring.format(_i), "][{:1}]: [{:#03x}|{:1}] {} = {}")), function_debug_level)
         tempfields = convertFieldsToOrdDict(CONST_PARAM_SFO_INDEX_ENTRY_FIELDS, tempfields)
         keyname = convertUtf8BytesToString(sfobytes[headerfields["KEYTBLOFS"]+tempfields["KEYOFS"]:], 0x0204)
         data = bytes(sfobytes[headerfields["DATATBLOFS"]+tempfields["DATAOFS"]:headerfields["DATATBLOFS"]+tempfields["DATAOFS"]+tempfields["DATAUSEDSIZE"]])
@@ -1761,7 +1770,7 @@ if __name__ == "__main__":
             ## b) International/English title
             SfoTitle = ""
             for Language in [ "01", "18" ]:
-                Key = "TITLE_" + Language
+                Key = "".join(("TITLE_", Language))
                 if SfoValues \
                 and Key in SfoValues:
                    if DebugLevel >= 2:
@@ -1786,7 +1795,7 @@ if __name__ == "__main__":
                         for _i in range(len(ReplaceChars[0])):
                             ReplaceChar = ReplaceChars[0][_i]
                             if ReplaceChars[1] == " ":
-                                SfoTitle = SfoTitle.replace(ReplaceChar + ":", ":")
+                                SfoTitle = SfoTitle.replace("".join((ReplaceChar, ":")), ":")
                             SfoTitle = SfoTitle.replace(ReplaceChar, ReplaceChars[1])
                 SfoTitle = re.sub(r"\s+", " ", SfoTitle, 0, re.UNICODE).strip()  ## also replaces \u3000
                 ## Condense demo information in title to "(DEMO)"
@@ -1796,7 +1805,7 @@ if __name__ == "__main__":
             ## c) Regional title
             SfoTitleRegional = ""
             for Language in Languages:
-                Key = "TITLE_" + Language
+                Key = "".join(("TITLE_", Language))
                 if SfoValues \
                 and Key in SfoValues:
                    if DebugLevel >= 2:
@@ -1821,7 +1830,7 @@ if __name__ == "__main__":
                         for _i in range(len(ReplaceChars[0])):
                             ReplaceChar = ReplaceChars[0][_i]
                             if ReplaceChars[1] == " ":
-                                SfoTitleRegional = SfoTitleRegional.replace(ReplaceChar + ":", ":")
+                                SfoTitleRegional = SfoTitleRegional.replace("".join((ReplaceChar, ":")), ":")
                             SfoTitleRegional = SfoTitleRegional.replace(ReplaceChar, ReplaceChars[1])
                 SfoTitleRegional = re.sub(r"\s+", " ", SfoTitleRegional, 0, re.UNICODE).strip()  ## also replaces \u3000
 
@@ -1859,14 +1868,14 @@ if __name__ == "__main__":
                 if SfoCategory == "gp":
                     NpsType = "VITA UPDATE"
                 if TitleId and TitleId.strip():
-                    UpdateHash = HMAC.new(CONST_PKG3_UPDATE_KEYS[2]["KEY"], digestmod=SHA256)
-                    UpdateHash.update(("np_" + TitleId).encode("UTF-8"))
+                    UpdateHash = Cryptodome.Hash.HMAC.new(CONST_PKG3_UPDATE_KEYS[2]["KEY"], digestmod=Cryptodome.Hash.SHA256)
+                    UpdateHash.update("".join(("np_", TitleId)).encode("UTF-8"))
                     TitleUpdateUrl = "http://gs-sec.ww.np.dl.playstation.net/pl/np/{0}/{1}/{0}-ver.xml".format(TitleId, UpdateHash.hexdigest())
             elif PkgContentType == 0x16:
                 NpsType = "VITA DLC"  #md_type = 17
                 if TitleId and TitleId.strip():
-                    UpdateHash = HMAC.new(CONST_PKG3_UPDATE_KEYS[2]["KEY"], digestmod=SHA256)
-                    UpdateHash.update(("np_" + TitleId).encode("UTF-8"))
+                    UpdateHash = Cryptodome.Hash.HMAC.new(CONST_PKG3_UPDATE_KEYS[2]["KEY"], digestmod=Cryptodome.Hash.SHA256)
+                    UpdateHash.update("".join(("np_", TitleId)).encode("UTF-8"))
                     TitleUpdateUrl = "http://gs-sec.ww.np.dl.playstation.net/pl/np/{0}/{1}/{0}-ver.xml".format(TitleId, UpdateHash.hexdigest())
             elif PkgContentType == 0x1F:
                 NpsType = "VITA THEME"  #md_type = 17
@@ -1920,7 +1929,7 @@ if __name__ == "__main__":
                         print("unset PSN_PKG_TITLEID")
                     if ContentId and ContentId.strip():
                         print("PSN_PKG_CONTENTID='{}'".format(ContentId))
-                        print("PSN_PKG_REGION='{}'".format(Region.replace("(HKG)","").replace("(KOR)","")))
+                        print("PSN_PKG_REGION='{}'".format(Region.replace("(HKG)", "").replace("(KOR)", "")))
                     else:
                         print("unset PSN_PKG_CONTENTID")
                         print("unset PSN_PKG_REGION")
@@ -1970,11 +1979,29 @@ if __name__ == "__main__":
                         dprintFieldsDict(HeaderFields, "headerfields[{KEY:14}|{INDEX:2}]", 2, None, print)
                         if ExtHeaderFields:
                             dprintFieldsDict(ExtHeaderFields, "extheaderfields[{KEY:14}|{INDEX:2}]", 2, None, print)
-                        dprintFieldsDict(MetaData, "metadata[{KEY:#04x}]", 2, None, print)
+                        for _i in MetaData:
+                            print("metadata[{:#04x}]:".format(_i), end=" ")
+                            if "DESC" in MetaData[_i]:
+                                print("Desc \"", MetaData[_i]["DESC"], "\"", sep="", end=" ")
+                            if "OFS" in MetaData[_i]:
+                                print("Ofs {:#012x}".format(MetaData[_i]["OFS"]), end=" ")
+                            if "SIZE" in MetaData[_i]:
+                                print("Size {:12}".format(MetaData[_i]["SIZE"]), end=" ")
+                            if "SHA256" in MetaData[_i]:
+                                print("SHA256", convertBytesToHexString(MetaData[_i]["SHA256"], sep=""), end=" ")
+                            if "VALUE" in MetaData[_i]:
+                                if isinstance(MetaData[_i]["VALUE"], bytes) \
+                                or isinstance(MetaData[_i]["VALUE"], bytearray):
+                                    print("Value", convertBytesToHexString(MetaData[_i]["VALUE"], sep=""), end=" ")
+                                else:
+                                    print("Value", MetaData[_i]["VALUE"], end=" ")
+                            if "UNKNOWN" in MetaData[_i]:
+                                print("Unknown", convertBytesToHexString(MetaData[_i]["UNKNOWN"], sep=""), end=" ")
+                            print()
                         if ItemEntries:
                             FormatString = "".join(("{:", unicode(len(unicode(HeaderFields["ITEMCNT"]))), "}"))
                             for _i in range(len(ItemEntries)):
-                                print("".join(("itementries[", FormatString, "]: Ofs {:#012x} Size {:12} Key Index {} {}")).format(_i, ItemEntries[_i]["DATAOFS"], ItemEntries[_i]["DATASIZE"], ItemEntries[_i]["KEYINDEX"],"".join(("Name \"", ItemEntries[_i]["NAME"], "\"")) if "NAME" in ItemEntries[_i] else ""))
+                                print("".join(("itementries[", FormatString, "]: Ofs {:#012x} Size {:12} Key Index {} {}")).format(_i, ItemEntries[_i]["DATAOFS"], ItemEntries[_i]["DATASIZE"], ItemEntries[_i]["KEYINDEX"], "".join(("Name \"", ItemEntries[_i]["NAME"], "\"")) if "NAME" in ItemEntries[_i] else ""))
                     elif PkgMagic == CONST_PKG4_MAGIC:
                         dprintFieldsDict(HeaderFields, "headerfields[{KEY:14}|{INDEX:2}]", 2, None, print)
                         FormatString = "".join(("{:", unicode(len(unicode(HeaderFields["FILECNT"]))), "}"))
