@@ -68,6 +68,7 @@ import traceback
 
 from Cryptodome.Cipher import AES
 from Cryptodome.Util import Counter
+from Cryptodome.Hash import HMAC, SHA256
 
 from math import log
 from datetime import datetime
@@ -238,6 +239,10 @@ CONST_PKG3_CONTENT_KEYS = {
    3: { "KEY": bytes.fromhex("423aca3a2bd5649f9686abad6fd8801f"), "DESC": "Unknown", "DERIVE": True, },
    4: { "KEY": bytes.fromhex("af07fd59652527baf13389668b17d9ea"), "DESC": "PSM",     "DERIVE": True, },
 }
+## --> PKG Update Keys
+CONST_PKG3_UPDATE_KEYS = {
+   2: { "KEY": bytes.fromhex("e5e278aa1ee34082a088279c83f9bbc806821c52f2ab5d2b4abd995450355114"), "DESC": "PSV", },
+}
 
 ##
 ## PKG4 Definitions
@@ -326,15 +331,15 @@ CONST_PKG4_FILE_ENTRY_ID_NAME_TABLE   = 0x0200
 CONST_PKG4_FILE_ENTRY_ID_PARAM_SFO    = 0x1000
 #
 CONST_PKG4_FILE_ENTRY_NAME_MAP = {
-	CONST_PKG4_FILE_ENTRY_ID_DIGEST_TABLE: ".digests",
-	CONST_PKG4_FILE_ENTRY_ID_ENTRY_KEYS: ".entry_keys",
-	CONST_PKG4_FILE_ENTRY_ID_IMAGE_KEY: ".image_key",
-	CONST_PKG4_FILE_ENTRY_ID_GENERAL_DIGESTS: ".general_digests",
-	CONST_PKG4_FILE_ENTRY_ID_META_TABLE: ".metatable",
-	CONST_PKG4_FILE_ENTRY_ID_NAME_TABLE: ".nametable",
+    CONST_PKG4_FILE_ENTRY_ID_DIGEST_TABLE: ".digests",
+    CONST_PKG4_FILE_ENTRY_ID_ENTRY_KEYS: ".entry_keys",
+    CONST_PKG4_FILE_ENTRY_ID_IMAGE_KEY: ".image_key",
+    CONST_PKG4_FILE_ENTRY_ID_GENERAL_DIGESTS: ".general_digests",
+    CONST_PKG4_FILE_ENTRY_ID_META_TABLE: ".metatable",
+    CONST_PKG4_FILE_ENTRY_ID_NAME_TABLE: ".nametable",
 
-	0x0400: "license.dat",
-	0x0401: "license.info",
+    0x0400: "license.dat",
+    0x0401: "license.info",
     0x0402: "nptitle.dat",
     0x0403: "npbind.dat",
     0x0404: "selfinfo.dat",
@@ -343,15 +348,15 @@ CONST_PKG4_FILE_ENTRY_NAME_MAP = {
     0x0408: "origin-deltainfo.dat",
     0x0409: "psreserved.dat",
 
-  	CONST_PKG4_FILE_ENTRY_ID_PARAM_SFO: "param.sfo",
-	0x1001: "playgo-chunk.dat",
-	0x1002: "playgo-chunk.sha",
-	0x1003: "playgo-manifest.xml",
-	0x1004: "pronunciation.xml",
-	0x1005: "pronunciation.sig",
-	0x1006: "pic1.png",
+    CONST_PKG4_FILE_ENTRY_ID_PARAM_SFO: "param.sfo",
+    0x1001: "playgo-chunk.dat",
+    0x1002: "playgo-chunk.sha",
+    0x1003: "playgo-manifest.xml",
+    0x1004: "pronunciation.xml",
+    0x1005: "pronunciation.sig",
+    0x1006: "pic1.png",
     0x1007: "pubtoolinfo.dat",
-	0x1008: "app/playgo-chunk.dat",
+    0x1008: "app/playgo-chunk.dat",
     0x1009: "app/playgo-chunk.sha",
     0x100a: "app/playgo-manifest.xml",
     0x100b: "shareparam.json",
@@ -445,6 +450,7 @@ CONST_PARAM_SFO_INDEX_ENTRY_FIELDS = collections.OrderedDict([ \
     ( "DATAMAXSIZE",  { "FORMAT": "L", "DEBUG": 1, "DESC": "Data Maximum Size", }, ),
     ( "DATAOFS",      { "FORMAT": "L", "DEBUG": 1, "DESC": "Data Offset", }, ),
 ])
+
 
 
 def prettySize(n, pow=0, b=1024, u="B", pre=[""]+[p+"i"for p in "KMGTPEZY"]):
@@ -1525,6 +1531,8 @@ if __name__ == "__main__":
             TitleId = ""
             Region = ""
             Languages = []
+            UpdateHash = None
+            TitleUpdateUrl = ""
             #
             Headers = {"User-Agent": "Mozilla/5.0 (PLAYSTATION 3; 4.83)"}  ## Default to PS3 headers (fits PS3/PSX/PSP/PSV packages, but not PSM packages for PSV)
 
@@ -1829,13 +1837,19 @@ if __name__ == "__main__":
                     NpsType = "PS3 UPDATE"
                 else:
                     NpsType = "PS3 DLC"  #md_type = 9 | Also PS3 updates : md_type = 11
+                if TitleId and TitleId.strip():
+                    TitleUpdateUrl = "https://a0.ww.np.dl.playstation.net/tpl/np/{0}/{0}-ver.xml".format(TitleId)
             elif PkgContentType == 0x5:
                 NpsType = "PS3 GAME"  #md_type = 5
+                if TitleId and TitleId.strip():
+                    TitleUpdateUrl = "https://a0.ww.np.dl.playstation.net/tpl/np/{0}/{0}-ver.xml".format(TitleId)
             elif PkgContentType == 0x7:
                 if PkgMdType0B == True:
                     NpsType = "PSP DLC"
                 else:
                     NpsType = "PSP GAME"  #md_type = 9 | Also PSP DLCS : md_type = 10
+                if TitleId and TitleId.strip():
+                    TitleUpdateUrl = "https://a0.ww.np.dl.playstation.net/tpl/np/{0}/{0}-ver.xml".format(TitleId)
             elif PkgContentType == 0x9:
                 NpsType = "PSP or PS3 THEME"  #md_type = 9 | Also PS3 THEMES : md_type = 9
             elif PkgContentType == 0xD:
@@ -1844,12 +1858,20 @@ if __name__ == "__main__":
                 NpsType = "VITA APP"  #md_type = 18
                 if SfoCategory == "gp":
                     NpsType = "VITA UPDATE"
+                if TitleId and TitleId.strip():
+                    UpdateHash = HMAC.new(CONST_PKG3_UPDATE_KEYS[2]["KEY"], digestmod=SHA256)
+                    UpdateHash.update(("np_" + TitleId).encode("UTF-8"))
+                    TitleUpdateUrl = "http://gs-sec.ww.np.dl.playstation.net/pl/np/{0}/{1}/{0}-ver.xml".format(TitleId, UpdateHash.hexdigest())
             elif PkgContentType == 0x16:
                 NpsType = "VITA DLC"  #md_type = 17
+                if TitleId and TitleId.strip():
+                    UpdateHash = HMAC.new(CONST_PKG3_UPDATE_KEYS[2]["KEY"], digestmod=SHA256)
+                    UpdateHash.update(("np_" + TitleId).encode("UTF-8"))
+                    TitleUpdateUrl = "http://gs-sec.ww.np.dl.playstation.net/pl/np/{0}/{1}/{0}-ver.xml".format(TitleId, UpdateHash.hexdigest())
             elif PkgContentType == 0x1F:
                 NpsType = "VITA THEME"  #md_type = 17
             elif PkgContentType == 0x18:
-        	    NpsType = "PSM GAME"  #md_type = 16
+                NpsType = "PSM GAME"  #md_type = 16
             else:
                 eprint("\nERROR: PKG content type {0}/{0:#0x} not supported. {1}".format(PkgContentType, Source))
 
@@ -1886,6 +1908,8 @@ if __name__ == "__main__":
                     print("{:13} {}".format("Pretty Size:", prettySize(PkgTotalSize)))
                     if FileSize:
                         print("{:13} {}".format("File Size:", FileSize))
+                    if TitleUpdateUrl and TitleUpdateUrl.strip():
+                        print("{:13} {}".format("Update URL:", TitleUpdateUrl))
                     print()
                 elif OutputFormat == 1:  ## Linux Shell Variable Output
                     print("PSN_PKG_SIZE='{}'".format(PkgTotalSize))
