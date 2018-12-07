@@ -62,9 +62,9 @@ import locale
 import os
 import getopt
 import re
+import traceback
 import json
 import binascii
-import traceback
 
 import Cryptodome.Cipher.AES
 import Cryptodome.Util.Counter
@@ -1377,7 +1377,7 @@ def parseSfo(sfobytes):
 
 
 def showUsage():
-    eprint("Usage: {} [options] <URL or path to PKG file> [<URL|PATH> ...]".format(sys.argv[0]))
+    eprint("Usage: {} [options] <Path or URL to PKG file> [<PATH|URL> ...]".format(sys.argv[0]))
     eprint("  -h/--help       Show this help")
     eprint("  -f/--format=<n> Format of output via code (multiple allowed)")
     for key in OutputFormatsKnown:

@@ -14,8 +14,6 @@
   * Extracted all data via -f 99 to separate text files and grep'ed through them
 
 ## Wishlist
-- [ ] Verify function
-  * Read the following block with digest (0x40) or SHA-1 (0x20) and compare with result
 - [ ] Extend PS4 package support
   * Decrypt files (not necessary, nice-to-have)
     http://www.psdevwiki.com/ps4/PKG_files#PFS
