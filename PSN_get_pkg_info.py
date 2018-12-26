@@ -1401,8 +1401,9 @@ def processPkg3Item(header_fields, item_entry, data_stream, item_data, raw_strea
         #if dec_hashes:
         #    hash decrypted_bytes
         #
-        if item_data:
-            item_data.extend(decrypted_bytes)
+        if item_data \
+        and "DECRYPTED" in item_data:
+            item_data["DECRYPTED"].extend(decrypted_bytes)
         #
         if raw_stream:
             raw_stream.write(decrypted_bytes)
@@ -1421,7 +1422,8 @@ def processPkg3Item(header_fields, item_entry, data_stream, item_data, raw_strea
 
     ## Remove aligned data from result
     if item_data:
-        item_data = item_data[item_entry["ALIGN"]["OFSDELTA"]:item_entry["ALIGN"]["OFSDELTA"]+item_entry["DATASIZE"]]
+        if "DECRYPTED" in item_data:
+            item_data["DECRYPTED"] = item_data["DECRYPTED"][item_entry["ALIGN"]["OFSDELTA"]:item_entry["ALIGN"]["OFSDELTA"]+item_entry["DATASIZE"]]
 
     return
 
@@ -1832,7 +1834,8 @@ if __name__ == "__main__":
                         and Item_Entry["NAME"] \
                         and Item_Entry["NAME"] == Header_Fields["PARAM.SFO"] \
                         and Item_Entry["DATASIZE"] > 0:
-                            Item_Data = bytearray()
+                            Item_Data = {}
+                            Item_Data["DECRYPTED"] = bytearray()
                         #
                         Extract_Stream = None
                         if Arguments.extract:
@@ -1848,7 +1851,7 @@ if __name__ == "__main__":
                             and Item_Entry["NAME"] \
                             and Item_Entry["NAME"] == Header_Fields["PARAM.SFO"] \
                             and Item_Entry["DATASIZE"] > 0:
-                                Sfo_Bytes = Item_Data
+                                Sfo_Bytes = Item_Data["DECRYPTED"]
                         #
                         del Item_Data
                     del Item_Entry
