@@ -19,8 +19,9 @@ Extract package information from header and PARAM.SFO of PS3/PSX/PSP/PSV/PSM and
 
 ## Execution
 For available options execute: PSN_get_pkg_info.py -h<br>
+It is recommended to place "--" before the package sources, to avoid them being used as targets, e.g. `PSN_get_pkg_info.py --raw -- 01.pkg 02.pkg` will never kill the 01.pkg!<br>
 Use at your own risk!<br>
-If you state URLs then only the necessary bytes are downloaded into memory.
+If you state URLs then only the necessary bytes are downloaded into memory. Note that the options "--raw" downloads the complete package once without storing the original data on the file system.
 
 ## Requirements
 * Python Modules

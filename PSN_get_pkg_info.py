@@ -12,18 +12,18 @@
 ### git master repository at https://github.com/windsurfer1122
 ### Read README.md for more information including Python requirements and more
 ###
-### Workarounds for Python 2 (see: http://python-future.org/compatible_idioms.html)
-### - use of struct.unpack() instead of int.from_bytes()
+### Python 2 backward-compatible workarounds:
+### - handle prefix in kwargs manually
+### - set system default encoding to UTF-8
+### - define unicode() for Python 3 like in Python 2 (ugly)
 ### - convert byte string of struct.pack() to bytes
-### - use future print function
-### - use future unicode literals
 ###
-### Adopted PEP8 Coding Style:
-### * [joined_]lower for attributes, variables
-### * ALL_CAPS for constants
-### * StudlyCaps for classes
+### Adopted PEP8 Coding Style: (see https://www.python.org/dev/peps/pep-0008/)
+### * (differs to PEP8) Studly_Caps_With_Underscores for global variables
 ### * (differs to PEP8) mixedCase for functions, methods
-### * (differs to PEP8) StudlyCaps global variables
+### * lower_case_with_underscores for attributes, variables
+### * UPPER_CASE_WITH_UNDERSCORES for constants
+### * StudlyCaps for classes
 ###
 
 ###
@@ -41,18 +41,27 @@
 ### along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ###
 
-### Python 2 workarounds:
+### Python 2 future-compatible workarounds: (see: http://python-future.org/compatible_idioms.html)
 ## a) prevent interpreting print(a,b) as a tuple plus support print(a, file=sys.stderr)
 from __future__ import print_function
 ## b) interpret all literals as unicode
 from __future__ import unicode_literals
 ## c) same division handling ( / = float, // = integer)
 from __future__ import division
-## d) interpret long as int
+## d) interpret long as int, support int.from_bytes()
 from builtins import int
 ## e) support bytes()
 from builtins import bytes
 
+
+## Version definition
+__version__ = "2018.12.26"
+__author__ = "https://github.com/windsurfer1122/PSN_get_pkg_info"
+__license__ = "GPL"
+__copyright__ = "Copyright 2018, windsurfer1122"
+
+
+## Imports
 import sys
 import struct
 import io
@@ -60,11 +69,11 @@ import requests
 import collections
 import locale
 import os
-import getopt
+import argparse
 import re
 import traceback
 import json
-import binascii
+import random
 
 import Cryptodome.Cipher.AES
 import Cryptodome.Util.Counter
@@ -75,17 +84,39 @@ from datetime import datetime
 
 
 ## Debug level for Python initializations (will be reset in "main" code)
-DebugLevel = 0
+Debug_Level = 0
 
 
 ## Error and Debug print to stderr
 ## https://stackoverflow.com/questions/5574702/how-to-print-to-stderr-in-python
 def eprint(*args, **kwargs):  ## error print
+    ## Python 2 workaround: handle prefix in kwargs manually
+    #def eprint(*args, prefix="[ERROR] ", **kwargs):  ## Python 3 only
+    if "prefix" in kwargs:
+        prefix = kwargs["prefix"]
+        del kwargs["prefix"]
+    else:
+        prefix="[ERROR] "
+    #
+    if not prefix is None \
+    and prefix != "":
+        print(prefix, file=sys.stderr, end="")
     print(*args, file=sys.stderr, **kwargs)
 
 def dprint(*args, **kwargs):  ## debug print
-    if DebugLevel:
-        print("[debug]", *args, file=sys.stderr, **kwargs)
+    if Debug_Level:
+        ## Python 2 workaround: handle prefix in kwargs manually
+        #def dprint(*args, prefix="[debug] ", **kwargs):  ## Python 3 only
+        if "prefix" in kwargs:
+            prefix = kwargs["prefix"]
+            del kwargs["prefix"]
+        else:
+            prefix="[debug] "
+        #
+        if not prefix is None \
+        and prefix != "":
+            print(prefix, file=sys.stderr, end="")
+        print(*args, file=sys.stderr, **kwargs)
 
 
 ## Enhanced TraceBack
@@ -112,34 +143,50 @@ def print_exc_plus():
             #printer! Calling str() on an unknown object could cause an
             #error we don't want.
             try:
-                eprint(value)
+                eprint(value, prefix=None)
             except:
-                eprint("<ERROR WHILE PRINTING VALUE>")
+                eprint("<ERROR WHILE PRINTING VALUE>", prefix=None)
 
     traceback.print_exc()
 
 
-## Python 2 workaround: set system default encoding to UTF-8 like in Python 3
-## All results will be Unicode and we want all output to be UTF-8
-if sys.getdefaultencoding().lower() != "utf-8":
-    if DebugLevel >= 1:
-        dprint("Default Encoding set from {} to UTF-8".format(sys.getdefaultencoding()))
-    reload(sys)
-    sys.setdefaultencoding("utf-8")
+## General debug information related to Python
+if Debug_Level >= 1:
+    dprint("Python Version", sys.version)
 
-## General debug information related to Python and Unicode
-if DebugLevel >= 1:
+## Python 2/Windows workaround: set system default encoding to UTF-8 like in Python 3
+## All results will be Unicode and we want all output to be UTF-8
+try:
+    reload
+except NameError:
+    ## Python 3.4+
+    from importlib import reload
+reload(sys)
+if sys.getdefaultencoding().lower() != "utf-8":
+    if Debug_Level >= 1:
+        dprint("Default Encoding setting from {} to UTF-8".format(sys.getdefaultencoding()))
+    sys.setdefaultencoding("utf-8")
+if sys.stdout.encoding.lower() != "utf-8":
+    if Debug_Level >= 1:
+        dprint("STDOUT Encoding setting from {} to UTF-8".format(sys.stdout.encoding))
+    sys.stdout.reconfigure(encoding='utf-8')
+if sys.stderr.encoding.lower() != "utf-8":
+    if Debug_Level >= 1:
+        dprint("STDERR Encoding setting from {} to UTF-8".format(sys.stderr.encoding))
+    sys.stderr.reconfigure(encoding='utf-8')
+
+## General debug information related to Unicode
+if Debug_Level >= 1:
     ## List encodings
-    dprint("Python Version {}".format(sys.version))
-    dprint("DEFAULT Encoding {}".format(sys.getdefaultencoding()))
-    dprint("LOCALE Encoding {}".format(locale.getpreferredencoding()))
+    dprint("DEFAULT Encoding", sys.getdefaultencoding())
+    dprint("LOCALE Encoding", locale.getpreferredencoding())
     dprint("STDOUT Encoding {} Terminal {}".format(sys.stdout.encoding, sys.stdout.isatty()))
     dprint("STDERR Encoding {} Terminal {}".format(sys.stderr.encoding, sys.stderr.isatty()))
-    dprint("FILESYS Encoding {}".format(sys.getfilesystemencoding()))
+    dprint("FILESYS Encoding", sys.getfilesystemencoding())
     value = ""
     if "PYTHONIOENCODING" in os.environ:
         value = os.environ["PYTHONIOENCODING"]
-    dprint("PYTHONIOENCODING={}".format(value))
+    dprint("PYTHONIOENCODING=", value, sep="")
     ## Check Unicode
     dprint("ö ☺ ☻")
 
@@ -150,15 +197,17 @@ if DebugLevel >= 1:
 try:
     unicode
 except:
-    if DebugLevel >= 1:
+    if Debug_Level >= 1:
         dprint("Define \"unicode = str\" for Python 3 :(")
     unicode = str
 
 
 ## Generic definitions
-OutputFormatsKnown = {
+OUTPUT_FORMATS = {
    0: "Human-readable Output [default]",
    1: "Linux Shell Variable Output",
+   97: "NPS Output in JSON format",
+   98: "Analysis Output in JSON format",
    99: "Analysis Output",
 }
 #
@@ -166,6 +215,8 @@ CONST_FMT_BIG_ENDIAN = ">"
 CONST_FMT_LITTLE_ENDIAN = "<"
 CONST_FMT_UINT64, CONST_FMT_UINT32, CONST_FMT_UINT16, CONST_FMT_UINT8 = 'Q', 'L', 'H', 'B'
 CONST_FMT_INT64, CONST_FMT_INT32, CONST_FMT_INT16, CONST_FMT_INT8 = 'q', 'l', 'h', 'b'
+#
+CONST_READ_SIZE = random.randint(50,100) * 0x100000  ## Read in 50-100 MiB chunks to reduce memory usage and swapping
 
 ## Generic PKG definitions
 CONST_CONTENT_ID_SIZE = 0x24
@@ -374,60 +425,60 @@ CONST_PKG4_FILE_ENTRY_NAME_MAP = {
 }
 #
 ## 0x1201-0x121f: icon0_<nn>.png
-for count in range(0x1f):
-    key = 0x1201 + count
-    CONST_PKG4_FILE_ENTRY_NAME_MAP[key] = "icon0_{:02}.png".format(count)
-    if DebugLevel >= 2:
-        dprint("Add ID {:#06x} Name \"{}\"".format(key, CONST_PKG4_FILE_ENTRY_NAME_MAP[key]))
+for Count in range(0x1f):
+    Key = 0x1201 + Count
+    CONST_PKG4_FILE_ENTRY_NAME_MAP[Key] = "icon0_{:02}.png".format(Count)
+    if Debug_Level >= 2:
+        dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_FILE_ENTRY_NAME_MAP[Key]))
 #
 ## 0x1241-0x125f: pic1_<nn>.png
-for count in range(0x1f):
-    key = 0x1241 + count
-    CONST_PKG4_FILE_ENTRY_NAME_MAP[key] = "pic1_{:02}.png".format(count)
-    if DebugLevel >= 2:
-        dprint("Add ID {:#06x} Name \"{}\"".format(key, CONST_PKG4_FILE_ENTRY_NAME_MAP[key]))
+for Count in range(0x1f):
+    Key = 0x1241 + Count
+    CONST_PKG4_FILE_ENTRY_NAME_MAP[Key] = "pic1_{:02}.png".format(Count)
+    if Debug_Level >= 2:
+        dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_FILE_ENTRY_NAME_MAP[Key]))
 #
 ## 0x1261-0x127f: pic1_<nn>.png
-for count in range(0x1f):
-    key = 0x1261 + count
-    CONST_PKG4_FILE_ENTRY_NAME_MAP[key] = "changeinfo/changeinfo_{:02}.xml".format(count)
-    if DebugLevel >= 2:
-        dprint("Add ID {:#06x} Name \"{}\"".format(key, CONST_PKG4_FILE_ENTRY_NAME_MAP[key]))
+for Count in range(0x1f):
+    Key = 0x1261 + Count
+    CONST_PKG4_FILE_ENTRY_NAME_MAP[Key] = "changeinfo/changeinfo_{:02}.xml".format(Count)
+    if Debug_Level >= 2:
+        dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_FILE_ENTRY_NAME_MAP[Key]))
 #
 ## 0x1281-0x129f: icon0_<nn>.dds
-for count in range(0x1f):
-    key = 0x1281 + count
-    CONST_PKG4_FILE_ENTRY_NAME_MAP[key] = "icon0_{:02}.dds".format(count)
-    if DebugLevel >= 2:
-        dprint("Add ID {:#06x} Name \"{}\"".format(key, CONST_PKG4_FILE_ENTRY_NAME_MAP[key]))
+for Count in range(0x1f):
+    Key = 0x1281 + Count
+    CONST_PKG4_FILE_ENTRY_NAME_MAP[Key] = "icon0_{:02}.dds".format(Count)
+    if Debug_Level >= 2:
+        dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_FILE_ENTRY_NAME_MAP[Key]))
 #
 ## 0x12c1-0x12df: pic1_<nn>.dds
-for count in range(0x1f):
-    key = 0x12c1 + count
-    CONST_PKG4_FILE_ENTRY_NAME_MAP[key] = "pic1_{:02}.dds".format(count)
-    if DebugLevel >= 2:
-        dprint("Add ID {:#06x} Name \"{}\"".format(key, CONST_PKG4_FILE_ENTRY_NAME_MAP[key]))
+for Count in range(0x1f):
+    Key = 0x12c1 + Count
+    CONST_PKG4_FILE_ENTRY_NAME_MAP[Key] = "pic1_{:02}.dds".format(Count)
+    if Debug_Level >= 2:
+        dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_FILE_ENTRY_NAME_MAP[Key]))
 #
 ## 0x1400-0x1463: trophy/trophy<nn>.dds
-for count in range(0x64):
-    key = 0x1400 + count
-    CONST_PKG4_FILE_ENTRY_NAME_MAP[key] = "trophy/trophy{:02}.trp".format(count)
-    if DebugLevel >= 2:
-        dprint("Add ID {:#06x} Name \"{}\"".format(key, CONST_PKG4_FILE_ENTRY_NAME_MAP[key]))
+for Count in range(0x64):
+    Key = 0x1400 + Count
+    CONST_PKG4_FILE_ENTRY_NAME_MAP[Key] = "trophy/trophy{:02}.trp".format(Count)
+    if Debug_Level >= 2:
+        dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_FILE_ENTRY_NAME_MAP[Key]))
 #
 ## 0x1600-0x1609: keymap_rp/<nn>.png
-for count in range(0x0a):
-    key = 0x1600 + count
-    CONST_PKG4_FILE_ENTRY_NAME_MAP[key] = "keymap_rp/{:03}.png".format(count)
-    if DebugLevel >= 2:
-        dprint("Add ID {:#06x} Name \"{}\"".format(key, CONST_PKG4_FILE_ENTRY_NAME_MAP[key]))
+for Count in range(0x0a):
+    Key = 0x1600 + Count
+    CONST_PKG4_FILE_ENTRY_NAME_MAP[Key] = "keymap_rp/{:03}.png".format(Count)
+    if Debug_Level >= 2:
+        dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_FILE_ENTRY_NAME_MAP[Key]))
 #
 ## 0x1610-0x17f9: keymap_rp/<nn>/<nnn>.png
-for count in range(0x01ea):
-    key = 0x1610 + count
-    CONST_PKG4_FILE_ENTRY_NAME_MAP[key] = "keymap_rp/{:02}/{:03}.png".format(count >> 4, count & 0xf )
-    if DebugLevel >= 2:
-        dprint("Add ID {:#06x} Name \"{}\"".format(key, CONST_PKG4_FILE_ENTRY_NAME_MAP[key]))
+for Count in range(0x01ea):
+    Key = 0x1610 + Count
+    CONST_PKG4_FILE_ENTRY_NAME_MAP[Key] = "keymap_rp/{:02}/{:03}.png".format(Count >> 4, Count & 0xf )
+    if Debug_Level >= 2:
+        dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_FILE_ENTRY_NAME_MAP[Key]))
 
 ##
 ## PARAM.SFO Definitions
@@ -477,6 +528,14 @@ def getInteger64BitBE(data, offset):
     return struct.unpack(">Q", data[offset:offset+8])[0]
 
 
+def specialToJSON(python_object):
+    if isinstance(python_object, bytes):
+        return {'__class__': 'bytes',
+                '__value__': convertBytesToHexString(python_object, sep="")}
+    if isinstance(python_object, PkgAesCtrCounter):
+        return ""
+    raise TypeError("".join((repr(python_object), " is not JSON serializable")))
+
 def convertBytesToHexString(data, format="", sep=" "):
     if isinstance(data, int):
         data = struct.pack(format, data)
@@ -487,20 +546,19 @@ def convertBytesToHexString(data, format="", sep=" "):
     return sep.join(["%02x" % b for b in data])
 
 
-def convertBytesToIntegerValue(data):
-    return int(binascii.hexlify(data), 16)
-
 def calculateAesAlignedOffsetAndSize(offset, size):
-    aligned_offset_delta = offset & ( Cryptodome.Cipher.AES.block_size - 1 )
-    aligned_offset = offset - aligned_offset_delta
+    align = {}
 
-    aligned_size_delta = size & ( Cryptodome.Cipher.AES.block_size - 1 )
-    if aligned_size_delta > 0:
-        aligned_size_delta = Cryptodome.Cipher.AES.block_size - aligned_size_delta
-    aligned_size_delta += aligned_offset_delta
-    aligned_size = size + aligned_size_delta
+    align["OFSDELTA"] = offset & (Cryptodome.Cipher.AES.block_size - 1)
+    align["OFS"] = offset - align["OFSDELTA"]
 
-    return aligned_offset, aligned_size, aligned_offset_delta, aligned_size_delta
+    align["SIZEDELTA"] = (align["OFSDELTA"] + size) & (Cryptodome.Cipher.AES.block_size - 1)
+    if align["SIZEDELTA"] > 0:
+        align["SIZEDELTA"] = Cryptodome.Cipher.AES.block_size - align["SIZEDELTA"]
+    align["SIZEDELTA"] += align["OFSDELTA"]
+    align["SIZE"] = size + align["SIZEDELTA"]
+
+    return align
 
 
 class PkgReader():
@@ -513,12 +571,14 @@ class PkgReader():
             if debug_level >= 2:
                 dprint("Opening source as URL data stream")
             self._stream_type = "requests"
+            self._pkg_name = os.path.basename(requests.utils.urlparse(self._source).path)
             ## Persistent session
             ## http://docs.python-requests.org/en/master/api/#request-sessions
             try:
                 self._data_stream = requests.Session()
             except:
-                eprint("\nERROR: {}: Could not create HTTP/S session for PKG URL".format(sys.argv[0]))
+                eprint("Could not create HTTP/S session for PKG URL", self._source)
+                eprint("", prefix=None)
                 sys.exit(2)
             self._data_stream.headers = headers
             response = self._data_stream.head(self._source)
@@ -531,20 +591,28 @@ class PkgReader():
             if debug_level >= 2:
                 dprint("Opening source as FILE data stream")
             self._stream_type = "file"
+            self._pkg_name = os.path.basename(self._source)
             try:
                 self._data_stream = io.open(self._source, mode="rb", buffering=-1, encoding=None, errors=None, newline=None, closefd=True)
             except:
-                eprint("\nERROR: {}: Could not open PKG FILE {}".format(sys.argv[0], self._source))
+                eprint("Could not open PKG FILE", self._source)
+                eprint("", prefix=None)
                 sys.exit(2)
             #
             self._data_stream.seek(0, os.SEEK_END)
             self._size = self._data_stream.tell()
 
         if debug_level >= 3:
-            dprint("Data stream is of class {}".format(self._data_stream.__class__.__name__))
+            dprint("Data stream is of class", self._data_stream.__class__.__name__)
 
     def getSize(self, debug_level=0):
         return self._size
+
+    def getSource(self, debug_level=0):
+        return self._source
+
+    def getPkgName(self, debug_level=0):
+        return self._pkg_name
 
     def read(self, offset, size, debug_level=0):
         if self._stream_type == "file":
@@ -570,23 +638,23 @@ class PkgAesCtrCounter():
             self._iv = iv
         elif isinstance(iv, bytes) \
         or isinstance(iv, bytearray):
-            self._iv = convertBytesToIntegerValue(iv)
+            self._iv = int.from_bytes(iv, byteorder="big")
         self._block_offset = -1
 
     def _setOffset(self, offset):
         if offset == self._block_offset:
             return
         #
-        startcounter = self._iv
+        start_counter = self._iv
         self._block_offset = 0
         count = offset // Cryptodome.Cipher.AES.block_size
         if count > 0:
-            startcounter += count
+            start_counter += count
             self._block_offset += count * Cryptodome.Cipher.AES.block_size
         #
         if hasattr(self, "_aes"):
             del self._aes
-        counter = Cryptodome.Util.Counter.new(self._key_size, initial_value=startcounter)
+        counter = Cryptodome.Util.Counter.new(self._key_size, initial_value=start_counter)
         self._aes = Cryptodome.Cipher.AES.new(self._key, Cryptodome.Cipher.AES.MODE_CTR, counter=counter)
 
     def decrypt(self, offset, data):
@@ -609,19 +677,19 @@ def getRegion(id):
     ##                    http://www.psdevwiki.com/ps3/PARAM.SFO#TITLE
     ##                    http://www.psdevwiki.com/ps4/Languages
     if id == "A":
-        return "ASIA", [ "09", "11", "10", "00" ]
+        return "ASIA", ["09", "11", "10", "00"]
     elif id == "E":
-        return "EU", [ "01", "18" ]
+        return "EU", ["01", "18"]
     elif id == "H":
-        return "ASIA(HKG)", [ "11", "10" ]
+        return "ASIA(HKG)", ["11", "10"]
     elif id == "I":
-        return "INT", [ "01", "18" ]
+        return "INT", ["01", "18"]
     elif id == "J":
-        return "JP", [ "00" ]
+        return "JP", ["00"]
     elif id == "K":
-        return "ASIA(KOR)", [ "09" ]
+        return "ASIA(KOR)", ["09"]
     elif id == "U":
-        return "US", [ "01" ]
+        return "US", ["01"]
     else:
         return "???", []
 
@@ -648,70 +716,70 @@ def convertUtf8BytesToString(data, conversion, length = 0):
     return result
 
 
-def dprintBytesStructure(CONST_STRUCTURE_FIELDS, CONST_STRUCTURE_ENDIAN, tempfields, formatstring, parent_debug_level):
+def dprintBytesStructure(CONST_STRUCTURE_FIELDS, CONST_STRUCTURE_ENDIAN, temp_fields, format_string, parent_debug_level):
     for key in CONST_STRUCTURE_FIELDS:
         if key == "STRUCTURE_SIZE" \
         or key == "STRUCTURE_UNPACK":
             continue
         #
-        fielddef = CONST_STRUCTURE_FIELDS[key]
+        field_def = CONST_STRUCTURE_FIELDS[key]
         #
-        if "VIRTUAL" in fielddef \
-        and fielddef["VIRTUAL"]:
+        if "VIRTUAL" in field_def \
+        and field_def["VIRTUAL"]:
             continue
         #
         field_debug_level = 1
-        if "DEBUG" in fielddef:
-            field_debug_level = fielddef["DEBUG"]
+        if "DEBUG" in field_def:
+            field_debug_level = field_def["DEBUG"]
         #
         if parent_debug_level >= field_debug_level:
-            fieldformat = fielddef["FORMAT"]
-            if "SEP" in fielddef:
-                sep = fielddef["SEP"]
+            field_format = field_def["FORMAT"]
+            if "SEP" in field_def:
+                sep = field_def["SEP"]
             else:
                 sep = " "
-            output = formatstring.format(fielddef["INDEX"], fielddef["OFFSET"], fielddef["SIZE"], fielddef["DESC"], convertBytesToHexString(tempfields[fielddef["INDEX"]], format="".join((CONST_STRUCTURE_ENDIAN, fieldformat)), sep=sep))
+            output = format_string.format(field_def["INDEX"], field_def["OFFSET"], field_def["SIZE"], field_def["DESC"], convertBytesToHexString(temp_fields[field_def["INDEX"]], format="".join((CONST_STRUCTURE_ENDIAN, field_format)), sep=sep))
             #
-            if "CONV" in fielddef:
-                if fielddef["CONV"] == 0x0004 \
-                or fielddef["CONV"] == 0x0204:  ## UTF-8 not and NUL-terminated
-                    value = convertUtf8BytesToString(tempfields[fielddef["INDEX"]], fielddef["CONV"])
+            if "CONV" in field_def:
+                if field_def["CONV"] == 0x0004 \
+                or field_def["CONV"] == 0x0204:  ## UTF-8 not and NUL-terminated
+                    value = convertUtf8BytesToString(temp_fields[field_def["INDEX"]], field_def["CONV"])
                     output = "".join((output, " => ", value))
             elif CONST_STRUCTURE_ENDIAN == CONST_FMT_LITTLE_ENDIAN \
-            and ( fieldformat == "L" \
-                  or fieldformat == "H" \
-                  or fieldformat == "Q" ) :
-                output = "".join((output, " => ", convertBytesToHexString(tempfields[fielddef["INDEX"]], format="".join((CONST_FMT_BIG_ENDIAN, fieldformat)), sep=sep)))
+            and (field_format == "L" \
+                 or field_format == "H" \
+                 or field_format == "Q") :
+                output = "".join((output, " => ", convertBytesToHexString(temp_fields[field_def["INDEX"]], format="".join((CONST_FMT_BIG_ENDIAN, field_format)), sep=sep)))
             #
             dprint(output)
 
 
-def dprintField(key, field, fielddef, formatstring, parent_debug_level, parent_prefix, print_func=dprint):
+def dprintField(key, field, field_def, format_string, parent_debug_level, parent_prefix, print_func=dprint):
     if isinstance(key, unicode):
-        key = "".join(("\"", key, "\"" ))
+        key = "".join(("\"", key, "\""))
     if parent_prefix is None:
-        formatvalues = {}
-        formatvalues["KEY"] = key
-        if fielddef:
-            formatvalues["INDEX"] = fielddef["INDEX"]
-            formatvalues["DESC"] = fielddef["DESC"]
-        prefix = formatstring.format(**formatvalues)
+        format_values = {}
+        format_values["KEY"] = key
+        if field_def:
+            format_values["INDEX"] = field_def["INDEX"]
+            format_values["DESC"] = field_def["DESC"]
+        prefix = format_string.format(**format_values)
     else:
-        prefix = "".join((parent_prefix, "[", formatstring.format(key), "]"))
+        prefix = "".join((parent_prefix, "[", format_string.format(key), "]"))
     #
     if isinstance(field, list) \
     or isinstance(field, tuple):  ## indexed list
-        dprintFieldsList(field, formatstring, parent_debug_level, prefix, print_func)
+        dprintFieldsList(field, format_string, parent_debug_level, prefix, print_func)
     elif isinstance(field, dict):  ## dictionary
-        dprintFieldsDict(field, formatstring, parent_debug_level, prefix, print_func)
+        dprintFieldsDict(field, format_string, parent_debug_level, prefix, print_func)
     else:
         if isinstance(field, int):
             value = "{0} = {0:#x}".format(field)
         elif isinstance(field, bytes) \
         or isinstance(field, bytearray):
-            if fielddef \
-            and "SEP" in fielddef:
-                sep = fielddef["SEP"]
+            if field_def \
+            and "SEP" in field_def:
+                sep = field_def["SEP"]
             else:
                 sep = " "
             value = convertBytesToHexString(field, sep=sep)
@@ -720,20 +788,20 @@ def dprintField(key, field, fielddef, formatstring, parent_debug_level, parent_p
         #
         print_func("".join((prefix, ":")), value)
 
-def dprintFieldsList(fields, formatstring, parent_debug_level, parent_prefix, print_func=dprint):
+def dprintFieldsList(fields, format_string, parent_debug_level, parent_prefix, print_func=dprint):
     length = len(fields)
     #
     if parent_prefix:
-        formatstring = "".join(("{:", unicode(len(unicode(length))), "}"))
+        format_string = "".join(("{:", unicode(len(unicode(length))), "}"))
     #
     for key in range(length):
         field = fields[key]
         #
-        dprintField(key, field, None, formatstring, parent_debug_level, parent_prefix, print_func)
+        dprintField(key, field, None, format_string, parent_debug_level, parent_prefix, print_func)
 
-def dprintFieldsDict(fields, formatstring, parent_debug_level, parent_prefix, print_func=dprint):
+def dprintFieldsDict(fields, format_string, parent_debug_level, parent_prefix, print_func=dprint):
     if parent_prefix:
-        formatstring = "{}"
+        format_string = "{}"
     #
     fields_structure = None
     if "STRUCTURE_DEF" in fields:
@@ -746,49 +814,49 @@ def dprintFieldsDict(fields, formatstring, parent_debug_level, parent_prefix, pr
         #
         field = fields[key]
         #
-        fielddef = None
+        field_def = None
         field_debug_level = 1
         if fields_structure \
         and key in fields_structure:
-            fielddef = fields_structure[key]
-            if "DEBUG" in fielddef:
-                field_debug_level = fielddef["DEBUG"]
+            field_def = fields_structure[key]
+            if "DEBUG" in field_def:
+                field_debug_level = field_def["DEBUG"]
         #
         if parent_debug_level >= field_debug_level:
-            dprintField(key, field, fielddef, formatstring, parent_debug_level, parent_prefix, print_func)
+            dprintField(key, field, field_def, format_string, parent_debug_level, parent_prefix, print_func)
 
 
-def finalizeBytesStructure(CONST_STRUCTURE_FIELDS, CONST_STRUCTURE_ENDIAN, structure_name, formatstring, parent_debug_level):
+def finalizeBytesStructure(CONST_STRUCTURE_FIELDS, CONST_STRUCTURE_ENDIAN, structure_name, format_string, parent_debug_level):
     unpack_format = CONST_STRUCTURE_ENDIAN
     offset = 0
     index = 0
     for key in CONST_STRUCTURE_FIELDS:
-        fielddef = CONST_STRUCTURE_FIELDS[key]
+        field_def = CONST_STRUCTURE_FIELDS[key]
         #
-        if "VIRTUAL" in fielddef \
-        and fielddef["VIRTUAL"]:
-            fielddef["INDEX"] = -1
-            fielddef["OFFSET"] = -1
+        if "VIRTUAL" in field_def \
+        and field_def["VIRTUAL"]:
+            field_def["INDEX"] = -1
+            field_def["OFFSET"] = -1
             continue
         #
-        fielddef["INDEX"] = index
-        fielddef["OFFSET"] = offset
-        if "FORMAT" in fielddef:
-            fieldformat = fielddef["FORMAT"]
-            if fieldformat == "s":
-                if "SUBSIZE" in fielddef:
-                    fielddef["SIZE"] = fielddef["SUBSIZE"] * fielddef["SUBCOUNT"]
-                elif fielddef["SIZE"] < 0:
-                    fielddef["SIZE"] = abs(fielddef["SIZE"]) - fielddef["OFFSET"]
-                fieldformat = "".join((unicode(fielddef["SIZE"]), fieldformat))
-            elif fieldformat == "L" \
-            or fieldformat == "H" \
-            or fieldformat == "Q":
-                fielddef["SIZE"] = struct.calcsize("".join((CONST_STRUCTURE_ENDIAN, fieldformat)))
-            unpack_format = "".join((unpack_format, fieldformat))
+        field_def["INDEX"] = index
+        field_def["OFFSET"] = offset
+        if "FORMAT" in field_def:
+            field_format = field_def["FORMAT"]
+            if field_format == "s":
+                if "SUBSIZE" in field_def:
+                    field_def["SIZE"] = field_def["SUBSIZE"] * field_def["SUBCOUNT"]
+                elif field_def["SIZE"] < 0:
+                    field_def["SIZE"] = abs(field_def["SIZE"]) - field_def["OFFSET"]
+                field_format = "".join((unicode(field_def["SIZE"]), field_format))
+            elif field_format == "L" \
+            or field_format == "H" \
+            or field_format == "Q":
+                field_def["SIZE"] = struct.calcsize("".join((CONST_STRUCTURE_ENDIAN, field_format)))
+            unpack_format = "".join((unpack_format, field_format))
         if parent_debug_level >= 3:
-            dprint(formatstring.format(structure_name, fielddef["INDEX"], fielddef["OFFSET"], fielddef["SIZE"], key, fielddef["DESC"]))
-        offset += fielddef["SIZE"]
+            dprint(format_string.format(structure_name, field_def["INDEX"], field_def["OFFSET"], field_def["SIZE"], key, field_def["DESC"]))
+        offset += field_def["SIZE"]
         index += 1
     structure_size = struct.calcsize(unpack_format)
     if parent_debug_level >= 2:
@@ -798,7 +866,7 @@ def finalizeBytesStructure(CONST_STRUCTURE_FIELDS, CONST_STRUCTURE_ENDIAN, struc
     CONST_STRUCTURE_FIELDS["STRUCTURE_UNPACK"] = unpack_format
 
 
-def convertFieldsToOrdDict(CONST_STRUCTURE_FIELDS, tempfields):
+def convertFieldsToOrdDict(CONST_STRUCTURE_FIELDS, temp_fields):
     fields = collections.OrderedDict()
     #
     for key in CONST_STRUCTURE_FIELDS:
@@ -806,26 +874,26 @@ def convertFieldsToOrdDict(CONST_STRUCTURE_FIELDS, tempfields):
         or key == "STRUCTURE_UNPACK":
             continue
         #
-        fielddef = CONST_STRUCTURE_FIELDS[key]
+        field_def = CONST_STRUCTURE_FIELDS[key]
         #
-        if "SKIP" in fielddef \
-        and fielddef["SKIP"]:
+        if "SKIP" in field_def \
+        and field_def["SKIP"]:
             continue
         #
-        if "VIRTUAL" in fielddef \
-        and fielddef["VIRTUAL"]:
-            if fielddef["VIRTUAL"] > 0:
+        if "VIRTUAL" in field_def \
+        and field_def["VIRTUAL"]:
+            if field_def["VIRTUAL"] > 0:
                 fields[key] = None
             continue
         #
-        fields[key] = tempfields[fielddef["INDEX"]]
-        if "CONV" in fielddef:
-            if fielddef["CONV"] == 0x0004 \
-            or fielddef["CONV"] == 0x0204:  ## UTF-8 not and NUL-terminated
-                fields[key] = convertUtf8BytesToString(fields[key], fielddef["CONV"])
-        elif "FORMAT" in fielddef:
+        fields[key] = temp_fields[field_def["INDEX"]]
+        if "CONV" in field_def:
+            if field_def["CONV"] == 0x0004 \
+            or field_def["CONV"] == 0x0204:  ## UTF-8 not and NUL-terminated
+                fields[key] = convertUtf8BytesToString(fields[key], field_def["CONV"])
+        elif "FORMAT" in field_def:
             ## Python 2 workaround: convert str to bytes
-            if fielddef["FORMAT"] == "s" \
+            if field_def["FORMAT"] == "s" \
             and isinstance(fields[key], str):
                 fields[key] = bytes(fields[key])
     #
@@ -834,280 +902,284 @@ def convertFieldsToOrdDict(CONST_STRUCTURE_FIELDS, tempfields):
     return fields
 
 
-def parsePkg4Header(headerbytes):
-    ## local debug level for fine-tuned analysis
-    function_debug_level = 0  ## hard-coded minimum local debug level
-    if function_debug_level < DebugLevel:
-        function_debug_level = DebugLevel
-
+def parsePkg4Header(header_bytes, data_stream, function_debug_level, print_unknown=False):
     if function_debug_level >= 2:
         dprint(">>>>> PKG4 Main Header:")
 
     ## For definition see http://www.psdevwiki.com/ps4/PKG_files#File_Header
 
     ## Extract fields from PKG4 Main Header
-    tempfields = struct.unpack(CONST_PKG4_MAIN_HEADER_FIELDS["STRUCTURE_UNPACK"], headerbytes)
+    temp_fields = struct.unpack(CONST_PKG4_MAIN_HEADER_FIELDS["STRUCTURE_UNPACK"], header_bytes)
     ## --> Debug print all
     if function_debug_level >= 2:
-        dprintBytesStructure(CONST_PKG4_MAIN_HEADER_FIELDS, CONST_PKG4_HEADER_ENDIAN, tempfields, "PKG4 Main Header[{:2}]: [{:#05x}|{:3}] {} = {}", function_debug_level)
+        dprintBytesStructure(CONST_PKG4_MAIN_HEADER_FIELDS, CONST_PKG4_HEADER_ENDIAN, temp_fields, "PKG4 Main Header[{:2}]: [{:#05x}|{:3}] {} = {}", function_debug_level)
 
     ## Convert to dictionary (associative array)
-    headerfields = convertFieldsToOrdDict(CONST_PKG4_MAIN_HEADER_FIELDS, tempfields)
-    del tempfields
+    header_fields = convertFieldsToOrdDict(CONST_PKG4_MAIN_HEADER_FIELDS, temp_fields)
+    del temp_fields
 
     ## Process sub structures
-    for key in headerfields:
+    for key in header_fields:
         if not key in CONST_PKG4_MAIN_HEADER_FIELDS:
             continue
         #
-        fielddef = CONST_PKG4_MAIN_HEADER_FIELDS[key]
-        if "SUBCOUNT" in fielddef:
+        field_def = CONST_PKG4_MAIN_HEADER_FIELDS[key]
+        if "SUBCOUNT" in field_def:
             unpack_format = CONST_PKG4_HEADER_ENDIAN
-            fieldformat = "".join((unicode(fielddef["SUBSIZE"]), fielddef["FORMAT"]))
-            for _i in range(fielddef["SUBCOUNT"]):
-                unpack_format = "".join((unpack_format, fieldformat))
-            headerfields[key] = struct.unpack(unpack_format, headerfields[key])
+            field_format = "".join((unicode(field_def["SUBSIZE"]), field_def["FORMAT"]))
+            for _i in range(field_def["SUBCOUNT"]):
+                unpack_format = "".join((unpack_format, field_format))
+            header_fields[key] = struct.unpack(unpack_format, header_fields[key])
             ## Python 2 workaround: convert str to bytes
-            if fielddef["FORMAT"] == "s" \
-            and isinstance(headerfields[key][0], str):
-                tempfields = []
-                for _i in range(len(headerfields[key])):
-                    tempfields.append(bytes(headerfields[key][_i]))
-                headerfields[key] = tempfields
-                del tempfields
+            if field_def["FORMAT"] == "s" \
+            and isinstance(header_fields[key][0], str):
+                temp_fields = []
+                for _i in range(len(header_fields[key])):
+                    temp_fields.append(bytes(header_fields[key][_i]))
+                header_fields[key] = temp_fields
+                del temp_fields
 
     ## Prepare format strings
-    filecntlen = unicode(len(unicode(headerfields["FILECNT"])))
-    filecntformatstring = "".join(("{:", filecntlen, "}"))
+    file_cnt_len = unicode(len(unicode(header_fields["FILECNT"])))
+    file_cnt_format_string = "".join(("{:", file_cnt_len, "}"))
 
     ## Retrieve PKG4 File Entry Table from data stream
     if function_debug_level >= 2:
         dprint(">>>>> PKG4 File Entry Table:")
-    pkg_file_table_size = headerfields["FILECNT"] * CONST_PKG4_FILE_ENTRY_FIELDS["STRUCTURE_SIZE"]
+    pkg_file_table_size = header_fields["FILECNT"] * CONST_PKG4_FILE_ENTRY_FIELDS["STRUCTURE_SIZE"]
     if function_debug_level >= 2:
-        dprint("Get PKG4 file entry table from offset {:#x} with count {} and size {}".format(headerfields["FILETBLOFS"], headerfields["FILECNT"], pkg_file_table_size))
-    tempbytes = bytearray()
+        dprint("Get PKG4 file entry table from offset {:#x} with count {} and size {}".format(header_fields["FILETBLOFS"], header_fields["FILECNT"], pkg_file_table_size))
+    temp_bytes = bytearray()
     try:
-        tempbytes.extend(DataStream.read(headerfields["FILETBLOFS"], pkg_file_table_size, function_debug_level))
+        temp_bytes.extend(data_stream.read(header_fields["FILETBLOFS"], pkg_file_table_size, function_debug_level))
     except:
-        DataStream.close(function_debug_level)
-        eprint("\nERROR: {}: Could not get PKG4 file entry table at offset {:#x} with size {} from {}".format(sys.argv[0], headerfields["FILETBLOFS"], pkg_file_table_size, Source))
+        data_stream.close(function_debug_level)
+        eprint("Could not get PKG4 file entry table at offset {:#x} with size {} from".format(header_fields["FILETBLOFS"], pkg_file_table_size), data_stream.getSource())
+        eprint("", prefix=None)
         sys.exit(2)
 
     ## Parse PKG4 File Entry Table Data
-    filetable = []
-    filetablemap = collections.OrderedDict()
+    file_table = []
+    file_table_map = collections.OrderedDict()
     offset = 0
     #
-    for _i in range(headerfields["FILECNT"]):  ## 0 to <file count - 1>
-        tempfields = struct.unpack(CONST_PKG4_FILE_ENTRY_FIELDS["STRUCTURE_UNPACK"], tempbytes[offset:offset+CONST_PKG4_FILE_ENTRY_FIELDS["STRUCTURE_SIZE"]])
+    for _i in range(header_fields["FILECNT"]):  ## 0 to <file count - 1>
+        temp_fields = struct.unpack(CONST_PKG4_FILE_ENTRY_FIELDS["STRUCTURE_UNPACK"], temp_bytes[offset:offset+CONST_PKG4_FILE_ENTRY_FIELDS["STRUCTURE_SIZE"]])
         if function_debug_level >= 2:
-            dprintBytesStructure(CONST_PKG4_FILE_ENTRY_FIELDS, CONST_PKG4_HEADER_ENDIAN, tempfields, "".join(("PKG4 File Entry[", filecntformatstring.format(_i), "][{:2}]: [{:#04x}|{:2}] {} = {}")), function_debug_level)
-        tempfields = convertFieldsToOrdDict(CONST_PKG4_FILE_ENTRY_FIELDS, tempfields)
-        tempfields["INDEX"] = _i
-        tempfields["KEYINDEX"] = (tempfields["FLAGS2"] & 0xf000) >> 12  # TODO: correct?
-        filetable.append(tempfields)
+            dprintBytesStructure(CONST_PKG4_FILE_ENTRY_FIELDS, CONST_PKG4_HEADER_ENDIAN, temp_fields, "".join(("PKG4 File Entry[", file_cnt_format_string.format(_i), "][{:2}]: [{:#04x}|{:2}] {} = {}")), function_debug_level)
+        temp_fields = convertFieldsToOrdDict(CONST_PKG4_FILE_ENTRY_FIELDS, temp_fields)
+        temp_fields["INDEX"] = _i
+        temp_fields["KEYINDEX"] = (temp_fields["FLAGS2"] & 0xf000) >> 12  # TODO: correct?
+        file_table.append(temp_fields)
         #
-        filetablemap[tempfields["FILEID"]] = _i
+        file_table_map[temp_fields["FILEID"]] = _i
         #
-        del tempfields
+        del temp_fields
         #
         offset += CONST_PKG4_FILE_ENTRY_FIELDS["STRUCTURE_SIZE"]
     #
-    del tempbytes
+    del temp_bytes
 
     ## Retrieve PKG4 Name Table from data stream
     if function_debug_level >= 2:
         dprint(">>>>> PKG4 Name Table:")
-    nametable = None
-    if not CONST_PKG4_FILE_ENTRY_ID_NAME_TABLE in filetablemap:
+    name_table = None
+    if not CONST_PKG4_FILE_ENTRY_ID_NAME_TABLE in file_table_map:
         dprint("Not present!")
     else:
-        fileentry = filetable[filetablemap[CONST_PKG4_FILE_ENTRY_ID_NAME_TABLE]]
+        file_entry = file_table[file_table_map[CONST_PKG4_FILE_ENTRY_ID_NAME_TABLE]]
         if function_debug_level >= 2:
-                dprint("Get PKG4 name table from offset {:#x} with size {}".format(fileentry["DATAOFS"], fileentry["DATASIZE"]))
-        nametable = bytearray()
+                dprint("Get PKG4 name table from offset {:#x} with size {}".format(file_entry["DATAOFS"], file_entry["DATASIZE"]))
+        name_table = bytearray()
         try:
-            nametable.extend(DataStream.read(fileentry["DATAOFS"], fileentry["DATASIZE"], function_debug_level))
+            name_table.extend(data_stream.read(file_entry["DATAOFS"], file_entry["DATASIZE"], function_debug_level))
         except:
-            DataStream.close(function_debug_level)
-            eprint("\nERROR: {}: Could not get PKG4 name table at offset {:#x} with size {} from {}".format(sys.argv[0], fileentry["DATAOFS"], fileentry["DATASIZE"], Source))
+            data_stream.close(function_debug_level)
+            eprint("Could not get PKG4 name table at offset {:#x} with size {} from".format(file_entry["DATAOFS"], file_entry["DATASIZE"]), data_stream.getSource())
+            eprint("", prefix=None)
             sys.exit(2)
-        nametable = bytes(nametable)
+        name_table = bytes(name_table)
 
     ## Parse PKG4 Name Table Data for File Entries
     if function_debug_level >= 2:
         dprint("Parse PKG4 Name Table for File Names")
-    for _i in range(headerfields["FILECNT"]):  ## 0 to <file count - 1>
-        fileentry = filetable[_i]
+    for _i in range(header_fields["FILECNT"]):  ## 0 to <file count - 1>
+        file_entry = file_table[_i]
         #
-        if nametable \
-        and fileentry["NAMERELOFS"] > 0:
-            fileentry["NAME"] = convertUtf8BytesToString(nametable[fileentry["NAMERELOFS"]:], 0x0204)
-        elif fileentry["FILEID"] in CONST_PKG4_FILE_ENTRY_NAME_MAP:
-            fileentry["NAME"] = CONST_PKG4_FILE_ENTRY_NAME_MAP[fileentry["FILEID"]]
+        if name_table \
+        and file_entry["NAMERELOFS"] > 0:
+            file_entry["NAME"] = convertUtf8BytesToString(name_table[file_entry["NAMERELOFS"]:], 0x0204)
+        elif file_entry["FILEID"] in CONST_PKG4_FILE_ENTRY_NAME_MAP:
+            file_entry["NAME"] = CONST_PKG4_FILE_ENTRY_NAME_MAP[file_entry["FILEID"]]
         #
-        if "NAME" in fileentry \
+        if "NAME" in file_entry \
         and function_debug_level >= 2:
-            dprint("".join(("PKG4 File Entry[", filecntformatstring, "]: ID {:#06x} Name Offset {:#03x} =")).format(_i, fileentry["FILEID"], fileentry["NAMERELOFS"]), fileentry["NAME"])
+            dprint("".join(("PKG4 File Entry[", file_cnt_format_string, "]: ID {:#06x} Name Offset {:#03x} =")).format(_i, file_entry["FILEID"], file_entry["NAMERELOFS"]), file_entry["NAME"])
         #
-        if ExtractUnknown \
-        and not fileentry["FILEID"] in CONST_PKG4_FILE_ENTRY_NAME_MAP:
-            eprint("!!! PKG4 File ID {:#x} {}".format(fileentry["FILEID"], fileentry["NAME"] if "NAME" in fileentry else ""))
+        if print_unknown \
+        and not file_entry["FILEID"] in CONST_PKG4_FILE_ENTRY_NAME_MAP:
+            eprint("PKG4 File ID {:#x} {}".format(file_entry["FILEID"], file_entry["NAME"] if "NAME" in file_entry else ""), prefix="[UNKNOWN] ")
 
     ## Debug print results
     dprint(">>>>> parsePkg4Header results:")
-    dprintFieldsDict(headerfields, "headerfields[{KEY:14}|{INDEX:2}]", function_debug_level, None)
-    dprintFieldsList(filetable, "".join(("filetable[{KEY:", filecntlen, "}]")), function_debug_level, None)
+    dprintFieldsDict(header_fields, "headerfields[{KEY:14}|{INDEX:2}]", function_debug_level, None)
+    dprintFieldsList(file_table, "".join(("filetable[{KEY:", file_cnt_len, "}]")), function_debug_level, None)
     if function_debug_level >= 2:
-        dprintFieldsDict(filetablemap, "filetablemap[{KEY:#06x}]", function_debug_level, None)
-        dprint("nametable: {}".format(nametable))
+        dprintFieldsDict(file_table_map, "filetablemap[{KEY:#06x}]", function_debug_level, None)
+        dprint("nametable:", name_table)
 
-    return headerfields, filetable, filetablemap
+    return header_fields, file_table, file_table_map
 
 
-def parsePkg3Header(headerbytes):
-    ## local debug level for fine-tuned analysis
-    function_debug_level = 0  ## hard-coded minimum local debug level
-    if function_debug_level < DebugLevel:
-        function_debug_level = DebugLevel
-
+def parsePkg3Header(header_bytes, data_stream, function_debug_level):
     if function_debug_level >= 2:
         dprint(">>>>> PKG3 Main Header:")
 
     ## For definition see http://www.psdevwiki.com/ps3/PKG_files#File_Header_2
 
     ## Extract fields from PKG3 Main Header
-    tempfields = struct.unpack(CONST_PKG3_MAIN_HEADER_FIELDS["STRUCTURE_UNPACK"], headerbytes)
+    temp_fields = struct.unpack(CONST_PKG3_MAIN_HEADER_FIELDS["STRUCTURE_UNPACK"], header_bytes)
     ## --> Debug print all
     if function_debug_level >= 2:
-        dprintBytesStructure(CONST_PKG3_MAIN_HEADER_FIELDS, CONST_PKG3_HEADER_ENDIAN, tempfields, "PKG3 Main Header[{:2}]: [{:#04x}|{:2}] {} = {}", function_debug_level)
+        dprintBytesStructure(CONST_PKG3_MAIN_HEADER_FIELDS, CONST_PKG3_HEADER_ENDIAN, temp_fields, "PKG3 Main Header[{:2}]: [{:#04x}|{:2}] {} = {}", function_debug_level)
 
     ## Convert to dictionary (associative array)
-    headerfields = convertFieldsToOrdDict(CONST_PKG3_MAIN_HEADER_FIELDS, tempfields)
-    del tempfields
+    header_fields = convertFieldsToOrdDict(CONST_PKG3_MAIN_HEADER_FIELDS, temp_fields)
+    del temp_fields
 
     ## Process sub structures
-    for key in headerfields:
+    for key in header_fields:
         if not key in CONST_PKG3_MAIN_HEADER_FIELDS:
             continue
         #
-        fielddef = CONST_PKG3_MAIN_HEADER_FIELDS[key]
-        if "SUBCOUNT" in fielddef:
+        field_def = CONST_PKG3_MAIN_HEADER_FIELDS[key]
+        if "SUBCOUNT" in field_def:
             unpack_format = CONST_PKG3_HEADER_ENDIAN
-            fieldformat = "".join((unicode(fielddef["SUBSIZE"]), fielddef["FORMAT"]))
-            for _i in range(fielddef["SUBCOUNT"]):
-                unpack_format = "".join((unpack_format, fieldformat))
-            headerfields[key] = struct.unpack(unpack_format, headerfields[key])
+            field_format = "".join((unicode(field_def["SUBSIZE"]), field_def["FORMAT"]))
+            for _i in range(field_def["SUBCOUNT"]):
+                unpack_format = "".join((unpack_format, field_format))
+            header_fields[key] = struct.unpack(unpack_format, header_fields[key])
             ## Python 2 workaround: convert str to bytes
-            if fielddef["FORMAT"] == "s" \
-            and isinstance(headerfields[key][0], str):
-                tempfields = []
-                for _i in range(len(headerfields[key])):
-                    tempfields.append(bytes(headerfields[key][_i]))
-                headerfields[key] = tempfields
-                del tempfields
+            if field_def["FORMAT"] == "s" \
+            and isinstance(header_fields[key][0], str):
+                temp_fields = []
+                for _i in range(len(header_fields[key])):
+                    temp_fields.append(bytes(header_fields[key][_i]))
+                header_fields[key] = temp_fields
+                del temp_fields
 
     ## Retrieve PKG3 Unencrypted Data from data stream
     if function_debug_level >= 2:
-        dprint("Get PKG3 remaining unencrypted data with size {}".format(headerfields["DATAOFS"]))
-    unencrypted = headerbytes
+        dprint("Get PKG3 remaining unencrypted data with size", header_fields["DATAOFS"])
+    unencrypted_bytes = header_bytes
     try:
-        unencrypted.extend(DataStream.read(CONST_PKG3_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"], headerfields["DATAOFS"] - CONST_PKG3_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"], function_debug_level))
+        unencrypted_bytes.extend(data_stream.read(CONST_PKG3_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"], header_fields["DATAOFS"]-CONST_PKG3_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"], function_debug_level))
     except:
-        DataStream.close(function_debug_level)
-        eprint("\nERROR: {}: Could not get PKG3 unencrypted data at offset {:#x} with size {} from {}".format(sys.argv[0], CONST_PKG3_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"], headerfields["DATAOFS"] - CONST_PKG3_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"], Source))
+        data_stream.close(function_debug_level)
+        eprint("Could not get PKG3 unencrypted data at offset {:#x} with size {} from".format(CONST_PKG3_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"], header_fields["DATAOFS"] - CONST_PKG3_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"]), data_stream.getSource())
+        eprint("", prefix=None)
         sys.exit(2)
 
     ## Extract fields from PKG3 Extended Header
-    extheaderfields = None
-    mainhdrsize = CONST_PKG3_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"] + CONST_PKG3_PS3_DIGEST_FIELDS["STRUCTURE_SIZE"]
-    if "HDRSIZE" in headerfields \
-    and headerfields["HDRSIZE"] > mainhdrsize:
+    ext_header_fields = None
+    main_hdr_size = CONST_PKG3_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"] + CONST_PKG3_PS3_DIGEST_FIELDS["STRUCTURE_SIZE"]
+    if "HDRSIZE" in header_fields \
+    and header_fields["HDRSIZE"] > main_hdr_size:
         if function_debug_level >= 2:
             dprint(">>>>> PKG3 Extended Main Header:")
-        tempfields = struct.unpack(CONST_PKG3_EXT_HEADER_FIELDS["STRUCTURE_UNPACK"], headerbytes[mainhdrsize:mainhdrsize+CONST_PKG3_EXT_HEADER_FIELDS["STRUCTURE_SIZE"]])
+        temp_fields = struct.unpack(CONST_PKG3_EXT_HEADER_FIELDS["STRUCTURE_UNPACK"], header_bytes[main_hdr_size:main_hdr_size+CONST_PKG3_EXT_HEADER_FIELDS["STRUCTURE_SIZE"]])
         ## --> Debug print all
         if function_debug_level >= 2:
-            dprintBytesStructure(CONST_PKG3_EXT_HEADER_FIELDS, CONST_PKG3_HEADER_ENDIAN, tempfields, "PKG3 Extended Main Header[{:2}]: [{:#04x}|{:2}] {} = {}", function_debug_level)
+            dprintBytesStructure(CONST_PKG3_EXT_HEADER_FIELDS, CONST_PKG3_HEADER_ENDIAN, temp_fields, "PKG3 Extended Main Header[{:2}]: [{:#04x}|{:2}] {} = {}", function_debug_level)
 
         ## Convert to dictionary (associative array)
-        extheaderfields = convertFieldsToOrdDict(CONST_PKG3_EXT_HEADER_FIELDS, tempfields)
-        del tempfields
+        ext_header_fields = convertFieldsToOrdDict(CONST_PKG3_EXT_HEADER_FIELDS, temp_fields)
+        del temp_fields
 
     ## Determine key index for item entries plus path of PARAM.SFO
     if function_debug_level >= 2:
         dprint(">>>>> PKG3 Package Keys:")
-    if headerfields["TYPE"] == 0x1:  ## PS3
-        headerfields["KEYINDEX"] = 0
-        headerfields["PARAM.SFO"] = "PARAM.SFO"
-    elif headerfields["TYPE"] == 0x2:  ## PSX/PSP/PSV/PSM
-        if extheaderfields:  ## PSV/PSM
-            headerfields["KEYINDEX"] = extheaderfields["KEYID"] & 0xf
-            if headerfields["KEYINDEX"] == 2:  ## PSV
-                headerfields["PARAM.SFO"] = "sce_sys/param.sfo"
-            elif headerfields["KEYINDEX"] == 3:  ## Unknown
-                eprint("!!! PKG3 Key Index {}".format(headerfields["KEYINDEX"]))
+    if header_fields["TYPE"] == 0x1:  ## PS3
+        header_fields["KEYINDEX"] = 0
+        header_fields["PARAM.SFO"] = "PARAM.SFO"
+    elif header_fields["TYPE"] == 0x2:  ## PSX/PSP/PSV/PSM
+        if ext_header_fields:  ## PSV/PSM
+            header_fields["KEYINDEX"] = ext_header_fields["KEYID"] & 0xf
+            if header_fields["KEYINDEX"] == 2:  ## PSV
+                header_fields["PARAM.SFO"] = "sce_sys/param.sfo"
+            elif header_fields["KEYINDEX"] == 3:  ## Unknown
+                eprint("PKG3 Key Index", header_fields["KEYINDEX"], prefix="[UNKNOWN] ")
         else:  ## PSX/PSP
-            headerfields["KEYINDEX"] = 1
-            headerfields["PARAM.SFO"] = "PARAM.SFO"
+            header_fields["KEYINDEX"] = 1
+            header_fields["PARAM.SFO"] = "PARAM.SFO"
     else:
-        eprint("!!! PKG3 Package Type {}".format(headerfields["TYPE"]))
+        eprint("PKG3 Package Type", header_fields["TYPE"], prefix="[UNKNOWN] ")
     #
-    headerfields["AES_CTR"] = {}
+    header_fields["AES_CTR"] = {}
     for key in CONST_PKG3_CONTENT_KEYS:
         if function_debug_level >= 2:
             dprint("Content Key #{}: {}".format(key, convertBytesToHexString(CONST_PKG3_CONTENT_KEYS[key]["KEY"], sep="")))
         if "DERIVE" in CONST_PKG3_CONTENT_KEYS[key] \
         and CONST_PKG3_CONTENT_KEYS[key]["DERIVE"]:
             aes = Cryptodome.Cipher.AES.new(CONST_PKG3_CONTENT_KEYS[key]["KEY"], Cryptodome.Cipher.AES.MODE_ECB)
-            pkg_key = aes.encrypt(headerfields["DATARIV"])
+            pkg_key = aes.encrypt(header_fields["DATARIV"])
             ## Python 2 workaround: convert str to bytes
             if isinstance(pkg_key, str):
                 pkg_key = bytes(pkg_key)
-            headerfields["AES_CTR"][key] = PkgAesCtrCounter(pkg_key, headerfields["DATARIV"])
+            header_fields["AES_CTR"][key] = PkgAesCtrCounter(pkg_key, header_fields["DATARIV"])
             del aes
             if function_debug_level >= 2:
                 dprint("Derived Key #{} from IV encrypted with Content Key: {}".format(key, convertBytesToHexString(pkg_key, sep="")))
             del pkg_key
         else:
-            headerfields["AES_CTR"][key] = PkgAesCtrCounter(CONST_PKG3_CONTENT_KEYS[key]["KEY"], headerfields["DATARIV"])
+            header_fields["AES_CTR"][key] = PkgAesCtrCounter(CONST_PKG3_CONTENT_KEYS[key]["KEY"], header_fields["DATARIV"])
 
     ## Extract fields from PKG3 Main Header Meta Data
     if function_debug_level >= 2:
         dprint(">>>>> PKG3 Meta Data:")
-    metadata = collections.OrderedDict()
+    meta_data = collections.OrderedDict()
     #
     md_type = -1
     md_size = -1
-    md_offset = headerfields["MDOFS"]
-    mdformatstring = "".join(("Metadata[{:", unicode(len(unicode(headerfields["MDCNT"]))), "}]: [{:#05x}|{:2}] ID {:#04x} ="))
-    for _i in range(headerfields["MDCNT"]):  ## 0 to <meta data count - 1>
-        md_type = getInteger32BitBE(unencrypted, md_offset)
+    md_offset = header_fields["MDOFS"]
+    md_format_string = "".join(("Metadata[{:", unicode(len(unicode(header_fields["MDCNT"]))), "}]: [{:#05x}|{:2}] ID {:#04x} ="))
+    for _i in range(header_fields["MDCNT"]):  ## 0 to <meta data count - 1>
+        md_type = getInteger32BitBE(unencrypted_bytes, md_offset)
         md_offset += 0x04
         #
-        md_size = getInteger32BitBE(unencrypted, md_offset)
+        md_size = getInteger32BitBE(unencrypted_bytes, md_offset)
         md_offset += 0x04
         #
-        tempbytes = unencrypted[md_offset:md_offset + md_size]
+        temp_bytes = unencrypted_bytes[md_offset:md_offset + md_size]
         if function_debug_level >= 2:
-            dprint(mdformatstring.format(_i, md_offset, md_size, md_type), \
-                   convertBytesToHexString(tempbytes))
+            dprint(md_format_string.format(_i, md_offset, md_size, md_type), \
+                   convertBytesToHexString(temp_bytes))
         #
-        metadata[md_type] = collections.OrderedDict()
+        meta_data[md_type] = collections.OrderedDict()
         ## DRM Type (0x1), Content Type (0x2)
         if md_type == 0x01 \
         or md_type == 0x02:
             if md_type == 0x01:
-                metadata[md_type]["DESC"] = "DRM Type"
+                meta_data[md_type]["DESC"] = "DRM Type"
             elif md_type == 0x02:
-                metadata[md_type]["DESC"] = "Content Type"
-            metadata[md_type]["VALUE"] = getInteger32BitBE(tempbytes, 0)
+                meta_data[md_type]["DESC"] = "Content Type"
+            meta_data[md_type]["VALUE"] = getInteger32BitBE(temp_bytes, 0)
+            if md_size > 0x04:
+                meta_data[md_type]["UNKNOWN"] = bytes(temp_bytes[0x04:])
         ## TitleID (when size 0xc) (otherwise Version + App Version)
         elif md_type == 0x06 \
         and md_size == 0x0C:
-            metadata[md_type]["DESC"] = "Title ID"
-            metadata[md_type]["VALUE"] = convertUtf8BytesToString(tempbytes, 0x0204)
+            meta_data[md_type]["DESC"] = "Title ID"
+            meta_data[md_type]["VALUE"] = convertUtf8BytesToString(temp_bytes, 0x0204)
+        ## (13) Items Info (PS Vita)
+        elif md_type == 0x0D:
+            if md_type == 0x0D:
+                meta_data[md_type]["DESC"] = "Items Info (SHA256 of decrypted data)"
+            meta_data[md_type]["OFS"] = getInteger32BitBE(temp_bytes, 0)
+            meta_data[md_type]["SIZE"] = getInteger32BitBE(temp_bytes, 0x04)
+            meta_data[md_type]["SHA256"] = bytes(temp_bytes[0x08:0x08+0x20])
+            if md_size > 0x28:
+                meta_data[md_type]["UNKNOWN"] = bytes(temp_bytes[0x28:])
         ## (14) PARAM.SFO Info (PS Vita)
         ## (15) Unknown Info (PS Vita)
         ## (16) Entirety Info (PS Vita)
@@ -1116,432 +1188,480 @@ def parsePkg3Header(headerbytes):
         or md_type == 0x10 \
         or md_type == 0x12:
             if md_type == 0x0E:
-                metadata[md_type]["DESC"] = "PARAM.SFO Info"
+                meta_data[md_type]["DESC"] = "PARAM.SFO Info"
             elif md_type == 0x10:
-                metadata[md_type]["DESC"] = "Entirety Info"
+                meta_data[md_type]["DESC"] = "Entirety Info"
             elif md_type == 0x12:
-                metadata[md_type]["DESC"] = "Self Info"
-            metadata[md_type]["OFS"] = getInteger32BitBE(tempbytes, 0)
-            metadata[md_type]["SIZE"] = getInteger32BitBE(tempbytes, 0x04)
-            metadata[md_type]["UNKNOWN"] = bytes(tempbytes[0x08:md_size - 0x20])
-            metadata[md_type]["SHA256"] = bytes(tempbytes[md_size - 0x20:])
+                meta_data[md_type]["DESC"] = "Self Info"
+            meta_data[md_type]["OFS"] = getInteger32BitBE(temp_bytes, 0)
+            meta_data[md_type]["SIZE"] = getInteger32BitBE(temp_bytes, 0x04)
+            meta_data[md_type]["UNKNOWN"] = bytes(temp_bytes[0x08:md_size - 0x20])
+            meta_data[md_type]["SHA256"] = bytes(temp_bytes[md_size - 0x20:])
         else:
             if md_type == 0x03:
-                metadata[md_type]["DESC"] = "Package Type/Flags"
+                meta_data[md_type]["DESC"] = "Package Type/Flags"
             elif md_type == 0x04:
-                metadata[md_type]["DESC"] = "Package Size"
+                meta_data[md_type]["DESC"] = "Package Size"
             elif md_type == 0x06:
-                metadata[md_type]["DESC"] = "Version + App Version"
+                meta_data[md_type]["DESC"] = "Version + App Version"
             elif md_type == 0x07:
-                metadata[md_type]["DESC"] = "QA Digest"
+                meta_data[md_type]["DESC"] = "QA Digest"
             elif md_type == 0x0A:
-                metadata[md_type]["DESC"] = "Install Directory"
-            metadata[md_type]["VALUE"] = bytes(tempbytes)
+                meta_data[md_type]["DESC"] = "Install Directory"
+            meta_data[md_type]["VALUE"] = bytes(temp_bytes)
         #
         md_offset += md_size
     #
-    del tempbytes
+    del temp_bytes
 
     ## Debug print results
     dprint(">>>>> parsePkg3Header results:")
-    dprintFieldsDict(headerfields, "headerfields[{KEY:14}|{INDEX:2}]", function_debug_level, None)
-    if extheaderfields:
-        dprintFieldsDict(extheaderfields, "extheaderfields[{KEY:14}|{INDEX:2}]", function_debug_level, None)
-    dprintFieldsDict(metadata, "metadata[{KEY:#04x}]", function_debug_level, None)
+    dprintFieldsDict(header_fields, "headerfields[{KEY:14}|{INDEX:2}]", function_debug_level, None)
+    if ext_header_fields:
+        dprintFieldsDict(ext_header_fields, "extheaderfields[{KEY:14}|{INDEX:2}]", function_debug_level, None)
+    dprintFieldsDict(meta_data, "metadata[{KEY:#04x}]", function_debug_level, None)
 
-    return headerfields, extheaderfields, metadata
+    return header_fields, ext_header_fields, meta_data, unencrypted_bytes
 
 
-def parsePkg3ItemEntries(headerfields):
-    ## local debug level for fine-tuned analysis
-    function_debug_level = 0  ## hard-coded minimum local debug level
-    if function_debug_level < DebugLevel:
-        function_debug_level = DebugLevel
-
+def parsePkg3ItemEntries(header_fields, data_stream, function_debug_level):
     if function_debug_level >= 2:
         dprint(">>>>> PKG3 Body Item Entries:")
 
     ## For definition see http://www.psdevwiki.com/ps3/PKG_files#File_Body
 
     ## Prepare format strings
-    itemcntlen = unicode(len(unicode(headerfields["ITEMCNT"])))
-    itemcntformatstring = "".join(("{:", itemcntlen, "}"))
+    item_cnt_len = unicode(len(unicode(header_fields["ITEMCNT"])))
+    item_cnt_format_string = "".join(("{:", item_cnt_len, "}"))
 
     ## Retrieve PKG3 Item Entries from data stream
-    item_entries_size = headerfields["ITEMCNT"] * CONST_PKG3_ITEM_ENTRY_FIELDS["STRUCTURE_SIZE"]
+    item_entries_size = header_fields["ITEMCNT"] * CONST_PKG3_ITEM_ENTRY_FIELDS["STRUCTURE_SIZE"]
+    decrypted_item_entries = {}
+    decrypted_item_entries["OFS"] = 0
+    decrypted_item_entries["SIZE"] = item_entries_size
+    decrypted_item_entries["ALIGN"] = calculateAesAlignedOffsetAndSize(decrypted_item_entries["OFS"], decrypted_item_entries["SIZE"])
     if function_debug_level >= 2:
-        dprint("Get PKG3 item entries from encrypted data with offset {:#x} with count {} and size {}".format(headerfields["DATAOFS"], headerfields["ITEMCNT"], item_entries_size))
+        dprint("Get PKG3 item entries from encrypted data with offset {:#x}-{:#x}+{:#x}={:#x} with count {} and size {}+{}={}".format(decrypted_item_entries["OFS"], decrypted_item_entries["ALIGN"]["OFSDELTA"], header_fields["DATAOFS"], header_fields["DATAOFS"]+decrypted_item_entries["ALIGN"]["OFS"], header_fields["ITEMCNT"], decrypted_item_entries["SIZE"], decrypted_item_entries["ALIGN"]["SIZEDELTA"], decrypted_item_entries["ALIGN"]["SIZE"]))
+    if decrypted_item_entries["ALIGN"]["OFSDELTA"] > 0:
+        eprint("Unaligned offset {:#x}-{:#x}+{:#x}={:#x} for item entries in".format(decrypted_item_entries["OFS"], decrypted_item_entries["ALIGN"]["OFSDELTA"], header_fields["DATAOFS"], header_fields["DATAOFS"]+decrypted_item_entries["ALIGN"]["OFS"]), data_stream.getSource(), prefix="[ALIGN] ")
+        eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[ALIGN] ")
     encrypted_bytes = bytearray()
     try:
-        encrypted_bytes.extend(DataStream.read(headerfields["DATAOFS"], item_entries_size, function_debug_level))
+        encrypted_bytes.extend(data_stream.read(header_fields["DATAOFS"]+decrypted_item_entries["ALIGN"]["OFS"], decrypted_item_entries["ALIGN"]["SIZE"], function_debug_level))
     except:
-        DataStream.close(function_debug_level)
-        eprint("\nERROR: {}: Could not get PKG3 encrypted data at offset {:#x} with size {} from {}".format(sys.argv[0], headerfields["DATAOFS"], item_entries_size, Source))
+        data_stream.close(function_debug_level)
+        eprint("Could not get PKG3 encrypted data at offset {:#x} with size {} from".format(header_fields["DATAOFS"]+decrypted_item_entries["ALIGN"]["OFS"], decrypted_item_entries["ALIGN"]["SIZE"]), data_stream.getSource())
+        eprint("", prefix=None)
         sys.exit(2)
 
     ## Decrypt PKG3 Item Entries
-    tempbytes = headerfields["AES_CTR"][headerfields["KEYINDEX"]].decrypt(0, bytes(encrypted_bytes))
+    decrypted_item_entries["DATA"] = header_fields["AES_CTR"][header_fields["KEYINDEX"]].decrypt(decrypted_item_entries["ALIGN"]["OFS"], bytes(encrypted_bytes))
     del encrypted_bytes
 
     ## Parse PKG3 Item Entries
-    itementries = []
-    offset = 0
+    item_entries = []
+    offset = decrypted_item_entries["ALIGN"]["OFSDELTA"]
     name_offset_start = -1
     name_offset_end = -1
+    item_name_size_max = 0
     #
-    for _i in range(headerfields["ITEMCNT"]):  ## 0 to <item count - 1>
-        tempfields = struct.unpack(CONST_PKG3_ITEM_ENTRY_FIELDS["STRUCTURE_UNPACK"], tempbytes[offset:offset+CONST_PKG3_ITEM_ENTRY_FIELDS["STRUCTURE_SIZE"]])
+    for _i in range(header_fields["ITEMCNT"]):  ## 0 to <item count - 1>
+        temp_fields = struct.unpack(CONST_PKG3_ITEM_ENTRY_FIELDS["STRUCTURE_UNPACK"], decrypted_item_entries["DATA"][offset:offset+CONST_PKG3_ITEM_ENTRY_FIELDS["STRUCTURE_SIZE"]])
         if function_debug_level >= 2:
-            dprintBytesStructure(CONST_PKG3_ITEM_ENTRY_FIELDS, CONST_PKG3_HEADER_ENDIAN, tempfields, "".join(("PKG3 Body Item Entry[", itemcntformatstring.format(_i), "][{:1}]: [", "{:#06x}+".format(headerfields["DATAOFS"] + offset), "{:#04x}|{:1}] {} = {}")), function_debug_level)
-        tempfields = convertFieldsToOrdDict(CONST_PKG3_ITEM_ENTRY_FIELDS, tempfields)
-        tempfields["INDEX"] = _i
-        tempfields["KEYINDEX"] = ( tempfields["FLAGS"] >> 28 ) & 0x7
-        itementries.append(tempfields)
+            dprintBytesStructure(CONST_PKG3_ITEM_ENTRY_FIELDS, CONST_PKG3_HEADER_ENDIAN, temp_fields, "".join(("PKG3 Body Item Entry[", item_cnt_format_string.format(_i), "][{:1}]: [", "{:#06x}+".format(header_fields["DATAOFS"] + offset), "{:#04x}|{:1}] {} = {}")), function_debug_level)
+        temp_fields = convertFieldsToOrdDict(CONST_PKG3_ITEM_ENTRY_FIELDS, temp_fields)
+        temp_fields["INDEX"] = _i
+        temp_fields["KEYINDEX"] = (temp_fields["FLAGS"] >> 28) & 0x7
+        temp_fields["ALIGN"] = calculateAesAlignedOffsetAndSize(temp_fields["DATAOFS"], temp_fields["DATASIZE"])
+        if temp_fields["ALIGN"]["OFSDELTA"] > 0:
+            eprint("Unaligned offset {:#x}-{:#x}+{:#x}={:#x} for item data {} in".format(temp_fields["ALIGN"]["OFS"], temp_fields["ALIGN"]["OFSDELTA"], header_fields["DATAOFS"], header_fields["DATAOFS"]+temp_fields["ALIGN"]["OFS"]), data_stream.getSource(), prefix="[ALIGN] ")
+            eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[ALIGN] ")
+        item_entries.append(temp_fields)
         #
-        if tempfields["ITEMNAMESIZE"] > 0:
+        if temp_fields["ITEMNAMESIZE"] > 0:
             if name_offset_start == -1 \
-            or tempfields["ITEMNAMEOFS"] < name_offset_start:
-                name_offset_start = tempfields["ITEMNAMEOFS"]
+            or temp_fields["ITEMNAMEOFS"] < name_offset_start:
+                name_offset_start = temp_fields["ITEMNAMEOFS"]
             #
             if name_offset_end == -1 \
-            or tempfields["ITEMNAMEOFS"] > name_offset_end:
-                name_offset_end = tempfields["ITEMNAMEOFS"] + tempfields["ITEMNAMESIZE"]
+            or temp_fields["ITEMNAMEOFS"] > name_offset_end:
+                name_offset_end = temp_fields["ITEMNAMEOFS"] + temp_fields["ITEMNAMESIZE"]
+            #
+            if temp_fields["ITEMNAMESIZE"] > item_name_size_max:
+                item_name_size_max = temp_fields["ITEMNAMESIZE"]
         #
-        del tempfields
+        del temp_fields
         #
         offset += CONST_PKG3_ITEM_ENTRY_FIELDS["STRUCTURE_SIZE"]
     #
-    del tempbytes
     name_size = name_offset_end - name_offset_start + 1
 
     ## Retrieve PKG3 Item Names from data stream
-    aligned_offset, aligned_size, aligned_offset_delta, aligned_size_delta = calculateAesAlignedOffsetAndSize(name_offset_start, name_offset_end - name_offset_start + 1)
+    decrypted_item_names = {}
+    decrypted_item_names["OFS"] = name_offset_start
+    decrypted_item_names["SIZE"] = name_size
+    decrypted_item_names["ALIGN"] = calculateAesAlignedOffsetAndSize(decrypted_item_names["OFS"], decrypted_item_names["SIZE"])
     if function_debug_level >= 2:
-        dprint("Get PKG3 item names from encrypted data with offset {:#x}(-{:#x}) and size {}(+{})".format(headerfields["DATAOFS"] + name_offset_start, aligned_offset_delta, name_size, aligned_size_delta))
+        dprint("Get PKG3 item names from encrypted data with offset {:#x}-{:#x}+{:#x}={:#x} and size {}+{}={}".format(decrypted_item_names["OFS"], decrypted_item_names["ALIGN"]["OFSDELTA"], header_fields["DATAOFS"], header_fields["DATAOFS"]+decrypted_item_names["ALIGN"]["OFS"], decrypted_item_names["SIZE"], decrypted_item_names["ALIGN"]["SIZEDELTA"], decrypted_item_names["ALIGN"]["SIZE"]))
+    if decrypted_item_names["ALIGN"]["OFSDELTA"] > 0:
+        eprint("Unaligned offset {:#x}-{:#x}+{:#x}={:#x} for item names in".format(decrypted_item_names["OFS"], decrypted_item_names["ALIGN"]["OFSDELTA"], header_fields["DATAOFS"], header_fields["DATAOFS"]+decrypted_item_names["ALIGN"]["OFS"]), data_stream.getSource(), prefix="[ALIGN] ")
+        eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[ALIGN] ")
     encrypted_bytes = bytearray()
     try:
-        encrypted_bytes.extend(DataStream.read(headerfields["DATAOFS"] + aligned_offset, aligned_size, function_debug_level))
+        encrypted_bytes.extend(data_stream.read(header_fields["DATAOFS"]+decrypted_item_names["ALIGN"]["OFS"], decrypted_item_names["ALIGN"]["SIZE"], function_debug_level))
     except:
-        DataStream.close(function_debug_level)
-        eprint("\nERROR: {}: Could not get PKG3 encrypted data at offset {:#x} with size {} from {}".format(sys.argv[0], aligned_offset, aligned_size, Source))
+        data_stream.close(function_debug_level)
+        eprint("Could not get PKG3 encrypted data at offset {:#x} with size {} from".format(header_fields["DATAOFS"]+decrypted_item_names["ALIGN"]["OFS"], decrypted_item_names["ALIGN"]["SIZE"]), data_stream.getSource())
+        eprint("", prefix=None)
         sys.exit(2)
 
     ## Decrypt and Parse PKG3 Item Names
-    for _i in range(len(itementries)):  ## 0 to <item count - 1>
-        item = itementries[_i]
-        if item["ITEMNAMESIZE"] <= 0:
+    item_name_size_cnt_len = unicode(len(unicode(item_name_size_max)))
+    item_name_size_format_string = "".join(("{:", item_name_size_cnt_len, "}"))
+    #
+    decrypted_item_names["DATA"] = bytearray()
+    decrypted_item_names["DATA"].extend(encrypted_bytes)
+    for item_entry in item_entries:
+        if item_entry["ITEMNAMESIZE"] <= 0:
             continue
         #
-        key_index = item["KEYINDEX"]
-        aligned_offset, aligned_size, aligned_offset_delta, aligned_size_delta = calculateAesAlignedOffsetAndSize(item["ITEMNAMEOFS"], item["ITEMNAMESIZE"])
-        offset = aligned_offset - name_offset_start
+        key_index = item_entry["KEYINDEX"]
+        align = calculateAesAlignedOffsetAndSize(item_entry["ITEMNAMEOFS"], item_entry["ITEMNAMESIZE"])
+        if align["OFSDELTA"] > 0:
+            eprint("Unaligned offset {:#x}-{:#x}+{:#x}={:#x} for item name {} in".format(item_entry["ITEMNAMEOFS"], align["OFSDELTA"], header_fields["DATAOFS"], header_fields["DATAOFS"]+align["OFS"], item_entry["INDEX"]), data_stream.getSource(), prefix="[ALIGN] ")
+            eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[ALIGN] ")
+        offset = align["OFS"] - decrypted_item_names["ALIGN"]["OFS"]
         #
-        decrypted_bytes = headerfields["AES_CTR"][key_index].decrypt(aligned_offset, bytes(encrypted_bytes[offset:offset+aligned_size]))
-        tempbytes = decrypted_bytes[aligned_offset_delta:aligned_offset_delta+item["ITEMNAMESIZE"]]
-        del decrypted_bytes
-        #if function_debug_level >= 3:
-        #    dprint("".join(("PKG3 Body Item Name[", itemcntformatstring, "]: key {:#} with offset {:#x} {:#} {}")).format(_i, key_index, item["ITEMNAMEOFS"], item["ITEMNAMESIZE"], tempbytes))
-        item["NAME"] = convertUtf8BytesToString(tempbytes, 0x0204)
+        decrypted_item_names["DATA"][offset:offset+align["SIZE"]] = header_fields["AES_CTR"][key_index].decrypt(align["OFS"], bytes(encrypted_bytes[offset:offset+align["SIZE"]]))
+        temp_bytes = decrypted_item_names["DATA"][offset+align["OFSDELTA"]:offset+align["OFSDELTA"]+item_entry["ITEMNAMESIZE"]]
+        del align
+        if function_debug_level >= 2:
+            dprint("".join(("PKG3 Body Item Name[", item_cnt_format_string, "]: key {:#} [{:#06x}|", item_name_size_format_string, "] {}")).format(item_entry["INDEX"], key_index, header_fields["DATAOFS"]+item_entry["ITEMNAMEOFS"], item_entry["ITEMNAMESIZE"], temp_bytes))
+        item_entry["NAME"] = convertUtf8BytesToString(temp_bytes, 0x0004, length=item_entry["ITEMNAMESIZE"])
         #
-        del tempbytes
+        del temp_bytes
     #
     del encrypted_bytes
 
+    ## Calculate SHA-256 hash of decrypted data
+    hash_sha256 = Cryptodome.Hash.SHA256.new()
+    hash_sha256.update(bytes(decrypted_item_entries["DATA"]))
+    hash_sha256.update(bytes(decrypted_item_names["DATA"]))
+
     ## Debug print results
     dprint(">>>>> parsePkg3ItemEntries results:")
-    dprintFieldsList(itementries, "".join(("itementries[{KEY:", itemcntlen, "}]")), function_debug_level, None)
+    dprintFieldsList(item_entries, "".join(("itementries[{KEY:", item_cnt_len, "}]")), function_debug_level, None)
+    dprint("SHA-256 of decrypted items entries and names:", hash_sha256.hexdigest())
 
-    return itementries
+    return item_entries, decrypted_item_entries, decrypted_item_names
 
 
-def retrievePkg3Item(headerfields, item):
-    ## local debug level for fine-tuned analysis
-    function_debug_level = 0  ## hard-coded minimum local debug level
-    if function_debug_level < DebugLevel:
-        function_debug_level = DebugLevel
-
+def processPkg3Item(header_fields, item_entry, data_stream, item_data, raw_stream, extract_stream, function_debug_level):
     if function_debug_level >= 2:
-        dprint(">>>>> PKG3 Body Item Entry #{} {}:".format(item["INDEX"], item["NAME"]))
+        dprint(">>>>> PKG3 Body Item Entry #{} {}:".format(item_entry["INDEX"], item_entry["NAME"]))
 
     ## Retrieve PKG3 Item Data from data stream
-    aligned_offset, aligned_size, aligned_offset_delta, aligned_size_delta = calculateAesAlignedOffsetAndSize(item["DATAOFS"], item["DATASIZE"])
     if function_debug_level >= 2:
-        dprint("Get PKG3 item data from encrypted data with offset {:#x}(-{:#x}) and size {}(+{})".format(headerfields["DATAOFS"] + item["DATAOFS"], aligned_offset_delta, item["DATASIZE"], aligned_size_delta))
-    encrypted_bytes = bytearray()
-    try:
-        encrypted_bytes.extend(DataStream.read(headerfields["DATAOFS"] + aligned_offset, aligned_size, function_debug_level))
-    except:
-        DataStream.close(function_debug_level)
-        eprint("\nERROR: {}: Could not get PKG3 encrypted data at offset {:#x} with size {} from {}".format(sys.argv[0], aligned_offset, aligned_size, Source))
-        sys.exit(2)
-
-    ## Decrypt PKG3 Item Data
-    decrypted_bytes = headerfields["AES_CTR"][item["KEYINDEX"]].decrypt(aligned_offset, bytes(encrypted_bytes))
-    data_bytes = decrypted_bytes[aligned_offset_delta:aligned_offset_delta+item["DATASIZE"]]
+        dprint("Get PKG3 item data from encrypted data with offset {:#x}-{:#x}+{:#x}={:#x} and size {}+{}={}".format(item_entry["DATAOFS"], item_entry["ALIGN"]["OFSDELTA"], header_fields["DATAOFS"], header_fields["DATAOFS"]+item_entry["ALIGN"]["OFS"], item_entry["DATASIZE"], item_entry["ALIGN"]["SIZEDELTA"], item_entry["ALIGN"]["SIZE"]))
+        if raw_stream:
+            dprint("Write PKG3 item data from offset {:#x} and size {}".format(header_fields["DATAOFS"]+item_entry["ALIGN"]["OFS"], item_entry["ALIGN"]["SIZE"]), prefix="[WRITE] ")
+    #
+    dataoffset = item_entry["ALIGN"]["OFS"]
+    fileoffset = header_fields["DATAOFS"]+dataoffset
+    filesize = item_entry["ALIGN"]["SIZE"]
+    #
+    encrypted_bytes = None
+    decrypted_bytes = None
+    ofsdelta = item_entry["ALIGN"]["OFSDELTA"]
+    sizedelta = 0
+    while filesize > 0:
+        if filesize >= CONST_READ_SIZE:
+            blocksize = CONST_READ_SIZE
+        else:
+            blocksize = filesize
+            sizedelta = item_entry["ALIGN"]["SIZEDELTA"]
+        #
+        if function_debug_level >= 3:
+            dprint("...read offset {:#010x} size {}".format(fileoffset, blocksize))
+        ## Read encrypted data block
+        try:
+            encrypted_bytes = data_stream.read(fileoffset, blocksize, function_debug_level)
+        except:
+            data_stream.close(function_debug_level)
+            eprint("Could not get PKG3 encrypted data at offset {:#x} with size {} from".format(header_fields["DATAOFS"]+item_entry["ALIGN"]["OFS"], item_entry["ALIGN"]["SIZE"]), data_stream.getSource())
+            eprint("", prefix=None)
+            sys.exit(2)
+        #
+        #if enc_hashes:
+        #    hash encrypted_bytes
+        #
+        ## Decrypt data block
+        decrypted_bytes = header_fields["AES_CTR"][item_entry["KEYINDEX"]].decrypt(dataoffset, encrypted_bytes)
+        #
+        #if dec_hashes:
+        #    hash decrypted_bytes
+        #
+        if item_data:
+            item_data.extend(decrypted_bytes)
+        #
+        if raw_stream:
+            raw_stream.write(decrypted_bytes)
+        #
+        if extract_stream:
+            extract_stream.write(decrypted_bytes[ofsdelta:-sizedelta])
+        #
+        ## Prepare for next data block
+        filesize -= blocksize
+        fileoffset += blocksize
+        dataoffset += blocksize
+        ofsdelta = 0
+    #
     del encrypted_bytes
     del decrypted_bytes
-    del aligned_offset, aligned_size, aligned_offset_delta, aligned_size_delta
 
-    return data_bytes
+    ## Remove aligned data from result
+    if item_data:
+        item_data = item_data[item_entry["ALIGN"]["OFSDELTA"]:item_entry["ALIGN"]["OFSDELTA"]+item_entry["DATASIZE"]]
+
+    return
 
 
-def parseSfo(sfobytes):
-    ## local debug level for fine-tuned analysis
-    function_debug_level = 0  ## hard-coded minimum local debug level
-    if function_debug_level < DebugLevel:
-        function_debug_level = DebugLevel
-
+def parseSfo(sfo_bytes, function_debug_level):
     if function_debug_level >= 2:
         dprint(">>>>> SFO Header:")
 
     ## For definition see https://playstationdev.wiki/psvitadevwiki/index.php?title=System_File_Object_(SFO)_(PSF)
 
     ## Extract fields from SFO Header
-    tempfields = struct.unpack(CONST_PARAM_SFO_HEADER_FIELDS["STRUCTURE_UNPACK"], sfobytes[0:CONST_PARAM_SFO_HEADER_FIELDS["STRUCTURE_SIZE"]])
+    temp_fields = struct.unpack(CONST_PARAM_SFO_HEADER_FIELDS["STRUCTURE_UNPACK"], sfo_bytes[0:CONST_PARAM_SFO_HEADER_FIELDS["STRUCTURE_SIZE"]])
     ## --> Debug print all
     if function_debug_level >= 2:
-        dprintBytesStructure(CONST_PARAM_SFO_HEADER_FIELDS, CONST_PARAM_SFO_ENDIAN, tempfields, "SFO Header[{:1}]: [{:#04x}|{:1}] {} = {}", function_debug_level)
+        dprintBytesStructure(CONST_PARAM_SFO_HEADER_FIELDS, CONST_PARAM_SFO_ENDIAN, temp_fields, "SFO Header[{:1}]: [{:#04x}|{:1}] {} = {}", function_debug_level)
 
     ## Convert to dictionary (associative array)
-    headerfields = convertFieldsToOrdDict(CONST_PARAM_SFO_HEADER_FIELDS, tempfields)
-    del tempfields
+    header_fields = convertFieldsToOrdDict(CONST_PARAM_SFO_HEADER_FIELDS, temp_fields)
+    del temp_fields
 
     ## Retrieve SFO Index Table from sfo bytes
     if function_debug_level >= 2:
         dprint(">>>>> SFO Index Table:")
-    sfo_index_table_size = headerfields["COUNT"] * CONST_PARAM_SFO_INDEX_ENTRY_FIELDS["STRUCTURE_SIZE"]
+    sfo_index_table_size = header_fields["COUNT"] * CONST_PARAM_SFO_INDEX_ENTRY_FIELDS["STRUCTURE_SIZE"]
     if function_debug_level >= 2:
-        dprint("Get SFO index table from offset {:#x} with count {} and size {}".format(CONST_PARAM_SFO_HEADER_FIELDS["STRUCTURE_SIZE"], headerfields["COUNT"], sfo_index_table_size))
-    tempbytes = sfobytes[CONST_PARAM_SFO_HEADER_FIELDS["STRUCTURE_SIZE"]:CONST_PARAM_SFO_HEADER_FIELDS["STRUCTURE_SIZE"]+sfo_index_table_size]
-    sfovalues = collections.OrderedDict()
+        dprint("Get SFO index table from offset {:#x} with count {} and size {}".format(CONST_PARAM_SFO_HEADER_FIELDS["STRUCTURE_SIZE"], header_fields["COUNT"], sfo_index_table_size))
+    temp_bytes = sfo_bytes[CONST_PARAM_SFO_HEADER_FIELDS["STRUCTURE_SIZE"]:CONST_PARAM_SFO_HEADER_FIELDS["STRUCTURE_SIZE"]+sfo_index_table_size]
+    sfo_values = collections.OrderedDict()
 
     ## Parse SFO Index Table Data
-    cntformatstring = "".join(("{:", unicode(len(unicode(headerfields["COUNT"]))), "}"))
-    formatstring = ""
+    cnt_format_string = "".join(("{:", unicode(len(unicode(header_fields["COUNT"]))), "}"))
+    format_string = ""
     if function_debug_level >= 2:
         if function_debug_level >= 3:
-            formatstring = "".join(("SFO Index Entry[", cntformatstring, "][^]: [^^^|^] {} = {}"))
+            format_string = "".join(("SFO Index Entry[", cnt_format_string, "][^]: [^^^|^] {} = {}"))
         elif function_debug_level >= 2:
-            formatstring = "".join(("SFO Index Entry[", cntformatstring, "]: {} = {}"))
+            format_string = "".join(("SFO Index Entry[", cnt_format_string, "]: {} = {}"))
     #
     offset = 0
     #
-    for _i in range(headerfields["COUNT"]):  ## 0 to <count - 1>
-        tempfields = struct.unpack(CONST_PARAM_SFO_INDEX_ENTRY_FIELDS["STRUCTURE_UNPACK"], tempbytes[offset:offset+CONST_PARAM_SFO_INDEX_ENTRY_FIELDS["STRUCTURE_SIZE"]])
+    for _i in range(header_fields["COUNT"]):  ## 0 to <count - 1>
+        temp_fields = struct.unpack(CONST_PARAM_SFO_INDEX_ENTRY_FIELDS["STRUCTURE_UNPACK"], temp_bytes[offset:offset+CONST_PARAM_SFO_INDEX_ENTRY_FIELDS["STRUCTURE_SIZE"]])
         if function_debug_level >= 3:
-            dprintBytesStructure(CONST_PARAM_SFO_INDEX_ENTRY_FIELDS, CONST_PARAM_SFO_ENDIAN, tempfields, "".join(("SFO Index Entry[", cntformatstring.format(_i), "][{:1}]: [{:#03x}|{:1}] {} = {}")), function_debug_level)
-        tempfields = convertFieldsToOrdDict(CONST_PARAM_SFO_INDEX_ENTRY_FIELDS, tempfields)
-        keyname = convertUtf8BytesToString(sfobytes[headerfields["KEYTBLOFS"]+tempfields["KEYOFS"]:], 0x0204)
-        data = bytes(sfobytes[headerfields["DATATBLOFS"]+tempfields["DATAOFS"]:headerfields["DATATBLOFS"]+tempfields["DATAOFS"]+tempfields["DATAUSEDSIZE"]])
+            dprintBytesStructure(CONST_PARAM_SFO_INDEX_ENTRY_FIELDS, CONST_PARAM_SFO_ENDIAN, temp_fields, "".join(("SFO Index Entry[", cnt_format_string.format(_i), "][{:1}]: [{:#03x}|{:1}] {} = {}")), function_debug_level)
+        temp_fields = convertFieldsToOrdDict(CONST_PARAM_SFO_INDEX_ENTRY_FIELDS, temp_fields)
+        key_name = convertUtf8BytesToString(sfo_bytes[header_fields["KEYTBLOFS"]+temp_fields["KEYOFS"]:], 0x0204)
+        data = bytes(sfo_bytes[header_fields["DATATBLOFS"]+temp_fields["DATAOFS"]:header_fields["DATATBLOFS"]+temp_fields["DATAOFS"]+temp_fields["DATAUSEDSIZE"]])
         if function_debug_level >= 2:
-            dprint(formatstring.format(_i, "Key Name", keyname))
-            datadesc = "Data Used (Fmt {:#0x})".format(tempfields["DATAFORMAT"])
-            dprint(formatstring.format(_i, datadesc, convertBytesToHexString(data)))
-        format = tempfields["DATAFORMAT"]
+            dprint(format_string.format(_i, "Key Name", key_name))
+            data_desc = "Data Used (Fmt {:#0x})".format(temp_fields["DATAFORMAT"])
+            dprint(format_string.format(_i, data_desc, convertBytesToHexString(data)))
+        format = temp_fields["DATAFORMAT"]
         if format == 0x0004 \
         or format == 0x0204:  ## UTF-8 not and NUL-terminated
             data = convertUtf8BytesToString(data, format)
             #
             if function_debug_level >= 2:
-                datadesc = "UTF-8 String"
-                dprint(formatstring.format(_i, datadesc, data))
+                data_desc = "UTF-8 String"
+                dprint(format_string.format(_i, data_desc, data))
             #
-            if keyname == "STITLE" \
-            or keyname[:7] == "STITLE_" \
-            or keyname == "TITLE" \
-            or ( keyname[:6] == "TITLE_" \
-                 and keyname != "TITLE_ID" ):
+            if key_name == "STITLE" \
+            or key_name[:7] == "STITLE_" \
+            or key_name == "TITLE" \
+            or (key_name[:6] == "TITLE_" \
+                and key_name != "TITLE_ID"):
                 data = data.replace("\r\n", " ").replace("\n\r", " ")
                 data = re.sub(r"\s", " ", data, 0, re.UNICODE).strip()  ## also replaces \u3000
         elif format == 0x0404:
             data = getInteger32BitLE(data, 0x00)
             #
             if function_debug_level >= 2:
-                datadesc = "Integer"
-                datadisplay = "{0} = {0:#x}".format(data)
-                dprint(formatstring.format(_i, datadesc, datadisplay))
+                data_desc = "Integer"
+                data_display = "{0} = {0:#x}".format(data)
+                dprint(format_string.format(_i, data_desc, data_display))
         #
-        sfovalues[keyname] = data
+        sfo_values[key_name] = data
         #
-        del tempfields
+        del temp_fields
         #
         offset += CONST_PARAM_SFO_INDEX_ENTRY_FIELDS["STRUCTURE_SIZE"]
     #
-    del tempbytes
+    del temp_bytes
 
     ## Debug print results
     dprint(">>>>> parseSfo results:")
-    dprintFieldsDict(sfovalues, "sfovalues[{KEY:20}]", function_debug_level, None)
+    dprintFieldsDict(sfo_values, "sfovalues[{KEY:20}]", function_debug_level, None)
 
-    return sfovalues
+    return sfo_values
 
 
-def showUsage():
-    eprint("Usage: {} [options] <Path or URL to PKG file> [<PATH|URL> ...]".format(sys.argv[0]))
-    eprint("  -h/--help       Show this help")
-    eprint("  -f/--format=<n> Format of output via code (multiple allowed)")
-    for key in OutputFormatsKnown:
-        eprint("                    {:#2} = {}".format(key, OutputFormatsKnown[key]))
-    eprint("  -d/--debug=<n>  Debug verbosity level")
-    eprint("                    0 = No debug info [default]")
-    eprint("                    1 = Show parsed results only")
-    eprint("                    2 = Additionally show raw PKG and SFO data plus read actions")
-    eprint("                    3 = Additionally show interim PKG and SFO data to get results")
-    eprint("  -u/--unclean    Do not clean up international/english tile, except for condensing")
-    eprint("                  multiple white spaces incl. new line to a single space.")
-    eprint("                  Default is to clean up by replacing {}".format(ReplaceList))
-    eprint("                  and condensing demo information to just \"(DEMO)\".")
-    eprint("  --itementries   Always decrypt item entries on PS3/PSX/PSP/PSV/PSM packages.")
-    eprint("                  Useful for analysis.")
-    eprint("  --unknown       Print unknown file ids on PS4 packages.")
-    eprint("                  Useful for analysis.")
+def createArgParser():
+    ## argparse: https://docs.python.org/3/library/argparse.html
+
+    ## Create help texts
+    ## --> Format Codes
+    choices_format = []
+    help_format = "Format of output via code (multiple allowed)\n"
+    for key in OUTPUT_FORMATS:
+        choices_format.append(key)
+        help_format = "".join((help_format, "  {:#2} = {}\n".format(key, OUTPUT_FORMATS[key])))
+    ## --> Raw
+    help_raw = "Create decrypted PKG file of PS3/PSX/PSP/PSV/PSM package.\n\
+  Specify a target path where to create the file, e.g. \".\".\n\
+  If target path is a directory then file name is <package name>.decrypted.\n\
+  Note that the signature and checksum in the file tail are for the *encrypted* data."
+    ## --> Extract
+    help_extract = "Extract PS3/PSX/PSP/PSV/PSM package in ux0-style hierarchy.\n\
+  Specify a target path where to create the file, e.g. \".\"."
+    ## --> Overwrite
+    help_overwrite = "Allow options \"--raw\" to overwrite existing files."
+    ## --> Unclean
+    help_unclean = "".join(("Do not clean up international/english tile, except for condensing\n\
+multiple white spaces incl. new line to a single space.\n\
+Default is to clean up by replacing ", unicode(Replace_List), "\nand condensing demo information to just \"(DEMO)\"."))
+    ## --> Item Entries
+    help_itementries = "Always decrypt item entries on PS3/PSX/PSP/PSV/PSM packages.\nUseful for analysis."
+    ## --> Unknown
+    help_unknown = "Print unknown file ids in PS4 packages.\nUseful for analysis."
+    ## --> Debug
+    choices_debug = range(4)
+    help_debug = "Debug verbosity level\n\
+  0 = No debug info [default]\n\
+  1 = Show parsed results only\n\
+  2 = Additionally show raw PKG and SFO data plus read/write actions\n\
+  3 = Additionally show interim PKG and SFO data to get result"
+
+    ## Create description
+    description = "%(prog)s {version}\n{copyright}\n{author}\nExtract package information and/or files from PS3/PSX/PSP/PSV/PSM and PS4 packages.".format(version=__version__, copyright=__copyright__, author=__author__)
+    ## Create epilog
+    epilog = "It is recommended to place \"--\" before the package/JSON sources to avoid them being used as targets,\nthen wrong option usage like \"%(prog)s --raw -- 01.pkg 02.pkg\" will not overwrite \"01.pkg\".\n\
+If you state URLs then only the necessary bytes are downloaded into memory.\nNote that the options \"--raw\" download the complete(!) package just once\nwithout storing the original data on the file system."
+
+    ## Build Arg Parser
+    parser = argparse.ArgumentParser(description=description, epilog=epilog, formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument("-V", "--version", action='version', version=__version__)
+    parser.add_argument("source", nargs="+", help="Path or URL to PKG or JSON file")
+    parser.add_argument("--format", "-f", metavar="CODE", type=int, action="append", choices=choices_format, help=help_format)
+    parser.add_argument("--raw", metavar="TARGETPATH", help=help_raw)
+    parser.add_argument("--overwrite", action="store_true", help=help_overwrite)
+    parser.add_argument("--unclean", "-u", action="store_true", help=help_unclean)
+    parser.add_argument("--itementries", action="store_true", help=help_itementries)
+    parser.add_argument("--unknown", action="store_true", help=help_unknown)
+    parser.add_argument("--debug", "-d", metavar="LEVEL", type=int, default=0, choices=choices_debug, help=help_debug)
+    parser.add_argument("--extract", "-x", action="store_true", help=argparse.SUPPRESS)  ## TODO
+
+    return parser
 
 
 ## Global code
 if __name__ == "__main__":
     try:
-        ## Initialize (global) variables changeable by command line parameters
-        ## Global Debug [Verbosity] Level: can be set via '-d'/'--debug='
-        DebugLevel = 0
-        ## Output Format: can be set via '-f'/'--format='
-        OutputFormats = collections.OrderedDict()
-        ReplaceList = [ ["™®☆◆", " "], ["—–", "-"], ]
-        UncleanedTitle = False
-        ExtractUnknown = False
-        ExtractItemEntries = False
-        ShowUsage = False
-        ExitCode = 0
+        ## Initialize (global) variables
+        Replace_List = [ ["™®☆◆", " "], ["—–", "-"], ]
 
         ## Check parameters from command line
-        try:
-            Options, Arguments = getopt.gnu_getopt(sys.argv[1:], "hf:d:ux", ["help", "format=", "debug=", "unclean", "unknown", "itementries"])
-        except getopt.GetoptError as err:
-            ## Print help information and exit
-            eprint(unicode(err))  ## will print something like "option -X not recognized"
-            showUsage()
-            sys.exit(2)
-        #
-        for Option, OptionValue in Options:
-            if Option in ("-h", "--help"):
-                ShowUsage = True
-            elif Option in ("-u", "--unclean"):
-                UncleanedTitle = True
-            elif Option in ("--unknown"):
-                ExtractUnknown = True
-            elif Option in ("--itementries"):
-                ExtractItemEntries = True
-            elif Option in ("-f", "--format"):
-                try:
-                    OutputFormat = int(OptionValue)
-                except:
-                    eprint("Option {}: value {} is not a number".format(Option, OptionValue))
-                    ExitCode = 2
-                    continue
-                if OutputFormat < 0:
-                    eprint("Option {}: value {} is not valid".format(Option, OptionValue))
-                    ExitCode = 2
-                    continue
-                if not OutputFormat in OutputFormatsKnown:
-                    eprint("Option {}: unknown output format {}".format(Option, OptionValue))
-                    ExitCode = 2
-                    continue
-                if OutputFormat in OutputFormats:
-                    eprint("Option {}: duplicate output format {}".format(Option, OptionValue))
-                    ExitCode = 2
-                    continue
-                OutputFormats[OutputFormat] = True
-            elif Option in ("-d", "--debug"):
-                try:
-                    DebugLevel = int(OptionValue)
-                except:
-                    eprint("Option {}: value {} is not a number".format(Option, OptionValue))
-                    ExitCode = 2
-                    continue
-                if DebugLevel < 0:
-                    eprint("Option {}: value {} is not valid".format(Option, OptionValue))
-                    ExitCode = 2
-                    continue
-            else:
-                eprint("Option {} is unhandled in program".format(Option, OptionValue))
-                ExitCode = 2
-        #
-        if not ShowUsage \
-        and not Arguments:
-            eprint("No paths or URLs stated")
-            ExitCode = 2
-        #
-        if ShowUsage \
-        or ExitCode:
-            showUsage()
-            sys.exit(ExitCode)
-
+        Parser = createArgParser()
+        Arguments = Parser.parse_args()
+        ## Global Debug [Verbosity] Level: can be set via '-d'/'--debug='
+        Debug_Level = Arguments.debug
+        ## Output Format: can be set via '-f'/'--format='
         ## Fallback to default output format if none stated
-        if len(OutputFormats) == 0:
-            OutputFormats[0] = True
+        if Arguments.format is None:
+            Arguments.format = [0]
+        ## Raw Target Path
+        Target_Is_Dir = None
+        if Arguments.raw:
+            Target_Is_Dir = os.path.isdir(Arguments.raw)
 
         ## Enrich structure format arrays
         ## --> PKG3 Main Header
-        finalizeBytesStructure(CONST_PKG3_MAIN_HEADER_FIELDS, CONST_PKG3_HEADER_ENDIAN, "PKG3 Main Header", "{}[{:2}]: ofs {:#04x} size {:2} key {:12} = {}", DebugLevel)
+        finalizeBytesStructure(CONST_PKG3_MAIN_HEADER_FIELDS, CONST_PKG3_HEADER_ENDIAN, "PKG3 Main Header", "{}[{:2}]: ofs {:#04x} size {:2} key {:12} = {}", Debug_Level)
         ## --> PKG3 PS3 0x40 Digest
-        finalizeBytesStructure(CONST_PKG3_PS3_DIGEST_FIELDS, CONST_PKG3_HEADER_ENDIAN, "PKG3 PS3 0x40 Digest", "{}[{:1}]: ofs {:#04x} size {:2} key {:12} = {}", DebugLevel)
+        finalizeBytesStructure(CONST_PKG3_PS3_DIGEST_FIELDS, CONST_PKG3_HEADER_ENDIAN, "PKG3 PS3 0x40 Digest", "{}[{:1}]: ofs {:#04x} size {:2} key {:12} = {}", Debug_Level)
         ## --> PKG3 Extended Header
-        finalizeBytesStructure(CONST_PKG3_EXT_HEADER_FIELDS, CONST_PKG3_HEADER_ENDIAN, "PKG3 Ext Header", "{}[{:2}]: ofs {:#04x} size {:2} key {:12} = {}", DebugLevel)
+        finalizeBytesStructure(CONST_PKG3_EXT_HEADER_FIELDS, CONST_PKG3_HEADER_ENDIAN, "PKG3 Ext Header", "{}[{:2}]: ofs {:#04x} size {:2} key {:12} = {}", Debug_Level)
         ## --> PKG3 Item Entry
-        finalizeBytesStructure(CONST_PKG3_ITEM_ENTRY_FIELDS, CONST_PKG3_HEADER_ENDIAN, "PKG3 Item Entry", "{}[{:1}]: ofs {:#04x} size {:1} key {:12} = {}", DebugLevel)
+        finalizeBytesStructure(CONST_PKG3_ITEM_ENTRY_FIELDS, CONST_PKG3_HEADER_ENDIAN, "PKG3 Item Entry", "{}[{:1}]: ofs {:#04x} size {:1} key {:12} = {}", Debug_Level)
         ## --> PKG4 Main Header
-        finalizeBytesStructure(CONST_PKG4_MAIN_HEADER_FIELDS, CONST_PKG4_HEADER_ENDIAN, "PKG4 Main Header", "{}[{:2}]: ofs {:#05x} size {:3} key {:12} = {}", DebugLevel)
+        finalizeBytesStructure(CONST_PKG4_MAIN_HEADER_FIELDS, CONST_PKG4_HEADER_ENDIAN, "PKG4 Main Header", "{}[{:2}]: ofs {:#05x} size {:3} key {:12} = {}", Debug_Level)
         ## --> PKG4 File Entry
-        finalizeBytesStructure(CONST_PKG4_FILE_ENTRY_FIELDS, CONST_PKG4_HEADER_ENDIAN, "PKG4 File Entry", "{}[{:1}]: ofs {:#04x} size {:1} key {:12} = {}", DebugLevel)
+        finalizeBytesStructure(CONST_PKG4_FILE_ENTRY_FIELDS, CONST_PKG4_HEADER_ENDIAN, "PKG4 File Entry", "{}[{:1}]: ofs {:#04x} size {:1} key {:12} = {}", Debug_Level)
         ## --> PARAM.SFO Header
-        finalizeBytesStructure(CONST_PARAM_SFO_HEADER_FIELDS, CONST_PARAM_SFO_ENDIAN, "SFO Header", "{}[{:1}]: ofs {:#04x} size {:1} key {:12} = {}", DebugLevel)
+        finalizeBytesStructure(CONST_PARAM_SFO_HEADER_FIELDS, CONST_PARAM_SFO_ENDIAN, "SFO Header", "{}[{:1}]: ofs {:#04x} size {:1} key {:12} = {}", Debug_Level)
         ## --> PARAM.SFO Index Entry
-        finalizeBytesStructure(CONST_PARAM_SFO_INDEX_ENTRY_FIELDS, CONST_PARAM_SFO_ENDIAN, "SFO Index Entry", "{}[{:1}]: ofs {:#03x} size {:1} key {:12} = {}", DebugLevel)
+        finalizeBytesStructure(CONST_PARAM_SFO_INDEX_ENTRY_FIELDS, CONST_PARAM_SFO_ENDIAN, "SFO Index Entry", "{}[{:1}]: ofs {:#03x} size {:1} key {:12} = {}", Debug_Level)
 
         ## Process paths and URLs
-        for Source in Arguments:
-            ## Initialize per-file variables
-            HeaderFields = None
-            ExtHeaderFields = None
-            MetaData = None
-            RetrieveEncryptedParamSfo = False
-            ItemEntries = None
-            FileTable = None
-            FileTableMap = None
-            SfoBytes = None
-            SfoValues = None
+        for Source in Arguments.source:
+            ## Initialize per-package variables
+            Data_Stream = None
+            File_Size = None
+            Target = None
+            Raw_Stream = None
+            Raw_Size_Written = None
             #
-            PkgContentId = ""
-            PkgDrmType = -1
-            PkgContentType = -1
-            PkgTitleId = ""
-            PkgSfoOffset = -1
-            PkgSfoSize = -1
-            PkgTotalSize = -1
-            PkgMdType0A = False
-            PkgMdType0B = False
+            Header_Fields = None
+            Header_Bytes = None
+            Ext_Header_Fields = None
+            Meta_Data = None
+            Item_Entries = None
+            Decrypted_Item_Entries = None
+            Decrypted_Item_Names = None
+            Retrieve_Encrypted_Param_Sfo = False
+            File_Table = None
+            File_Table_Map = None
+            Sfo_Bytes = None
+            Sfo_Values = None
             #
-            SfoContentId = ""
-            SfoTitleId = ""
-            SfoMinVer = 0.00
-            SfoCategory = ""
-            SfoVersion = 0.00
-            SfoAppVer = 0.00
-            SfoSdkVer = 0.00
-            SfoCreationDate = ""
+            Pkg_Content_Id = None
+            Pkg_Drm_Type = None
+            Pkg_Content_Type = None
+            Pkg_Title_Id = None
+            Pkg_Sfo_Offset = None
+            Pkg_Sfo_Size = None
+            Pkg_Total_Size = None
+            Pkg_Md_Type_0A = False
+            Pkg_Md_Type_0B = False
             #
-            SfoTitle = ""
-            SfoTitleRegional = ""
+            Sfo_Content_Id = None
+            Sfo_Title_Id = None
+            Sfo_Min_Ver = 0.00
+            Sfo_Category = None
+            Sfo_Version = 0.00
+            Sfo_App_Ver = 0.00
+            Sfo_Sdk_Ver = 0.00
+            Sfo_Creation_Date = None
             #
-            NpsType = "UNKNOWN"
+            Sfo_Title = None
+            Sfo_Title_Regional = None
             #
-            PsxTitleId = ""
+            Nps_Type = "UNKNOWN"
             #
-            ContentId = ""
-            TitleId = ""
-            Region = ""
-            Languages = []
-            UpdateHash = None
-            TitleUpdateUrl = ""
+            Psx_Title_Id = None
+            #
+            Content_Id = None
+            Title_Id = None
+            Region = None
+            Languages = None
+            Update_Hash = None
+            Title_Update_Url = None
             #
             Headers = {"User-Agent": "Mozilla/5.0 (PLAYSTATION 3; 4.83)"}  ## Default to PS3 headers (fits PS3/PSX/PSP/PSV packages, but not PSM packages for PSV)
 
@@ -1551,465 +1671,627 @@ if __name__ == "__main__":
                 Headers = {"User-Agent": "Download/1.00 libhttp/6.02 (PlayStation 4)"}  ## Switch to PS4 headers
                 if Source.startswith("http:") \
                 or Source.startswith("https:"):
-                    if DebugLevel >= 2:
+                    if Debug_Level >= 2:
                         dprint("Opening source as URL data stream")
                     try:
-                        DataStream = requests.get(Source, headers=Headers)
+                        Data_Stream = requests.get(Source, headers=Headers)
                     except:
-                        eprint("\nERROR: {}: Could not open URL (1) {}".format(sys.argv[0], Source))
+                        eprint("Could not open URL (1)", Source)
+                        eprint("", prefix=None)
                         sys.exit(2)
-                    StreamData = DataStream.json()
+                    Stream_Data = Data_Stream.json()
                 else:
-                    if DebugLevel >= 2:
+                    if Debug_Level >= 2:
                         dprint("Opening source as FILE data stream")
                     try:
-                        DataStream = io.open(Source, mode="r", buffering=-1, encoding=None, errors=None, newline=None, closefd=True)
+                        Data_Stream = io.open(Source, mode="r", buffering=-1, encoding=None, errors=None, newline=None, closefd=True)
                     except:
-                        eprint("\nERROR: {}: Could not open FILE {}".format(sys.argv[0], Source))
+                        eprint("Could not open FILE", Source)
+                        eprint("", prefix=None)
                         sys.exit(2)
-                    StreamData = json.load(DataStream)
-                    DataStream.close()
+                    Stream_Data = json.load(Data_Stream)
+                    Data_Stream.close()
 
                 ## Get PKG source from JSON data
-                if not 'pieces' in StreamData \
-                or not StreamData['pieces'][0] \
-                or not 'url' in StreamData['pieces'][0]:
-                    eprint("\nERROR: {}: JSON source does not look like PKG meta data (missing [pieces][0]) {}".format(sys.argv[0], Source))
+                if not 'pieces' in Stream_Data \
+                or not Stream_Data['pieces'][0] \
+                or not 'url' in Stream_Data['pieces'][0]:
+                    eprint("JSON source does not look like PKG meta data (missing [pieces][0])", Source)
+                    eprint("", prefix=None)
                     sys.exit(2)
 
-                Source = StreamData['pieces'][0]['url']
+                Source = Stream_Data['pieces'][0]['url']
+                del Stream_Data
 
             ## Open PKG source
-            print("# >>>>>>>>>> PKG Source:", Source)
-            DataStream = PkgReader(Source, Headers, DebugLevel)
-            FileSize = DataStream.getSize(DebugLevel)
-            if DebugLevel >= 2:
-                dprint("File Size:", FileSize)
+            if not 97 in Arguments.format \
+            and not 98 in Arguments.format:  ## Special case JSON output for parsing
+                print("# >>>>>>>>>> PKG Source:", Source)
+            else:
+                eprint("# >>>>>>>>>> PKG Source:", Source, prefix=None)
+            Data_Stream = PkgReader(Source, Headers, Debug_Level)
+            File_Size = Data_Stream.getSize(Debug_Level)
+            if Debug_Level >= 2:
+                dprint("File Size:", File_Size)
 
-            ## Initialize headerbytes array
+            ## Initialize header bytes array
             dprint(">>>>> PKG Main Header:")
-            HeaderBytes = bytearray()
+            Header_Bytes = bytearray()
 
             ## Get file magic code/string and check for GAME PKG file
             ## see http://www.psdevwiki.com/ps3/PKG_files#File_Header_2
             ## see http://www.psdevwiki.com/ps4/PKG_files#File_Header
-            HeaderBytes.extend(DataStream.read(0, 4, DebugLevel))
-            PkgMagic = getInteger32BitBE(HeaderBytes, 0x00)
+            Header_Bytes.extend(Data_Stream.read(0, 4, Debug_Level))
+            Pkg_Magic = getInteger32BitBE(Header_Bytes, 0x00)
             #
-            if PkgMagic == CONST_PKG3_MAGIC:
-                HeaderSize = CONST_PKG3_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"]
-                NpsType = "".join((NpsType, " (PS3/PSX/PSP/PSV/PSM)"))
+            if Pkg_Magic == CONST_PKG3_MAGIC:
+                Header_Size = CONST_PKG3_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"]
+                Nps_Type = "".join((Nps_Type, " (PS3/PSX/PSP/PSV/PSM)"))
                 dprint("Detected PS3/PSX/PSP/PSV/PSM game package")
-            elif PkgMagic == CONST_PKG4_MAGIC:
-                HeaderSize = CONST_PKG4_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"]
-                NpsType = "".join((NpsType, " (PS4)"))
+                ## Determine decrypted PKG target
+                if Arguments.raw:
+                    if Target_Is_Dir:
+                        Target = "".join((Data_Stream.getPkgName(), ".decrypted"))
+                        Target = os.path.join(Arguments.raw, Target)
+                    else:
+                        Target = Arguments.raw
+                    if not 97 in Arguments.format \
+                    and not 98 in Arguments.format:  ## Special case JSON output for parsing
+                        print("# >>> Decrypted Target File:", Target)
+                    else:
+                        eprint("# >>> Decrypted Target File:", Target, prefix=None)
+                    if not os.path.exists(Target) \
+                    or Arguments.overwrite:
+                        Raw_Stream = io.open(Target, mode="wb", buffering=-1, encoding=None, errors=None, newline=None, closefd=True)
+                    else:
+                        eprint("Target File already exists and will NOT be written", Target)
+            elif Pkg_Magic == CONST_PKG4_MAGIC:
+                Header_Size = CONST_PKG4_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"]
+                Nps_Type = "".join((Nps_Type, " (PS4)"))
                 dprint("Detected PS4 game package")
             else:
-                DataStream.close(DebugLevel)
-                eprint("\nERROR: {}: Not a known GAME PKG file ({:#x} <> {:#x}|{:#x}) {}".format(sys.argv[0], PkgMagic, CONST_PKG3_MAGIC, CONST_PKG4_MAGIC, Source))
+                Data_Stream.close(Debug_Level)
+                eprint("Not a known GAME PKG file ({:#x} <> {:#x}|{:#x})".format(Pkg_Magic, CONST_PKG3_MAGIC, CONST_PKG4_MAGIC), Source)
+                eprint("", prefix=None)
                 sys.exit(2)
 
             ## Get rest of PKG main header from data stream
-            if DebugLevel >= 2:
-                dprint("Get PKG main header from offset {:#x} with size {}".format(0, HeaderSize))
-            HeaderBytes.extend(DataStream.read(4, HeaderSize - 4, DebugLevel))
+            if Debug_Level >= 2:
+                dprint("Get PKG main header from offset {:#x} with size {}".format(0, Header_Size))
+            Header_Bytes.extend(Data_Stream.read(4, Header_Size-4, Debug_Level))
 
             ## Process GAME PKG main header data
             ## --> PKG3
-            if PkgMagic == CONST_PKG3_MAGIC:
-                HeaderFields, ExtHeaderFields, MetaData = parsePkg3Header(HeaderBytes)
+            if Pkg_Magic == CONST_PKG3_MAGIC:
+                Header_Fields, Ext_Header_Fields, Meta_Data, Header_Bytes = parsePkg3Header(Header_Bytes, Data_Stream, max(0, Debug_Level))
+                if Raw_Stream:
+                    if Debug_Level >= 2:
+                        dprint("Write PKG3 unencrypted header data from offset {:#x} and size {}".format(0, len(Header_Bytes)), prefix="[WRITE] ")
+                    Raw_Stream.write(Header_Bytes)
                 ## --> Size of package (=file size)
-                if "TOTALSIZE" in HeaderFields:
-                    PkgTotalSize = HeaderFields["TOTALSIZE"]
+                if "TOTALSIZE" in Header_Fields:
+                    Pkg_Total_Size = Header_Fields["TOTALSIZE"]
                 ## --> Package content id
-                if "CID" in HeaderFields:
-                    PkgContentId = HeaderFields["CID"]
+                if "CID" in Header_Fields:
+                    Pkg_Content_Id = Header_Fields["CID"]
                 ## --> param.sfo offset + size
-                if 0xE in MetaData:
-                    PkgSfoOffset = MetaData[0xE]["OFS"]
-                    PkgSfoSize = MetaData[0xE]["SIZE"]
+                if 0xE in Meta_Data:
+                    Pkg_Sfo_Offset = Meta_Data[0xE]["OFS"]
+                    Pkg_Sfo_Size = Meta_Data[0xE]["SIZE"]
                 ## --> DRM Type
-                if 0x1 in MetaData:
-                    PkgDrmType = MetaData[0x1]["VALUE"]
+                if 0x1 in Meta_Data:
+                    Pkg_Drm_Type = Meta_Data[0x1]["VALUE"]
                 ## --> Content Type
-                if 0x2 in MetaData:
-                    PkgContentType = MetaData[0x2]["VALUE"]
+                if 0x2 in Meta_Data:
+                    Pkg_Content_Type = Meta_Data[0x2]["VALUE"]
                 ## --> Title ID
-                if 0x6 in MetaData:  ## Version + App Version / TitleID (on size 0xC)
-                    PkgTitleId = MetaData[0x6]["VALUE"]
+                if 0x6 in Meta_Data:  ## Version + App Version / TitleID (on size 0xC)
+                    Pkg_Title_Id = Meta_Data[0x6]["VALUE"]
                 ## --> Other flags for NPS Package Type
-                if 0xA in MetaData:
-                    PkgMdType0A = True
-                if 0xB in MetaData:
-                    PkgMdType0B = True
+                if 0xA in Meta_Data:
+                    Pkg_Md_Type_0A = True
+                if 0xB in Meta_Data:
+                    Pkg_Md_Type_0B = True
                 ## If PARAM.SFO not present in unencrypted data, then search in encrypted item entries
-                if PkgSfoOffset <= 0 \
-                and "PARAM.SFO" in HeaderFields \
-                and HeaderFields["PARAM.SFO"]:
-                    RetrieveEncryptedParamSfo = True
+                if Pkg_Sfo_Offset is None \
+                and "PARAM.SFO" in Header_Fields \
+                and Header_Fields["PARAM.SFO"]:
+                    Retrieve_Encrypted_Param_Sfo = True
                 ## Process PKG3 encrypted item entries
-                if not HeaderFields["KEYINDEX"] is None \
-                and ( ExtractItemEntries \
-                      or RetrieveEncryptedParamSfo ):
-                    ItemEntries = parsePkg3ItemEntries(HeaderFields)
-                    #
-                    if RetrieveEncryptedParamSfo:
-                        ## Find PARAM.SFO in encrypted item entries
-                        for _i in range(len(ItemEntries)):
-                            Item = ItemEntries[_i]
-                            if "NAME" in Item \
-                            and Item["NAME"] \
-                            and Item["NAME"] == HeaderFields["PARAM.SFO"] \
-                            and Item["DATASIZE"] > 0:
-                                SfoBytes = retrievePkg3Item(HeaderFields, Item)
-                                break
-                        del Item
+                if not Header_Fields["KEYINDEX"] is None \
+                and (Arguments.itementries \
+                     or Raw_Stream \
+                     or Arguments.extract \
+                     or Retrieve_Encrypted_Param_Sfo ):
+                    Item_Entries, Decrypted_Item_Entries, Decrypted_Item_Names = parsePkg3ItemEntries(Header_Fields, Data_Stream, max(0, Debug_Level))
+                    if Raw_Stream:
+                        if Debug_Level >= 2:
+                            dprint("Write PKG3 unencrypted item entries from offset {:#x} and size {}".format(Decrypted_Item_Entries["ALIGN"]["OFS"]+Header_Fields["DATAOFS"], len(Decrypted_Item_Entries["DATA"])), prefix="[WRITE] ")
+                        Raw_Stream.write(Decrypted_Item_Entries["DATA"])
+                        if Debug_Level >= 2:
+                            dprint("Write PKG3 unencrypted item names from offset {:#x} and size {}".format(Decrypted_Item_Names["ALIGN"]["OFS"]+Header_Fields["DATAOFS"], len(Decrypted_Item_Names["DATA"])), prefix="[WRITE] ")
+                        Raw_Stream.write(Decrypted_Item_Names["DATA"])
+                    del Decrypted_Item_Entries
+                    del Decrypted_Item_Names
+                #
+                if not Item_Entries is None \
+                and (Raw_Stream \
+                     or Arguments.extract \
+                     or Retrieve_Encrypted_Param_Sfo):
+                    Item_Entries_Sorted = sorted(Item_Entries, key=lambda x: x["DATAOFS"])
+                    for Item_Entry in Item_Entries_Sorted:
+                        if Item_Entry["DATASIZE"] <= 0:
+                            if Arguments.extract:
+                                pass ## TODO
+                            #
+                            continue
+                        #
+                        Item_Data = None
+                        if Retrieve_Encrypted_Param_Sfo \
+                        and "NAME" in Item_Entry \
+                        and Item_Entry["NAME"] \
+                        and Item_Entry["NAME"] == Header_Fields["PARAM.SFO"] \
+                        and Item_Entry["DATASIZE"] > 0:
+                            Item_Data = bytearray()
+                        #
+                        Extract_Stream = None
+                        if Arguments.extract:
+                            Extract_Stream = None  ## TODO
+                        #
+                        if Raw_Stream \
+                        or Extract_Stream \
+                        or Item_Data:
+                            processPkg3Item(Header_Fields, Item_Entry, Data_Stream, Item_Data, Raw_Stream, Extract_Stream, max(0, Debug_Level))
+                            #
+                            if Retrieve_Encrypted_Param_Sfo \
+                            and "NAME" in Item_Entry \
+                            and Item_Entry["NAME"] \
+                            and Item_Entry["NAME"] == Header_Fields["PARAM.SFO"] \
+                            and Item_Entry["DATASIZE"] > 0:
+                                Sfo_Bytes = Item_Data
+                        #
+                        del Item_Data
+                    del Item_Entry
+                    del Item_Entries_Sorted
+                ## Write unencrypted tail data
+                if Raw_Stream:
+                    if Debug_Level >= 2:
+                        dprint("Get PKG tail data from offset {:#x}".format(Header_Fields["DATAOFS"]+Header_Fields["DATASIZE"]))
+                    Data_Bytes = Data_Stream.read(Header_Fields["DATAOFS"]+Header_Fields["DATASIZE"], -1, Debug_Level)
+                    if Debug_Level >= 2:
+                        dprint("Write PKG3 unencrypted tail data from offset {:#x} and size {}".format(Header_Fields["DATAOFS"]+Header_Fields["DATASIZE"], len(Data_Bytes)), prefix="[WRITE] ")
+                    Raw_Stream.write(Data_Bytes)
+                    Raw_Size_Written = Raw_Stream.tell()
+                    Raw_Stream.close()
+                    del Data_Bytes
+                    if (not Pkg_Total_Size is None \
+                        and Raw_Size_Written != Pkg_Total_Size) \
+                    or (not File_Size is None \
+                        and Raw_Size_Written != File_Size):
+                        eprint("Written size {} of unencrypted/decrypted data from".format(Raw_Size_Written), Source)
+                        if (not Pkg_Total_Size is None \
+                            and Raw_Size_Written != Pkg_Total_Size):
+                            eprint("mismatches package total size of", Pkg_Total_Size)
+                        if (not File_Size is None \
+                            and Raw_Size_Written != File_Size):
+                            eprint("mismatches file size of", File_Size)
+                        eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info")
             ## --> PKG4
-            elif PkgMagic == CONST_PKG4_MAGIC:
-                HeaderFields, FileTable, FileTableMap = parsePkg4Header(HeaderBytes)
+            elif Pkg_Magic == CONST_PKG4_MAGIC:
+                Header_Fields, File_Table, File_Table_Map = parsePkg4Header(Header_Bytes, Data_Stream, max(0, Debug_Level), print_unknown=Arguments.unknown)
                 ## --> Size of package (=file size)
-                if "PKGSIZE" in HeaderFields:
-                    PkgTotalSize = HeaderFields["PKGSIZE"]
+                if "PKGSIZE" in Header_Fields:
+                    Pkg_Total_Size = Header_Fields["PKGSIZE"]
                 ## --> Package content id
-                if "CID" in HeaderFields:
-                    PkgContentId = HeaderFields["CID"]
+                if "CID" in Header_Fields:
+                    Pkg_Content_Id = Header_Fields["CID"]
                 ## --> param.sfo offset + size
-                if CONST_PKG4_FILE_ENTRY_ID_PARAM_SFO in FileTableMap:
-                    FileEntry = FileTable[FileTableMap[CONST_PKG4_FILE_ENTRY_ID_PARAM_SFO]]
-                    PkgSfoOffset = FileEntry["DATAOFS"]
-                    PkgSfoSize = FileEntry["DATASIZE"]
+                if CONST_PKG4_FILE_ENTRY_ID_PARAM_SFO in File_Table_Map:
+                    File_Entry = File_Table[File_Table_Map[CONST_PKG4_FILE_ENTRY_ID_PARAM_SFO]]
+                    Pkg_Sfo_Offset = File_Entry["DATAOFS"]
+                    Pkg_Sfo_Size = File_Entry["DATASIZE"]
                 ## --> DRM Type
-                if "DRMTYPE" in HeaderFields:
-                    PkgDrmType = HeaderFields["DRMTYPE"]
+                if "DRMTYPE" in Header_Fields:
+                    Pkg_Drm_Type = Header_Fields["DRMTYPE"]
                 ## --> Content Type
-                if "CONTTYPE" in HeaderFields:
-                    PkgContentType = HeaderFields["CONTTYPE"]
+                if "CONTTYPE" in Header_Fields:
+                    Pkg_Content_Type = Header_Fields["CONTTYPE"]
             #
-            if PkgTitleId and PkgTitleId.strip():
-                TitleId = PkgTitleId.strip()
+            if Pkg_Title_Id and Pkg_Title_Id.strip():
+                Title_Id = Pkg_Title_Id.strip()
             #
-            if PkgContentId and PkgContentId.strip():
-                ContentId = PkgContentId.strip()
-                if not (PkgTitleId and PkgTitleId.strip()):
-                    TitleId = ContentId[7:16]
+            if Pkg_Content_Id and Pkg_Content_Id.strip():
+                Content_Id = Pkg_Content_Id.strip()
+                if not (Pkg_Title_Id and Pkg_Title_Id.strip()):
+                    Title_Id = Content_Id[7:16]
 
             ## Retrieve PARAM.SFO from unencrypted data if present
-            if PkgSfoOffset > 0 \
-            and not SfoBytes:
-                if DebugLevel >= 2:
+            if Pkg_Sfo_Offset \
+            and Pkg_Sfo_Offset > 0 \
+            and not Sfo_Bytes:
+                if Debug_Level >= 2:
                     dprint(">>>>> PARAM.SFO:")
                 ## Get PARAM.SFO from data stream
-                if DebugLevel >= 2:
-                    dprint("Get PARAM.SFO from offset {:#x} with size {}".format(PkgSfoOffset, PkgSfoSize))
-                SfoBytes = bytearray()
-                try:
-                    SfoBytes.extend(DataStream.read(PkgSfoOffset, PkgSfoSize, DebugLevel))
-                except:
-                    DataStream.close(DebugLevel)
-                    eprint("\nERROR: {}: Could not get PARAM.SFO at offset {:#x} with size {} from {}".format(sys.argv[0], PkgSfoOffset, PkgSfoSize, Source))
-                    sys.exit(2)
+                if Debug_Level >= 2:
+                    dprint("Get PARAM.SFO from unencrypted data with offset {:#x} with size {}".format(Pkg_Sfo_Offset, Pkg_Sfo_Size), end=" ")
+                Sfo_Bytes = bytearray()
+                if len(Header_Bytes) > (Pkg_Sfo_Offset+Pkg_Sfo_Size):
+                    if Debug_Level >= 2:
+                        dprint("from header data", prefix=None)
+                    Sfo_Bytes.extend(Header_Bytes[Pkg_Sfo_Offset:Pkg_Sfo_Offset+Pkg_Sfo_Size])
+                else:
+                    if Debug_Level >= 2:
+                        dprint("from data stream", prefix=None)
+                    try:
+                        Sfo_Bytes.extend(Data_Stream.read(Pkg_Sfo_Offset, Pkg_Sfo_Size, Debug_Level))
+                    except:
+                        Data_Stream.close(Debug_Level)
+                        eprint("Could not get PARAM.SFO at offset {:#x} with size {} from".format(Pkg_Sfo_Offset, Pkg_Sfo_Size), Source)
+                        eprint("", prefix=None)
+                        sys.exit(2)
 
             ## Process PARAM.SFO if present
-            if SfoBytes:
+            if Sfo_Bytes:
                 ## Check for known PARAM.SFO data
-                SfoMagic = getInteger32BitLE(SfoBytes, 0)
+                SfoMagic = getInteger32BitLE(Sfo_Bytes, 0)
                 if SfoMagic != 0x46535000:
-                    DataStream.close(DebugLevel)
-                    eprint("\nERROR: {}: Not a known PARAM.SFO structure ({:#x} <> 0x46535000) {}".format(sys.argv[0], SfoMagic, Source))
+                    Data_Stream.close(Debug_Level)
+                    eprint("Not a known PARAM.SFO structure ({:#x} <> 0x46535000)".format(SfoMagic), Source)
+                    eprint("", prefix=None)
                     sys.exit(2)
 
                 ## Process PARAM.SFO data
-                SfoValues = parseSfo(SfoBytes)
+                Sfo_Values = parseSfo(Sfo_Bytes, max(0, Debug_Level))
                 ## -->
-                if "TITLE_ID" in SfoValues:
-                    SfoTitleId = SfoValues["TITLE_ID"]
+                if "TITLE_ID" in Sfo_Values:
+                    Sfo_Title_Id = Sfo_Values["TITLE_ID"]
                 ## -->
-                if "CONTENT_ID" in SfoValues:
-                    SfoContentId = SfoValues["CONTENT_ID"]
+                if "CONTENT_ID" in Sfo_Values:
+                    Sfo_Content_Id = Sfo_Values["CONTENT_ID"]
                 ## --> Firmware PS4
-                if "SYSTEM_VER" in SfoValues:
-                    SfoMinVer = float("{:02x}.{:02x}".format((SfoValues["SYSTEM_VER"] >> 24) & 0xff, (SfoValues["SYSTEM_VER"] >> 16) & 0xff))
+                if "SYSTEM_VER" in Sfo_Values:
+                    Sfo_Min_Ver = float("{:02x}.{:02x}".format((Sfo_Values["SYSTEM_VER"] >> 24) & 0xff, (Sfo_Values["SYSTEM_VER"] >> 16) & 0xff))
                 ## --> Firmware PS3
-                if "PS3_SYSTEM_VER" in SfoValues:
-                    SfoMinVer = float(SfoValues["PS3_SYSTEM_VER"])
+                if "PS3_SYSTEM_VER" in Sfo_Values:
+                    Sfo_Min_Ver = float(Sfo_Values["PS3_SYSTEM_VER"])
                 ## --> Firmware PS Vita
-                if "PSP2_DISP_VER" in SfoValues:
-                    SfoMinVer = float(SfoValues["PSP2_DISP_VER"])
+                if "PSP2_DISP_VER" in Sfo_Values:
+                    Sfo_Min_Ver = float(Sfo_Values["PSP2_DISP_VER"])
                 ## -->
-                if "CATEGORY" in SfoValues:
-                    SfoCategory = SfoValues["CATEGORY"]
+                if "CATEGORY" in Sfo_Values:
+                    Sfo_Category = Sfo_Values["CATEGORY"]
                 ## -->
-                if "VERSION" in SfoValues:
-                    SfoVersion = float(SfoValues["VERSION"])
+                if "VERSION" in Sfo_Values:
+                    Sfo_Version = float(Sfo_Values["VERSION"])
                 ## -->
-                if "APP_VER" in SfoValues:
-                    SfoAppVer = float(SfoValues["APP_VER"])
+                if "APP_VER" in Sfo_Values:
+                    Sfo_App_Ver = float(Sfo_Values["APP_VER"])
                 ## -->
-                if "PUBTOOLINFO" in SfoValues:
+                if "PUBTOOLINFO" in Sfo_Values:
                     try:
-                        SfoSdkVer = int(SfoValues["PUBTOOLINFO"][24:32]) / 1000000
-                        SfoCreationDate = SfoValues["PUBTOOLINFO"][7:15]
+                        Sfo_Sdk_Ver = int(Sfo_Values["PUBTOOLINFO"][24:32]) / 1000000
+                        Sfo_Creation_Date = Sfo_Values["PUBTOOLINFO"][7:15]
                     except:
                         pass
                 #
-                if SfoTitleId and SfoTitleId.strip():
-                    TitleId = SfoTitleId.strip()
+                if Sfo_Title_Id and Sfo_Title_Id.strip():
+                    Title_Id = Sfo_Title_Id.strip()
                 #
-                if SfoContentId and SfoContentId.strip():
-                    ContentId = SfoContentId.strip()
-                    if not (SfoTitleId and SfoTitleId.strip()):
-                        TitleId = ContentId[7:16]
+                if Sfo_Content_Id and Sfo_Content_Id.strip():
+                    Content_Id = Sfo_Content_Id.strip()
+                    if not (Sfo_Title_Id and Sfo_Title_Id.strip()):
+                        Title_Id = Content_Id[7:16]
 
             ## Close data stream
-            DataStream.close(DebugLevel)
+            Data_Stream.close(Debug_Level)
 
             ## Determine some derived variables
             ## a) Region and related languages
-            if ContentId and ContentId.strip():
-                Region, Languages = getRegion(ContentId[0])
+            if Content_Id and Content_Id.strip():
+                Region, Languages = getRegion(Content_Id[0])
             ## b) International/English title
-            SfoTitle = ""
-            for Language in [ "01", "18" ]:
+            for Language in ["01", "18"]:
                 Key = "".join(("TITLE_", Language))
-                if SfoValues \
-                and Key in SfoValues:
-                   if DebugLevel >= 2:
+                if Sfo_Values \
+                and Key in Sfo_Values:
+                   if Debug_Level >= 2:
                        dprint("Set international name to", Key)
-                   SfoTitle = SfoValues[Key].strip()
+                   Sfo_Title = Sfo_Values[Key].strip()
                    break
-            if not SfoTitle \
-            and SfoValues \
-            and "TITLE" in SfoValues \
-            and SfoValues["TITLE"] \
-            and SfoValues["TITLE"].strip():
-                if DebugLevel >= 2:
+            if not Sfo_Title \
+            and Sfo_Values \
+            and "TITLE" in Sfo_Values \
+            and Sfo_Values["TITLE"] \
+            and Sfo_Values["TITLE"].strip():
+                if Debug_Level >= 2:
                     dprint("Set international title to TITLE")
-                SfoTitle = SfoValues["TITLE"].strip()
+                Sfo_Title = Sfo_Values["TITLE"].strip()
             ## --> Clean international/english title
-            if SfoTitle \
-            and not UncleanedTitle:
-                if ReplaceList:
-                    for ReplaceChars in ReplaceList:
-                        if DebugLevel >= 2:
-                            dprint("Clean international title from", ReplaceChars[0])
-                        for _i in range(len(ReplaceChars[0])):
-                            ReplaceChar = ReplaceChars[0][_i]
-                            if ReplaceChars[1] == " ":
-                                SfoTitle = SfoTitle.replace("".join((ReplaceChar, ":")), ":")
-                            SfoTitle = SfoTitle.replace(ReplaceChar, ReplaceChars[1])
-                SfoTitle = re.sub(r"\s+", " ", SfoTitle, 0, re.UNICODE).strip()  ## also replaces \u3000
+            if Sfo_Title \
+            and not Arguments.unclean:
+                if Replace_List:
+                    for Replace_Chars in Replace_List:
+                        if Debug_Level >= 2:
+                            dprint("Clean international title from", Replace_Chars[0])
+                        for _i in range(len(Replace_Chars[0])):
+                            Replace_Char = Replace_Chars[0][_i]
+                            if Replace_Chars[1] == " ":
+                                Sfo_Title = Sfo_Title.replace("".join((Replace_Char, ":")), ":")
+                            Sfo_Title = Sfo_Title.replace(Replace_Char, Replace_Chars[1])
+                Sfo_Title = re.sub(r"\s+", " ", Sfo_Title, 0, re.UNICODE).strip()  ## also replaces \u3000
                 ## Condense demo information in title to "(DEMO)"
-                SfoTitle = SfoTitle.replace("demo ver.", "(DEMO)").replace("(Demo Version)", "(DEMO)").replace("Demo Version", "(DEMO)").replace("Demo version", "(DEMO)").replace("DEMO Version", "(DEMO)").replace("DEMO version", "(DEMO)").replace("【体験版】", "(DEMO)").replace("(体験版)", "(DEMO)").replace("体験版", "(DEMO)").strip()
-                SfoTitle = re.sub(r"\(demo\)", r"(DEMO)", SfoTitle, 0, re.IGNORECASE|re.UNICODE)
-                SfoTitle = re.sub(r"(^|[^a-z(]{1})demo([^a-z)]{1}|$)", r"\1(DEMO)\2", SfoTitle, 0, re.IGNORECASE|re.UNICODE)
+                Sfo_Title = Sfo_Title.replace("demo ver.", "(DEMO)").replace("(Demo Version)", "(DEMO)").replace("Demo Version", "(DEMO)").replace("Demo version", "(DEMO)").replace("DEMO Version", "(DEMO)").replace("DEMO version", "(DEMO)").replace("【体験版】", "(DEMO)").replace("(体験版)", "(DEMO)").replace("体験版", "(DEMO)").strip()
+                Sfo_Title = re.sub(r"\(demo\)", r"(DEMO)", Sfo_Title, 0, re.IGNORECASE|re.UNICODE)
+                Sfo_Title = re.sub(r"(^|[^a-z(]{1})demo([^a-z)]{1}|$)", r"\1(DEMO)\2", Sfo_Title, 0, re.IGNORECASE|re.UNICODE)
             ## c) Regional title
-            SfoTitleRegional = ""
-            for Language in Languages:
-                Key = "".join(("TITLE_", Language))
-                if SfoValues \
-                and Key in SfoValues:
-                   if DebugLevel >= 2:
-                       dprint("Set regional title to", Key)
-                   SfoTitleRegional = SfoValues[Key].strip()
-                   break
-            if not SfoTitleRegional \
-            and SfoValues \
-            and "TITLE" in SfoValues \
-            and SfoValues["TITLE"] \
-            and SfoValues["TITLE"].strip():
-                if DebugLevel >= 2:
+            if Languages:
+                for Language in Languages:
+                    Key = "".join(("TITLE_", Language))
+                    if Sfo_Values \
+                    and Key in Sfo_Values:
+                       if Debug_Level >= 2:
+                           dprint("Set regional title to", Key)
+                       Sfo_Title_Regional = Sfo_Values[Key].strip()
+                       break
+            if not Sfo_Title_Regional \
+            and Sfo_Values \
+            and "TITLE" in Sfo_Values \
+            and Sfo_Values["TITLE"] \
+            and Sfo_Values["TITLE"].strip():
+                if Debug_Level >= 2:
                     dprint("Set regional title to TITLE")
-                SfoTitleRegional = SfoValues["TITLE"].strip()
+                Sfo_Title_Regional = Sfo_Values["TITLE"].strip()
             ## --> Clean regional title
-            if SfoTitleRegional \
-            and not UncleanedTitle:
-                if ReplaceList:
-                    for ReplaceChars in ReplaceList:
-                        if DebugLevel >= 2:
-                            dprint("Clean regional title from", ReplaceChars[0])
-                        for _i in range(len(ReplaceChars[0])):
-                            ReplaceChar = ReplaceChars[0][_i]
-                            if ReplaceChars[1] == " ":
-                                SfoTitleRegional = SfoTitleRegional.replace("".join((ReplaceChar, ":")), ":")
-                            SfoTitleRegional = SfoTitleRegional.replace(ReplaceChar, ReplaceChars[1])
-                SfoTitleRegional = re.sub(r"\s+", " ", SfoTitleRegional, 0, re.UNICODE).strip()  ## also replaces \u3000
+            if Sfo_Title_Regional \
+            and not Arguments.unclean:
+                if Replace_List:
+                    for Replace_Chars in Replace_List:
+                        if Debug_Level >= 2:
+                            dprint("Clean regional title from", Replace_Chars[0])
+                        for _i in range(len(Replace_Chars[0])):
+                            Replace_Char = Replace_Chars[0][_i]
+                            if Replace_Chars[1] == " ":
+                                Sfo_Title_Regional = Sfo_Title_Regional.replace("".join((Replace_Char, ":")), ":")
+                            Sfo_Title_Regional = Sfo_Title_Regional.replace(Replace_Char, Replace_Chars[1])
+                Sfo_Title_Regional = re.sub(r"\s+", " ", Sfo_Title_Regional, 0, re.UNICODE).strip()  ## also replaces \u3000
 
             ## Determine NPS package type from data
-            if PkgContentType == 0x1 \
-            or PkgContentType == 0x6:
-                NpsType = "PSX GAME"  #md_type = 9
-                if PkgContentType == 0x6:
-                    PsxTitleId = HeaderBytes[712:721].decode("utf-8", errors="ignore")
-            elif PkgContentType == 0x4 \
-            or PkgContentType == 0xB:
-                if PkgMdType0B == True:
-                    NpsType = "PS3 UPDATE"
+            if Pkg_Content_Type == 0x1 \
+            or Pkg_Content_Type == 0x6:
+                Nps_Type = "PSX GAME"  #md_type = 9
+                if Pkg_Content_Type == 0x6:
+                    Psx_Title_Id = Header_Bytes[712:721].decode("utf-8", errors="ignore")
+            elif Pkg_Content_Type == 0x4 \
+            or Pkg_Content_Type == 0xB:
+                if Pkg_Md_Type_0B == True:
+                    Nps_Type = "PS3 UPDATE"
                 else:
-                    NpsType = "PS3 DLC"  #md_type = 9 | Also PS3 updates : md_type = 11
-                if TitleId and TitleId.strip():
-                    TitleUpdateUrl = "https://a0.ww.np.dl.playstation.net/tpl/np/{0}/{0}-ver.xml".format(TitleId)
-            elif PkgContentType == 0x5:
-                NpsType = "PS3 GAME"  #md_type = 5
-                if TitleId and TitleId.strip():
-                    TitleUpdateUrl = "https://a0.ww.np.dl.playstation.net/tpl/np/{0}/{0}-ver.xml".format(TitleId)
-            elif PkgContentType == 0x7:
-                if PkgMdType0B == True:
-                    NpsType = "PSP DLC"
+                    Nps_Type = "PS3 DLC"  #md_type = 9 | Also PS3 updates : md_type = 11
+                if Title_Id and Title_Id.strip():
+                    Title_Update_Url = "https://a0.ww.np.dl.playstation.net/tpl/np/{0}/{0}-ver.xml".format(Title_Id)
+            elif Pkg_Content_Type == 0x5:
+                Nps_Type = "PS3 GAME"  #md_type = 5
+                if Title_Id and Title_Id.strip():
+                    Title_Update_Url = "https://a0.ww.np.dl.playstation.net/tpl/np/{0}/{0}-ver.xml".format(Title_Id)
+            elif Pkg_Content_Type == 0x7 \
+            or Pkg_Content_Type == 0xE \
+            or Pkg_Content_Type == 0xF \
+            or Pkg_Content_Type == 0x10:
+                ## PSP & PSP-PCEngine / PSP-Go / PSP-Mini / PSP-NeoGeo
+                if Pkg_Md_Type_0B == True:
+                    Nps_Type = "PSP DLC"
                 else:
-                    NpsType = "PSP GAME"  #md_type = 9 | Also PSP DLCS : md_type = 10
-                if TitleId and TitleId.strip():
-                    TitleUpdateUrl = "https://a0.ww.np.dl.playstation.net/tpl/np/{0}/{0}-ver.xml".format(TitleId)
-            elif PkgContentType == 0x9:
-                NpsType = "PSP or PS3 THEME"  #md_type = 9 | Also PS3 THEMES : md_type = 9
-            elif PkgContentType == 0xD:
-                NpsType = "PS3 AVATAR"  #md_type = 9
-            elif PkgContentType == 0x15:
-                NpsType = "VITA APP"  #md_type = 18
-                if SfoCategory == "gp":
-                    NpsType = "VITA UPDATE"
-                if TitleId and TitleId.strip():
-                    UpdateHash = Cryptodome.Hash.HMAC.new(CONST_PKG3_UPDATE_KEYS[2]["KEY"], digestmod=Cryptodome.Hash.SHA256)
-                    UpdateHash.update("".join(("np_", TitleId)).encode("UTF-8"))
-                    TitleUpdateUrl = "http://gs-sec.ww.np.dl.playstation.net/pl/np/{0}/{1}/{0}-ver.xml".format(TitleId, UpdateHash.hexdigest())
-            elif PkgContentType == 0x16:
-                NpsType = "VITA DLC"  #md_type = 17
-                if TitleId and TitleId.strip():
-                    UpdateHash = Cryptodome.Hash.HMAC.new(CONST_PKG3_UPDATE_KEYS[2]["KEY"], digestmod=Cryptodome.Hash.SHA256)
-                    UpdateHash.update("".join(("np_", TitleId)).encode("UTF-8"))
-                    TitleUpdateUrl = "http://gs-sec.ww.np.dl.playstation.net/pl/np/{0}/{1}/{0}-ver.xml".format(TitleId, UpdateHash.hexdigest())
-            elif PkgContentType == 0x1F:
-                NpsType = "VITA THEME"  #md_type = 17
-            elif PkgContentType == 0x18:
-                NpsType = "PSM GAME"  #md_type = 16
+                    Nps_Type = "PSP GAME"  #md_type = 9 | Also PSP DLCS : md_type = 10
+                if Title_Id and Title_Id.strip():
+                    Title_Update_Url = "https://a0.ww.np.dl.playstation.net/tpl/np/{0}/{0}-ver.xml".format(Title_Id)
+            elif Pkg_Content_Type == 0x9:
+                Nps_Type = "PSP or PS3 THEME"  #md_type = 9 | Also PS3 THEMES : md_type = 9
+            elif Pkg_Content_Type == 0xD:
+                Nps_Type = "PS3 AVATAR"  #md_type = 9
+            elif Pkg_Content_Type == 0x15:
+                Nps_Type = "PSV GAME"  #md_type = 18
+                if Sfo_Category == "gp":
+                    Nps_Type = "PSV UPDATE"
+                if Title_Id and Title_Id.strip():
+                    Update_Hash = Cryptodome.Hash.HMAC.new(CONST_PKG3_UPDATE_KEYS[2]["KEY"], digestmod=Cryptodome.Hash.SHA256)
+                    Update_Hash.update("".join(("np_", Title_Id)).encode("UTF-8"))
+                    Title_Update_Url = "http://gs-sec.ww.np.dl.playstation.net/pl/np/{0}/{1}/{0}-ver.xml".format(Title_Id, Update_Hash.hexdigest())
+            elif Pkg_Content_Type == 0x16:
+                Nps_Type = "PSV DLC"  #md_type = 17
+                if Title_Id and Title_Id.strip():
+                    Update_Hash = Cryptodome.Hash.HMAC.new(CONST_PKG3_UPDATE_KEYS[2]["KEY"], digestmod=Cryptodome.Hash.SHA256)
+                    Update_Hash.update("".join(("np_", Title_Id)).encode("UTF-8"))
+                    Title_Update_Url = "http://gs-sec.ww.np.dl.playstation.net/pl/np/{0}/{1}/{0}-ver.xml".format(Title_Id, Update_Hash.hexdigest())
+            elif Pkg_Content_Type == 0x1F:
+                Nps_Type = "PSV THEME"  #md_type = 17
+            elif Pkg_Content_Type == 0x18 \
+            or Pkg_Content_Type == 0x1D:
+                Nps_Type = "PSM GAME"  #md_type = 16
             else:
-                eprint("\nERROR: PKG content type {0}/{0:#0x} not supported. {1}".format(PkgContentType, Source))
+                eprint("PKG content type {0}/{0:#0x} not supported.".format(Pkg_Content_Type), Source, prefix="[UNKNOWN] ")
 
-            for OutputFormat in OutputFormats:
-                if OutputFormat == 0:  ## Human-readable Output
+            for Output_Format in Arguments.format:
+                if Output_Format == 0:  ## Human-readable Output
                     print()
-                    print("{:13} {}".format("NPS Type:", NpsType))
-                    if TitleId and TitleId.strip():
-                        print("{:13} {}".format("Title ID:", TitleId))
-                    if SfoTitle:
-                        print("{:13} {}".format("Title:", SfoTitle))
-                    if SfoTitleRegional:
-                        print("{:13} {}".format("Title Region:", SfoTitleRegional))
-                    if ContentId and ContentId.strip():
+                    print("{:13} {}".format("NPS Type:", Nps_Type))
+                    if Title_Id and Title_Id.strip():
+                        print("{:13} {}".format("Title ID:", Title_Id))
+                    if Sfo_Title:
+                        print("{:13} {}".format("Title:", Sfo_Title))
+                    if Sfo_Title_Regional:
+                        print("{:13} {}".format("Title Region:", Sfo_Title_Regional))
+                    if Content_Id and Content_Id.strip():
                         print("{:13} {}".format("Region:", Region))
-                    if SfoMinVer >= 0:
-                        print("{:13} {:.2f}".format("Min FW:", SfoMinVer))
-                    if SfoSdkVer >= 0:
-                        print("{:13} {:.2f}".format("SDK Ver:", SfoSdkVer))
-                    if SfoCreationDate and SfoCreationDate.strip():
-                        print("{:13} {}".format("c_date:", datetime.strptime(SfoCreationDate, "%Y%m%d").strftime("%Y.%m.%d")))
-                    if SfoVersion >= 0:
-                        print("{:13} {:.2f}".format("Version:", SfoVersion))
-                    if SfoAppVer >= 0:
-                        print("{:13} {:.2f}".format("App Ver:", SfoAppVer))
-                    if PsxTitleId and PsxTitleId.strip():
-                        print("{:13} {}".format("PSX Title ID:", PsxTitleId))
-                    if ContentId and ContentId.strip():
-                        print("{:13} {}".format("Content ID:", ContentId))
-                        if SfoContentId and SfoContentId.strip() \
-                        and PkgContentId.strip() != SfoContentId.strip():
-                            print("{:13} {}".format("PKG Hdr CID:", PkgContentId))
-                    print("{:13} {}".format("Size:", PkgTotalSize))
-                    print("{:13} {}".format("Pretty Size:", prettySize(PkgTotalSize)))
-                    if FileSize:
-                        print("{:13} {}".format("File Size:", FileSize))
-                    if TitleUpdateUrl and TitleUpdateUrl.strip():
-                        print("{:13} {}".format("Update URL:", TitleUpdateUrl))
+                    if Sfo_Min_Ver >= 0:
+                        print("{:13} {:.2f}".format("Min FW:", Sfo_Min_Ver))
+                    if Sfo_Sdk_Ver >= 0:
+                        print("{:13} {:.2f}".format("SDK Ver:", Sfo_Sdk_Ver))
+                    if Sfo_Creation_Date and Sfo_Creation_Date.strip():
+                        print("{:13} {}".format("c_date:", datetime.strptime(Sfo_Creation_Date, "%Y%m%d").strftime("%Y.%m.%d")))
+                    if Sfo_Version >= 0:
+                        print("{:13} {:.2f}".format("Version:", Sfo_Version))
+                    if Sfo_App_Ver >= 0:
+                        print("{:13} {:.2f}".format("App Ver:", Sfo_App_Ver))
+                    if Psx_Title_Id and Psx_Title_Id.strip():
+                        print("{:13} {}".format("PSX Title ID:", Psx_Title_Id))
+                    if Content_Id and Content_Id.strip():
+                        print("{:13} {}".format("Content ID:", Content_Id))
+                        if Sfo_Content_Id and Sfo_Content_Id.strip() \
+                        and Pkg_Content_Id.strip() != Sfo_Content_Id.strip():
+                            print("{:13} {}".format("PKG Hdr CID:", Pkg_Content_Id))
+                    if not Pkg_Total_Size is None:
+                        print("{:13} {}".format("Size:", Pkg_Total_Size))
+                        print("{:13} {}".format("Pretty Size:", prettySize(Pkg_Total_Size)))
+                    if not File_Size is None:
+                        print("{:13} {}".format("File Size:", File_Size))
+                    if Title_Update_Url and Title_Update_Url.strip():
+                        print("{:13} {}".format("Update URL:", Title_Update_Url))
                     print()
-                elif OutputFormat == 1:  ## Linux Shell Variable Output
-                    print("PSN_PKG_SIZE='{}'".format(PkgTotalSize))
-                    print("PSN_PKG_NPS_TYPE='{}'".format(NpsType))
-                    if TitleId and TitleId.strip():
-                        print("PSN_PKG_TITLEID='{}'".format(TitleId))
+                elif Output_Format == 1:  ## Linux Shell Variable Output
+                    print("PSN_PKG_SIZE='{}'".format(Pkg_Total_Size))
+                    print("PSN_PKG_NPS_TYPE='{}'".format(Nps_Type))
+                    if Title_Id and Title_Id.strip():
+                        print("PSN_PKG_TITLEID='{}'".format(Title_Id))
                     else:
                         print("unset PSN_PKG_TITLEID")
-                    if ContentId and ContentId.strip():
-                        print("PSN_PKG_CONTENTID='{}'".format(ContentId))
+                    if Content_Id and Content_Id.strip():
+                        print("PSN_PKG_CONTENTID='{}'".format(Content_Id))
                         print("PSN_PKG_REGION='{}'".format(Region.replace("(HKG)", "").replace("(KOR)", "")))
                     else:
                         print("unset PSN_PKG_CONTENTID")
                         print("unset PSN_PKG_REGION")
-                    if SfoTitle:
-                        print("PSN_PKG_SFO_TITLE=\"\\\"{}\\\"\"".format(SfoTitle.replace("\"", "\\\"\\\"")))
+                    if Sfo_Title:
+                        print("PSN_PKG_SFO_TITLE=\"\\\"{}\\\"\"".format(Sfo_Title.replace("\"", "\\\"\\\"")))
                     else:
                         print("unset PSN_PKG_SFO_TITLE")
-                    if SfoTitleRegional:
-                        print("PSN_PKG_SFO_TITLE_REGION=\"\\\"{}\\\"\"".format(SfoTitleRegional.replace("\"", "\\\"\\\"")))
+                    if Sfo_Title_Regional:
+                        print("PSN_PKG_SFO_TITLE_REGION=\"\\\"{}\\\"\"".format(Sfo_Title_Regional.replace("\"", "\\\"\\\"")))
                     else:
                         print("unset PSN_PKG_SFO_TITLE_REGION")
-                    if SfoMinVer >= 0:
-                        print("PSN_PKG_SFO_FW_VER='{:.2f}'".format(SfoMinVer))
+                    if Sfo_Min_Ver >= 0:
+                        print("PSN_PKG_SFO_FW_VER='{:.2f}'".format(Sfo_Min_Ver))
                     else:
                         print("unset PSN_PKG_SFO_FW_VER")
-                    if SfoVersion >= 0:
-                        print("PSN_PKG_SFO_VERSION='{:.2f}'".format(SfoVersion))
+                    if Sfo_Version >= 0:
+                        print("PSN_PKG_SFO_VERSION='{:.2f}'".format(Sfo_Version))
                     else:
                         print("unset PSN_PKG_SFO_VERSION")
-                    if SfoAppVer >= 0:
-                        print("PSN_PKG_SFO_APP_VER='{:.2f}'".format(SfoAppVer))
+                    if Sfo_App_Ver >= 0:
+                        print("PSN_PKG_SFO_APP_VER='{:.2f}'".format(Sfo_App_Ver))
                     else:
                         print("unset PSN_PKG_SFO_APP_VER")
-                    if SfoSdkVer >= 0:
-                        print("PSN_PKG_SFO_SDK_VER='{:.2f}'".format(SfoSdkVer))
+                    if Sfo_Sdk_Ver >= 0:
+                        print("PSN_PKG_SFO_SDK_VER='{:.2f}'".format(Sfo_Sdk_Ver))
                     else:
                         print("unset PSN_PKG_SFO_SDK_VER")
-                    if SfoCategory and SfoCategory.strip():
-                        print("PSN_PKG_SFO_CATEGORY='{}'".format(SfoCategory))
+                    if Sfo_Category and Sfo_Category.strip():
+                        print("PSN_PKG_SFO_CATEGORY='{}'".format(Sfo_Category))
                     else:
                         print("unset PSN_PKG_SFO_CATEGORY")
-                    if SfoCreationDate and SfoCreationDate.strip():
-                        print("PSN_PKG_SFO_CREATION='{}'".format(SfoCreationDate))
+                    if Sfo_Creation_Date and Sfo_Creation_Date.strip():
+                        print("PSN_PKG_SFO_CREATION='{}'".format(Sfo_Creation_Date))
                     else:
                         print("unset PSN_PKG_SFO_CREATION")
-                    if PsxTitleId and PsxTitleId.strip():
-                        print("PSN_PKG_PSXTITLEID='{}'".format(PsxTitleId))
+                    if Psx_Title_Id and Psx_Title_Id.strip():
+                        print("PSN_PKG_PSXTITLEID='{}'".format(Psx_Title_Id))
                     else:
                         print("unset PSN_PKG_PSXTITLEID")
-                    if FileSize:
-                        print("PSN_PKG_FILESIZE='{}'".format(FileSize))
+                    if not File_Size is None:
+                        print("PSN_PKG_FILESIZE='{}'".format(File_Size))
                     else:
                         print("unset PSN_PKG_FILESIZE")
-                elif OutputFormat == 99:  ## Analysis Output
-                    print("File Size:", FileSize)
-                    if PkgMagic == CONST_PKG3_MAGIC:
-                        dprintFieldsDict(HeaderFields, "headerfields[{KEY:14}|{INDEX:2}]", 2, None, print)
-                        if ExtHeaderFields:
-                            dprintFieldsDict(ExtHeaderFields, "extheaderfields[{KEY:14}|{INDEX:2}]", 2, None, print)
-                        for _i in MetaData:
+                elif Output_Format == 97 \
+                or Output_Format == 98:  ## JSON Output formats
+                    JSON_Output = {}
+                    if Output_Format == 98:  ## Analysis JSON Output
+                        JSON_Output["headerFields"] = Header_Fields
+                        if Ext_Header_Fields:
+                            JSON_Output["extHeaderFields"] = Ext_Header_Fields
+                        JSON_Output["metaData"] = Meta_Data
+                        if Sfo_Values:
+                            JSON_Output["paramSfo"] = Sfo_Values
+                        if Item_Entries:
+                            JSON_Output["itemEntries"] = Item_Entries
+                        if File_Table:
+                            JSON_Output["fileTable"] = File_Table
+                    JSON_Output["nps"] = {}
+                    JSON_Output["nps"]["npsType"] = Nps_Type
+                    if Title_Id and Title_Id.strip():
+                        JSON_Output["nps"]["titleId"] = Title_Id
+                    if Sfo_Title:
+                        JSON_Output["nps"]["title"] = Sfo_Title
+                    if Sfo_Title_Regional:
+                        JSON_Output["nps"]["regionalTitle"] = Sfo_Title_Regional
+                    if Content_Id and Content_Id.strip():
+                        JSON_Output["nps"]["region"] = Region
+                    if Sfo_Min_Ver >= 0:
+                        JSON_Output["nps"]["minFw"] = Sfo_Min_Ver
+                    if Sfo_Sdk_Ver >= 0:
+                        JSON_Output["nps"]["sdkVer"] = Sfo_Sdk_Ver
+                    if Sfo_Creation_Date and Sfo_Creation_Date.strip():
+                        JSON_Output["nps"]["creationDate"] = datetime.strptime(Sfo_Creation_Date, "%Y%m%d").strftime("%Y.%m.%d")
+                    if Sfo_Version >= 0:
+                        JSON_Output["nps"]["version"] = Sfo_Version
+                    if Sfo_App_Ver >= 0:
+                        JSON_Output["nps"]["appVer"] = Sfo_App_Ver
+                    if Psx_Title_Id and Psx_Title_Id.strip():
+                        JSON_Output["nps"]["psxTitleId"] = Psx_Title_Id
+                    if Content_Id and Content_Id.strip():
+                        JSON_Output["nps"]["contentId"] = Content_Id
+                        if Sfo_Content_Id and Sfo_Content_Id.strip() \
+                        and Pkg_Content_Id.strip() != Sfo_Content_Id.strip():
+                            JSON_Output["nps"]["pkgContentId"] = Pkg_Content_Id
+                    if not Pkg_Total_Size is None:
+                        JSON_Output["nps"]["pkgTotalSize"] = Pkg_Total_Size
+                        JSON_Output["nps"]["prettySize"] = prettySize(Pkg_Total_Size)
+                    if not File_Size is None:
+                        JSON_Output["nps"]["fileSize"] = File_Size
+                    JSON_Output["nps"]["pkgUrl"] = Source
+                    if Title_Update_Url and Title_Update_Url.strip():
+                        JSON_Output["nps"]["titleUpdateUrl"] = Title_Update_Url
+                    print(json.dumps(JSON_Output, indent=2, default=specialToJSON))
+                    del JSON_Output
+                elif Output_Format == 99:  ## Analysis Output
+                    if not File_Size is None:
+                        print("File Size:", File_Size)
+                    if Pkg_Magic == CONST_PKG3_MAGIC:
+                        dprintFieldsDict(Header_Fields, "headerfields[{KEY:14}|{INDEX:2}]", 2, None, print)
+                        if Ext_Header_Fields:
+                            dprintFieldsDict(Ext_Header_Fields, "extheaderfields[{KEY:14}|{INDEX:2}]", 2, None, print)
+                        for _i in Meta_Data:
                             print("metadata[{:#04x}]:".format(_i), end=" ")
-                            if "DESC" in MetaData[_i]:
-                                print("Desc \"", MetaData[_i]["DESC"], "\"", sep="", end=" ")
-                            if "OFS" in MetaData[_i]:
-                                print("Ofs {:#012x}".format(MetaData[_i]["OFS"]), end=" ")
-                            if "SIZE" in MetaData[_i]:
-                                print("Size {:12}".format(MetaData[_i]["SIZE"]), end=" ")
-                            if "SHA256" in MetaData[_i]:
-                                print("SHA256", convertBytesToHexString(MetaData[_i]["SHA256"], sep=""), end=" ")
-                            if "VALUE" in MetaData[_i]:
-                                if isinstance(MetaData[_i]["VALUE"], bytes) \
-                                or isinstance(MetaData[_i]["VALUE"], bytearray):
-                                    print("Value", convertBytesToHexString(MetaData[_i]["VALUE"], sep=""), end=" ")
+                            if "DESC" in Meta_Data[_i]:
+                                print("Desc \"", Meta_Data[_i]["DESC"], "\"", sep="", end=" ")
+                            if "OFS" in Meta_Data[_i]:
+                                print("Ofs {:#012x}".format(Meta_Data[_i]["OFS"]), end=" ")
+                            if "SIZE" in Meta_Data[_i]:
+                                print("Size {:12}".format(Meta_Data[_i]["SIZE"]), end=" ")
+                            if "SHA256" in Meta_Data[_i]:
+                                print("SHA256", convertBytesToHexString(Meta_Data[_i]["SHA256"], sep=""), end=" ")
+                            if "VALUE" in Meta_Data[_i]:
+                                if isinstance(Meta_Data[_i]["VALUE"], bytes) \
+                                or isinstance(Meta_Data[_i]["VALUE"], bytearray):
+                                    print("Value", convertBytesToHexString(Meta_Data[_i]["VALUE"], sep=""), end=" ")
                                 else:
-                                    print("Value", MetaData[_i]["VALUE"], end=" ")
-                            if "UNKNOWN" in MetaData[_i]:
-                                print("Unknown", convertBytesToHexString(MetaData[_i]["UNKNOWN"], sep=""), end=" ")
+                                    print("Value", Meta_Data[_i]["VALUE"], end=" ")
+                            if "UNKNOWN" in Meta_Data[_i]:
+                                print("Unknown", convertBytesToHexString(Meta_Data[_i]["UNKNOWN"], sep=""), end=" ")
                             print()
-                        if ItemEntries:
-                            FormatString = "".join(("{:", unicode(len(unicode(HeaderFields["ITEMCNT"]))), "}"))
-                            for _i in range(len(ItemEntries)):
-                                print("".join(("itementries[", FormatString, "]: Ofs {:#012x} Size {:12} Key Index {} {}")).format(_i, ItemEntries[_i]["DATAOFS"], ItemEntries[_i]["DATASIZE"], ItemEntries[_i]["KEYINDEX"], "".join(("Name \"", ItemEntries[_i]["NAME"], "\"")) if "NAME" in ItemEntries[_i] else ""))
-                    elif PkgMagic == CONST_PKG4_MAGIC:
-                        dprintFieldsDict(HeaderFields, "headerfields[{KEY:14}|{INDEX:2}]", 2, None, print)
-                        FormatString = "".join(("{:", unicode(len(unicode(HeaderFields["FILECNT"]))), "}"))
-                        for _i in range(len(FileTable)):
-                            print("".join(("filetable[", FormatString, "]: ID {:#06x} Ofs {:#012x} Size {:12} {}")).format(_i, FileTable[_i]["FILEID"], FileTable[_i]["DATAOFS"], FileTable[_i]["DATASIZE"], "".join(("Name \"", FileTable[_i]["NAME"], "\"")) if "NAME" in FileTable[_i] else ""))
-                        dprintFieldsDict(FileTableMap, "filetablemap[{KEY:#06x}]", 2, None, print)
-                    if SfoValues:
-                        dprintFieldsDict(SfoValues, "sfovalues[{KEY:20}]", 2, None, print)
+                        if Item_Entries:
+                            Format_String = "".join(("{:", unicode(len(unicode(Header_Fields["ITEMCNT"]))), "}"))
+                            for Item_Entry in Item_Entries:
+                                print("".join(("itementries[", Format_String, "]: Ofs {:#012x} Size {:12} Key Index {} {}")).format(_i, Item_Entry["DATAOFS"], Item_Entry["DATASIZE"], Item_Entry["KEYINDEX"], "".join(("Name \"", Item_Entry["NAME"], "\"")) if "NAME" in Item_Entry else ""))
+                    elif Pkg_Magic == CONST_PKG4_MAGIC:
+                        dprintFieldsDict(Header_Fields, "headerfields[{KEY:14}|{INDEX:2}]", 2, None, print)
+                        Format_String = "".join(("{:", unicode(len(unicode(Header_Fields["FILECNT"]))), "}"))
+                        for _i in range(len(File_Table)):
+                            print("".join(("filetable[", Format_String, "]: ID {:#06x} Ofs {:#012x} Size {:12} {}")).format(_i, File_Table[_i]["FILEID"], File_Table[_i]["DATAOFS"], File_Table[_i]["DATASIZE"], "".join(("Name \"", File_Table[_i]["NAME"], "\"")) if "NAME" in File_Table[_i] else ""))
+                        dprintFieldsDict(File_Table_Map, "filetablemap[{KEY:#06x}]", 2, None, print)
+                    if Sfo_Values:
+                        dprintFieldsDict(Sfo_Values, "sfovalues[{KEY:20}]", 2, None, print)
+            del Header_Bytes
+            sys.stdout.flush()
+            sys.stderr.flush()
     except SystemExit:
         raise  ## re-raise/throw up (let Python handle it)
     except:
