@@ -166,11 +166,13 @@ if sys.getdefaultencoding().lower() != "utf-8":
     if Debug_Level >= 1:
         dprint("Default Encoding setting from {} to UTF-8".format(sys.getdefaultencoding()))
     sys.setdefaultencoding("utf-8")
-if sys.stdout.encoding.lower() != "utf-8":
+if sys.stdout.encoding \
+and sys.stdout.encoding.lower() != "utf-8":
     if Debug_Level >= 1:
         dprint("STDOUT Encoding setting from {} to UTF-8".format(sys.stdout.encoding))
     sys.stdout.reconfigure(encoding='utf-8')
-if sys.stderr.encoding.lower() != "utf-8":
+if sys.stderr.encoding \
+and sys.stderr.encoding.lower() != "utf-8":
     if Debug_Level >= 1:
         dprint("STDERR Encoding setting from {} to UTF-8".format(sys.stderr.encoding))
     sys.stderr.reconfigure(encoding='utf-8')
