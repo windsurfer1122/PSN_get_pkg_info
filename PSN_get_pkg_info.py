@@ -622,7 +622,7 @@ class PkgReader():
             ## Send request in persistent session
             ## http://docs.python-requests.org/en/master/api/#requests.Session.get
             ## http://docs.python-requests.org/en/master/api/#requests.request
-            reqheaders={"Range": "bytes={}-{}".format(offset, offset + size - 1)}
+            reqheaders={"Range": "bytes={}-{}".format(offset, (offset + size - 1) if size > 0 else "")}
             response = self._data_stream.get(self._source, headers=reqheaders)
             return response.content
 
@@ -691,7 +691,7 @@ def getRegion(id):
     elif id == "U":
         return "US", ["01"]
     else:
-        return "???", []
+        return "???", None
 
 
 def convertUtf8BytesToString(data, conversion, length = 0):
@@ -1614,10 +1614,7 @@ if __name__ == "__main__":
         for Source in Arguments.source:
             ## Initialize per-package variables
             Data_Stream = None
-            File_Size = None
-            Target = None
             Raw_Stream = None
-            Raw_Size_Written = None
             #
             Header_Fields = None
             Header_Bytes = None
@@ -1632,38 +1629,9 @@ if __name__ == "__main__":
             Sfo_Bytes = None
             Sfo_Values = None
             #
-            Pkg_Content_Id = None
-            Pkg_Drm_Type = None
-            Pkg_Content_Type = None
-            Pkg_Title_Id = None
-            Pkg_Sfo_Offset = None
-            Pkg_Sfo_Size = None
-            Pkg_Total_Size = None
-            Pkg_Md_Type_0A = False
-            Pkg_Md_Type_0B = False
-            #
-            Sfo_Content_Id = None
-            Sfo_Title_Id = None
-            Sfo_Min_Ver = 0.00
-            Sfo_Category = None
-            Sfo_Version = 0.00
-            Sfo_App_Ver = 0.00
-            Sfo_Sdk_Ver = 0.00
-            Sfo_Creation_Date = None
-            #
-            Sfo_Title = None
-            Sfo_Title_Regional = None
-            #
-            Nps_Type = "UNKNOWN"
-            #
-            Psx_Title_Id = None
-            #
-            Content_Id = None
-            Title_Id = None
-            Region = None
-            Languages = None
-            Update_Hash = None
-            Title_Update_Url = None
+            Results = {}
+            Results["SFO_MIN_VER"] = 0.00  ## mandatory value
+            Results["NPS_TYPE"] = "UNKNOWN"
             #
             Headers = {"User-Agent": "Mozilla/5.0 (PLAYSTATION 3; 4.83)"}  ## Default to PS3 headers (fits PS3/PSX/PSP/PSV packages, but not PSM packages for PSV)
 
@@ -1712,9 +1680,11 @@ if __name__ == "__main__":
             else:
                 eprint("# >>>>>>>>>> PKG Source:", Source, prefix=None)
             Data_Stream = PkgReader(Source, Headers, Debug_Level)
-            File_Size = Data_Stream.getSize(Debug_Level)
-            if Debug_Level >= 2:
-                dprint("File Size:", File_Size)
+            Results["FILE_SIZE"] = Data_Stream.getSize(Debug_Level)
+            if Results["FILE_SIZE"] is None:
+                del Results["FILE_SIZE"]
+            elif Debug_Level >= 2:
+                dprint("File Size:", Results["FILE_SIZE"])
 
             ## Initialize header bytes array
             dprint(">>>>> PKG Main Header:")
@@ -1728,7 +1698,7 @@ if __name__ == "__main__":
             #
             if Pkg_Magic == CONST_PKG3_MAGIC:
                 Header_Size = CONST_PKG3_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"]
-                Nps_Type = "".join((Nps_Type, " (PS3/PSX/PSP/PSV/PSM)"))
+                Results["NPS_TYPE"] = "".join((Results["NPS_TYPE"], " (PS3/PSX/PSP/PSV/PSM)"))
                 dprint("Detected PS3/PSX/PSP/PSV/PSM game package")
                 ## Determine decrypted PKG target
                 if Arguments.raw:
@@ -1747,9 +1717,10 @@ if __name__ == "__main__":
                         Raw_Stream = io.open(Target, mode="wb", buffering=-1, encoding=None, errors=None, newline=None, closefd=True)
                     else:
                         eprint("Target File already exists and will NOT be written", Target)
+                    del Target
             elif Pkg_Magic == CONST_PKG4_MAGIC:
                 Header_Size = CONST_PKG4_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"]
-                Nps_Type = "".join((Nps_Type, " (PS4)"))
+                Results["NPS_TYPE"] = "".join((Results["NPS_TYPE"], " (PS4)"))
                 dprint("Detected PS4 game package")
             else:
                 Data_Stream.close(Debug_Level)
@@ -1772,32 +1743,27 @@ if __name__ == "__main__":
                     Raw_Stream.write(Header_Bytes)
                 ## --> Size of package (=file size)
                 if "TOTALSIZE" in Header_Fields:
-                    Pkg_Total_Size = Header_Fields["TOTALSIZE"]
+                    Results["PKG_TOTAL_SIZE"] = Header_Fields["TOTALSIZE"]
                 ## --> Package content id
                 if "CID" in Header_Fields:
-                    Pkg_Content_Id = Header_Fields["CID"]
+                    Results["PKG_CONTENT_ID"] = Header_Fields["CID"]
                 ## --> param.sfo offset + size
                 if 0xE in Meta_Data:
-                    Pkg_Sfo_Offset = Meta_Data[0xE]["OFS"]
-                    Pkg_Sfo_Size = Meta_Data[0xE]["SIZE"]
+                    Results["PKG_SFO_OFFSET"] = Meta_Data[0xE]["OFS"]
+                    Results["PKG_SFO_SIZE"] = Meta_Data[0xE]["SIZE"]
                 ## --> DRM Type
                 if 0x1 in Meta_Data:
-                    Pkg_Drm_Type = Meta_Data[0x1]["VALUE"]
+                    Results["PKG_DRM_TYPE"] = Meta_Data[0x1]["VALUE"]
                 ## --> Content Type
                 if 0x2 in Meta_Data:
-                    Pkg_Content_Type = Meta_Data[0x2]["VALUE"]
+                    Results["PKG_CONTENT_TYPE"] = Meta_Data[0x2]["VALUE"]
                 ## --> Title ID
                 if 0x6 in Meta_Data:  ## Version + App Version / TitleID (on size 0xC)
-                    Pkg_Title_Id = Meta_Data[0x6]["VALUE"]
-                ## --> Other flags for NPS Package Type
-                if 0xA in Meta_Data:
-                    Pkg_Md_Type_0A = True
-                if 0xB in Meta_Data:
-                    Pkg_Md_Type_0B = True
+                    Results["PKG_TITLE_ID"] = Meta_Data[0x6]["VALUE"]
                 ## If PARAM.SFO not present in unencrypted data, then search in encrypted item entries
-                if Pkg_Sfo_Offset is None \
+                if not "PKG_SFO_OFFSET" in Results \
                 and "PARAM.SFO" in Header_Fields \
-                and Header_Fields["PARAM.SFO"]:
+                and Header_Fields["PARAM.SFO"].strip():
                     Retrieve_Encrypted_Param_Sfo = True
                 ## Process PKG3 encrypted item entries
                 if not Header_Fields["KEYINDEX"] is None \
@@ -1831,7 +1797,6 @@ if __name__ == "__main__":
                         Item_Data = None
                         if Retrieve_Encrypted_Param_Sfo \
                         and "NAME" in Item_Entry \
-                        and Item_Entry["NAME"] \
                         and Item_Entry["NAME"] == Header_Fields["PARAM.SFO"] \
                         and Item_Entry["DATASIZE"] > 0:
                             Item_Data = {}
@@ -1848,7 +1813,6 @@ if __name__ == "__main__":
                             #
                             if Retrieve_Encrypted_Param_Sfo \
                             and "NAME" in Item_Entry \
-                            and Item_Entry["NAME"] \
                             and Item_Entry["NAME"] == Header_Fields["PARAM.SFO"] \
                             and Item_Entry["DATASIZE"] > 0:
                                 Sfo_Bytes = Item_Data["DECRYPTED"]
@@ -1867,69 +1831,73 @@ if __name__ == "__main__":
                     Raw_Size_Written = Raw_Stream.tell()
                     Raw_Stream.close()
                     del Data_Bytes
-                    if (not Pkg_Total_Size is None \
-                        and Raw_Size_Written != Pkg_Total_Size) \
-                    or (not File_Size is None \
-                        and Raw_Size_Written != File_Size):
+                    if ("PKG_TOTAL_SIZE" in Results \
+                        and Raw_Size_Written != Results["PKG_TOTAL_SIZE"]) \
+                    or ("FILE_SIZE" in Results \
+                        and Raw_Size_Written != Results["FILE_SIZE"]):
                         eprint("Written size {} of unencrypted/decrypted data from".format(Raw_Size_Written), Source)
-                        if (not Pkg_Total_Size is None \
-                            and Raw_Size_Written != Pkg_Total_Size):
-                            eprint("mismatches package total size of", Pkg_Total_Size)
-                        if (not File_Size is None \
-                            and Raw_Size_Written != File_Size):
-                            eprint("mismatches file size of", File_Size)
+                        if ("PKG_TOTAL_SIZE" in Results \
+                            and Raw_Size_Written != Results["PKG_TOTAL_SIZE"]):
+                            eprint("mismatches package total size of", Results["PKG_TOTAL_SIZE"])
+                        if ("FILE_SIZE" in Results \
+                            and Raw_Size_Written != Results["FILE_SIZE"]):
+                            eprint("mismatches file size of", Results["FILE_SIZE"])
                         eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info")
+                    del Raw_Size_Written
             ## --> PKG4
             elif Pkg_Magic == CONST_PKG4_MAGIC:
                 Header_Fields, File_Table, File_Table_Map = parsePkg4Header(Header_Bytes, Data_Stream, max(0, Debug_Level), print_unknown=Arguments.unknown)
                 ## --> Size of package (=file size)
                 if "PKGSIZE" in Header_Fields:
-                    Pkg_Total_Size = Header_Fields["PKGSIZE"]
+                    Results["PKG_TOTAL_SIZE"] = Header_Fields["PKGSIZE"]
                 ## --> Package content id
                 if "CID" in Header_Fields:
-                    Pkg_Content_Id = Header_Fields["CID"]
+                    Results["PKG_CONTENT_ID"] = Header_Fields["CID"]
                 ## --> param.sfo offset + size
                 if CONST_PKG4_FILE_ENTRY_ID_PARAM_SFO in File_Table_Map:
                     File_Entry = File_Table[File_Table_Map[CONST_PKG4_FILE_ENTRY_ID_PARAM_SFO]]
-                    Pkg_Sfo_Offset = File_Entry["DATAOFS"]
-                    Pkg_Sfo_Size = File_Entry["DATASIZE"]
+                    Results["PKG_SFO_OFFSET"] = File_Entry["DATAOFS"]
+                    Results["PKG_SFO_SIZE"] = File_Entry["DATASIZE"]
                 ## --> DRM Type
                 if "DRMTYPE" in Header_Fields:
-                    Pkg_Drm_Type = Header_Fields["DRMTYPE"]
+                    Results["PKG_DRM_TYPE"] = Header_Fields["DRMTYPE"]
                 ## --> Content Type
                 if "CONTTYPE" in Header_Fields:
-                    Pkg_Content_Type = Header_Fields["CONTTYPE"]
+                    Results["PKG_CONTENT_TYPE"] = Header_Fields["CONTTYPE"]
             #
-            if Pkg_Title_Id and Pkg_Title_Id.strip():
-                Title_Id = Pkg_Title_Id.strip()
+            if "PKG_TITLE_ID" in Results \
+            and Results["PKG_TITLE_ID"].strip():
+                Results["TITLE_ID"] = Results["PKG_TITLE_ID"].strip()
             #
-            if Pkg_Content_Id and Pkg_Content_Id.strip():
-                Content_Id = Pkg_Content_Id.strip()
-                if not (Pkg_Title_Id and Pkg_Title_Id.strip()):
-                    Title_Id = Content_Id[7:16]
+            if "PKG_CONTENT_ID" in Results \
+            and Results["PKG_CONTENT_ID"].strip():
+                Results["CONTENT_ID"] = Results["PKG_CONTENT_ID"].strip()
+                if not ("PKG_TITLE_ID" in Results \
+                        and Results["PKG_TITLE_ID"].strip()):
+                    Results["TITLE_ID"] = Results["CONTENT_ID"][7:16]
 
             ## Retrieve PARAM.SFO from unencrypted data if present
-            if Pkg_Sfo_Offset \
-            and Pkg_Sfo_Offset > 0 \
+            if "PKG_SFO_OFFSET" in Results \
+            and Results["PKG_SFO_OFFSET"] > 0 \
             and not Sfo_Bytes:
                 if Debug_Level >= 2:
                     dprint(">>>>> PARAM.SFO:")
                 ## Get PARAM.SFO from data stream
                 if Debug_Level >= 2:
-                    dprint("Get PARAM.SFO from unencrypted data with offset {:#x} with size {}".format(Pkg_Sfo_Offset, Pkg_Sfo_Size), end=" ")
+                    dprint("Get PARAM.SFO from unencrypted data with offset {:#x} with size {}".format(Results["PKG_SFO_OFFSET"], Results["PKG_SFO_SIZE"]), end=" ")
                 Sfo_Bytes = bytearray()
-                if len(Header_Bytes) > (Pkg_Sfo_Offset+Pkg_Sfo_Size):
+                if len(Header_Bytes) > (Results["PKG_SFO_OFFSET"]+Results["PKG_SFO_SIZE"]):
                     if Debug_Level >= 2:
                         dprint("from header data", prefix=None)
-                    Sfo_Bytes.extend(Header_Bytes[Pkg_Sfo_Offset:Pkg_Sfo_Offset+Pkg_Sfo_Size])
+                    Sfo_Bytes.extend(Header_Bytes[Results["PKG_SFO_OFFSET"]:Results["PKG_SFO_OFFSET"]+Results["PKG_SFO_SIZE"]])
                 else:
                     if Debug_Level >= 2:
                         dprint("from data stream", prefix=None)
                     try:
-                        Sfo_Bytes.extend(Data_Stream.read(Pkg_Sfo_Offset, Pkg_Sfo_Size, Debug_Level))
+                        Sfo_Bytes.extend(Data_Stream.read(Results["PKG_SFO_OFFSET"], Results["PKG_SFO_SIZE"], Debug_Level))
                     except:
                         Data_Stream.close(Debug_Level)
-                        eprint("Could not get PARAM.SFO at offset {:#x} with size {} from".format(Pkg_Sfo_Offset, Pkg_Sfo_Size), Source)
+                        eprint("Could not get PARAM.SFO at offset {:#x} with size {} from".format(Results["PKG_SFO_OFFSET"], Results["PKG_SFO_SIZE"]), Source)
                         eprint("", prefix=None)
                         sys.exit(2)
 
@@ -1947,70 +1915,76 @@ if __name__ == "__main__":
                 Sfo_Values = parseSfo(Sfo_Bytes, max(0, Debug_Level))
                 ## -->
                 if "TITLE_ID" in Sfo_Values:
-                    Sfo_Title_Id = Sfo_Values["TITLE_ID"]
+                    Results["SFO_TITLE_ID"] = Sfo_Values["TITLE_ID"]
                 ## -->
                 if "CONTENT_ID" in Sfo_Values:
-                    Sfo_Content_Id = Sfo_Values["CONTENT_ID"]
+                    Results["SFO_CONTENT_ID"] = Sfo_Values["CONTENT_ID"]
                 ## --> Firmware PS4
                 if "SYSTEM_VER" in Sfo_Values:
-                    Sfo_Min_Ver = float("{:02x}.{:02x}".format((Sfo_Values["SYSTEM_VER"] >> 24) & 0xff, (Sfo_Values["SYSTEM_VER"] >> 16) & 0xff))
+                    Results["SFO_MIN_VER"] = float("{:02x}.{:02x}".format((Sfo_Values["SYSTEM_VER"] >> 24) & 0xff, (Sfo_Values["SYSTEM_VER"] >> 16) & 0xff))
                 ## --> Firmware PS3
                 if "PS3_SYSTEM_VER" in Sfo_Values:
-                    Sfo_Min_Ver = float(Sfo_Values["PS3_SYSTEM_VER"])
+                    Results["SFO_MIN_VER"] = float(Sfo_Values["PS3_SYSTEM_VER"])
                 ## --> Firmware PS Vita
                 if "PSP2_DISP_VER" in Sfo_Values:
-                    Sfo_Min_Ver = float(Sfo_Values["PSP2_DISP_VER"])
+                    Results["SFO_MIN_VER"] = float(Sfo_Values["PSP2_DISP_VER"])
                 ## -->
                 if "CATEGORY" in Sfo_Values:
-                    Sfo_Category = Sfo_Values["CATEGORY"]
+                    Results["SFO_CATEGORY"] = Sfo_Values["CATEGORY"]
                 ## -->
                 if "VERSION" in Sfo_Values:
-                    Sfo_Version = float(Sfo_Values["VERSION"])
+                    Results["SFO_VERSION"] = float(Sfo_Values["VERSION"])
                 ## -->
                 if "APP_VER" in Sfo_Values:
-                    Sfo_App_Ver = float(Sfo_Values["APP_VER"])
+                    Results["SFO_APP_VER"] = float(Sfo_Values["APP_VER"])
                 ## -->
                 if "PUBTOOLINFO" in Sfo_Values:
                     try:
-                        Sfo_Sdk_Ver = int(Sfo_Values["PUBTOOLINFO"][24:32]) / 1000000
-                        Sfo_Creation_Date = Sfo_Values["PUBTOOLINFO"][7:15]
+                        Results["SFO_CREATION_DATE"] = Sfo_Values["PUBTOOLINFO"][7:15]
+                        Results["SFO_SDK_VER"] = int(Sfo_Values["PUBTOOLINFO"][24:32]) / 1000000
                     except:
                         pass
                 #
-                if Sfo_Title_Id and Sfo_Title_Id.strip():
-                    Title_Id = Sfo_Title_Id.strip()
+                if "SFO_TITLE_ID" in Results \
+                and Results["SFO_TITLE_ID"].strip():
+                    Results["TITLE_ID"] = Results["SFO_TITLE_ID"].strip()
                 #
-                if Sfo_Content_Id and Sfo_Content_Id.strip():
-                    Content_Id = Sfo_Content_Id.strip()
-                    if not (Sfo_Title_Id and Sfo_Title_Id.strip()):
-                        Title_Id = Content_Id[7:16]
+                if "SFO_CONTENT_ID" in Results \
+                and Results["SFO_CONTENT_ID"].strip():
+                    Results["CONTENT_ID"] = Results["SFO_CONTENT_ID"].strip()
+                    if not ("SFO_TITLE_ID" in Results
+                            and Results["SFO_TITLE_ID"].strip()):
+                        Results["TITLE_ID"] = Results["CONTENT_ID"][7:16]
 
             ## Close data stream
             Data_Stream.close(Debug_Level)
 
             ## Determine some derived variables
             ## a) Region and related languages
-            if Content_Id and Content_Id.strip():
-                Region, Languages = getRegion(Content_Id[0])
+            if "CONTENT_ID" in Results \
+            and Results["CONTENT_ID"].strip():
+                Results["REGION"], Results["LANGUAGES"] = getRegion(Results["CONTENT_ID"][0])
+                if Results["LANGUAGES"] is None:
+                    Results["LANGUAGES"]
             ## b) International/English title
             for Language in ["01", "18"]:
                 Key = "".join(("TITLE_", Language))
                 if Sfo_Values \
-                and Key in Sfo_Values:
+                and Key in Sfo_Values \
+                and Sfo_Values[Key].strip():
                    if Debug_Level >= 2:
                        dprint("Set international name to", Key)
-                   Sfo_Title = Sfo_Values[Key].strip()
+                   Results["SFO_TITLE"] = Sfo_Values[Key].strip()
                    break
-            if not Sfo_Title \
+            if not "SFO_TITLE" in Results \
             and Sfo_Values \
             and "TITLE" in Sfo_Values \
-            and Sfo_Values["TITLE"] \
             and Sfo_Values["TITLE"].strip():
                 if Debug_Level >= 2:
                     dprint("Set international title to TITLE")
-                Sfo_Title = Sfo_Values["TITLE"].strip()
+                Results["SFO_TITLE"] = Sfo_Values["TITLE"].strip()
             ## --> Clean international/english title
-            if Sfo_Title \
+            if "SFO_TITLE" in Results \
             and not Arguments.unclean:
                 if Replace_List:
                     for Replace_Chars in Replace_List:
@@ -2019,33 +1993,34 @@ if __name__ == "__main__":
                         for _i in range(len(Replace_Chars[0])):
                             Replace_Char = Replace_Chars[0][_i]
                             if Replace_Chars[1] == " ":
-                                Sfo_Title = Sfo_Title.replace("".join((Replace_Char, ":")), ":")
-                            Sfo_Title = Sfo_Title.replace(Replace_Char, Replace_Chars[1])
-                Sfo_Title = re.sub(r"\s+", " ", Sfo_Title, 0, re.UNICODE).strip()  ## also replaces \u3000
+                                Results["SFO_TITLE"] = Results["SFO_TITLE"].replace("".join((Replace_Char, ":")), ":")
+                            Results["SFO_TITLE"] = Results["SFO_TITLE"].replace(Replace_Char, Replace_Chars[1])
+                Results["SFO_TITLE"] = re.sub(r"\s+", " ", Results["SFO_TITLE"], 0, re.UNICODE).strip()  ## also replaces \u3000
                 ## Condense demo information in title to "(DEMO)"
-                Sfo_Title = Sfo_Title.replace("demo ver.", "(DEMO)").replace("(Demo Version)", "(DEMO)").replace("Demo Version", "(DEMO)").replace("Demo version", "(DEMO)").replace("DEMO Version", "(DEMO)").replace("DEMO version", "(DEMO)").replace("【体験版】", "(DEMO)").replace("(体験版)", "(DEMO)").replace("体験版", "(DEMO)").strip()
-                Sfo_Title = re.sub(r"\(demo\)", r"(DEMO)", Sfo_Title, 0, re.IGNORECASE|re.UNICODE)
-                Sfo_Title = re.sub(r"(^|[^a-z(]{1})demo([^a-z)]{1}|$)", r"\1(DEMO)\2", Sfo_Title, 0, re.IGNORECASE|re.UNICODE)
+                Results["SFO_TITLE"] = Results["SFO_TITLE"].replace("demo ver.", "(DEMO)").replace("(Demo Version)", "(DEMO)").replace("Demo Version", "(DEMO)").replace("Demo version", "(DEMO)").replace("DEMO Version", "(DEMO)").replace("DEMO version", "(DEMO)").replace("【体験版】", "(DEMO)").replace("(体験版)", "(DEMO)").replace("体験版", "(DEMO)").strip()
+                Results["SFO_TITLE"] = re.sub(r"\(demo\)", r"(DEMO)", Results["SFO_TITLE"], 0, re.IGNORECASE|re.UNICODE)
+                Results["SFO_TITLE"] = re.sub(r"(^|[^a-z(]{1})demo([^a-z)]{1}|$)", r"\1(DEMO)\2", Results["SFO_TITLE"], 0, re.IGNORECASE|re.UNICODE)
             ## c) Regional title
-            if Languages:
-                for Language in Languages:
+            if "LANGUAGES" in Results \
+            and Results["LANGUAGES"]:
+                for Language in Results["LANGUAGES"]:
                     Key = "".join(("TITLE_", Language))
                     if Sfo_Values \
-                    and Key in Sfo_Values:
+                    and Key in Sfo_Values \
+                    and Sfo_Values[Key].strip():
                        if Debug_Level >= 2:
                            dprint("Set regional title to", Key)
-                       Sfo_Title_Regional = Sfo_Values[Key].strip()
+                       Results["SFO_TITLE_REGIONAL"] = Sfo_Values[Key].strip()
                        break
-            if not Sfo_Title_Regional \
+            if not "SFO_TITLE_REGIONAL" in Results \
             and Sfo_Values \
             and "TITLE" in Sfo_Values \
-            and Sfo_Values["TITLE"] \
             and Sfo_Values["TITLE"].strip():
                 if Debug_Level >= 2:
                     dprint("Set regional title to TITLE")
-                Sfo_Title_Regional = Sfo_Values["TITLE"].strip()
+                Results["SFO_TITLE_REGIONAL"] = Sfo_Values["TITLE"].strip()
             ## --> Clean regional title
-            if Sfo_Title_Regional \
+            if "SFO_TITLE_REGIONAL" in Results \
             and not Arguments.unclean:
                 if Replace_List:
                     for Replace_Chars in Replace_List:
@@ -2054,153 +2029,194 @@ if __name__ == "__main__":
                         for _i in range(len(Replace_Chars[0])):
                             Replace_Char = Replace_Chars[0][_i]
                             if Replace_Chars[1] == " ":
-                                Sfo_Title_Regional = Sfo_Title_Regional.replace("".join((Replace_Char, ":")), ":")
-                            Sfo_Title_Regional = Sfo_Title_Regional.replace(Replace_Char, Replace_Chars[1])
-                Sfo_Title_Regional = re.sub(r"\s+", " ", Sfo_Title_Regional, 0, re.UNICODE).strip()  ## also replaces \u3000
+                                Results["SFO_TITLE_REGIONAL"] = Results["SFO_TITLE_REGIONAL"].replace("".join((Replace_Char, ":")), ":")
+                            Results["SFO_TITLE_REGIONAL"] = Results["SFO_TITLE_REGIONAL"].replace(Replace_Char, Replace_Chars[1])
+                Results["SFO_TITLE_REGIONAL"] = re.sub(r"\s+", " ", Results["SFO_TITLE_REGIONAL"], 0, re.UNICODE).strip()  ## also replaces \u3000
 
             ## Determine NPS package type from data
-            if Pkg_Content_Type == 0x1 \
-            or Pkg_Content_Type == 0x6:
-                Nps_Type = "PSX GAME"  #md_type = 9
-                if Pkg_Content_Type == 0x6:
-                    Psx_Title_Id = Header_Bytes[712:721].decode("utf-8", errors="ignore")
-            elif Pkg_Content_Type == 0x4 \
-            or Pkg_Content_Type == 0xB:
-                if Pkg_Md_Type_0B == True:
-                    Nps_Type = "PS3 UPDATE"
-                else:
-                    Nps_Type = "PS3 DLC"  #md_type = 9 | Also PS3 updates : md_type = 11
-                if Title_Id and Title_Id.strip():
-                    Title_Update_Url = "https://a0.ww.np.dl.playstation.net/tpl/np/{0}/{0}-ver.xml".format(Title_Id)
-            elif Pkg_Content_Type == 0x5:
-                Nps_Type = "PS3 GAME"  #md_type = 5
-                if Title_Id and Title_Id.strip():
-                    Title_Update_Url = "https://a0.ww.np.dl.playstation.net/tpl/np/{0}/{0}-ver.xml".format(Title_Id)
-            elif Pkg_Content_Type == 0x7 \
-            or Pkg_Content_Type == 0xE \
-            or Pkg_Content_Type == 0xF \
-            or Pkg_Content_Type == 0x10:
-                ## PSP & PSP-PCEngine / PSP-Go / PSP-Mini / PSP-NeoGeo
-                if Pkg_Md_Type_0B == True:
-                    Nps_Type = "PSP DLC"
-                else:
-                    Nps_Type = "PSP GAME"  #md_type = 9 | Also PSP DLCS : md_type = 10
-                if Title_Id and Title_Id.strip():
-                    Title_Update_Url = "https://a0.ww.np.dl.playstation.net/tpl/np/{0}/{0}-ver.xml".format(Title_Id)
-            elif Pkg_Content_Type == 0x9:
-                Nps_Type = "PSP or PS3 THEME"  #md_type = 9 | Also PS3 THEMES : md_type = 9
-            elif Pkg_Content_Type == 0xD:
-                Nps_Type = "PS3 AVATAR"  #md_type = 9
-            elif Pkg_Content_Type == 0x15:
-                Nps_Type = "PSV GAME"  #md_type = 18
-                if Sfo_Category == "gp":
-                    Nps_Type = "PSV UPDATE"
-                if Title_Id and Title_Id.strip():
-                    Update_Hash = Cryptodome.Hash.HMAC.new(CONST_PKG3_UPDATE_KEYS[2]["KEY"], digestmod=Cryptodome.Hash.SHA256)
-                    Update_Hash.update("".join(("np_", Title_Id)).encode("UTF-8"))
-                    Title_Update_Url = "http://gs-sec.ww.np.dl.playstation.net/pl/np/{0}/{1}/{0}-ver.xml".format(Title_Id, Update_Hash.hexdigest())
-            elif Pkg_Content_Type == 0x16:
-                Nps_Type = "PSV DLC"  #md_type = 17
-                if Title_Id and Title_Id.strip():
-                    Update_Hash = Cryptodome.Hash.HMAC.new(CONST_PKG3_UPDATE_KEYS[2]["KEY"], digestmod=Cryptodome.Hash.SHA256)
-                    Update_Hash.update("".join(("np_", Title_Id)).encode("UTF-8"))
-                    Title_Update_Url = "http://gs-sec.ww.np.dl.playstation.net/pl/np/{0}/{1}/{0}-ver.xml".format(Title_Id, Update_Hash.hexdigest())
-            elif Pkg_Content_Type == 0x1F:
-                Nps_Type = "PSV THEME"  #md_type = 17
-            elif Pkg_Content_Type == 0x18 \
-            or Pkg_Content_Type == 0x1D:
-                Nps_Type = "PSM GAME"  #md_type = 16
+            if not "PKG_CONTENT_TYPE" in Results:
+                eprint("PKG content type missing.", Source)
             else:
-                eprint("PKG content type {0}/{0:#0x} not supported.".format(Pkg_Content_Type), Source, prefix="[UNKNOWN] ")
+                if Results["PKG_CONTENT_TYPE"] == 0x1 \
+                or Results["PKG_CONTENT_TYPE"] == 0x6:
+                    Results["NPS_TYPE"] = "PSX GAME"  #md_type = 9
+                    if Results["PKG_CONTENT_TYPE"] == 0x6:
+                        Results["PSX_TITLE_ID"] = Header_Bytes[712:721].decode("utf-8", errors="ignore")
+                elif Results["PKG_CONTENT_TYPE"] == 0x4 \
+                or Results["PKG_CONTENT_TYPE"] == 0xB:
+                    if 0xB in Meta_Data:
+                        Results["NPS_TYPE"] = "PS3 UPDATE"
+                    else:
+                        Results["NPS_TYPE"] = "PS3 DLC"  #md_type = 9 | Also PS3 updates : md_type = 11
+                    if "TITLE_ID" in Results \
+                    and Results["TITLE_ID"].strip():
+                        Results["TITLE_UPDATE_URL"] = "https://a0.ww.np.dl.playstation.net/tpl/np/{0}/{0}-ver.xml".format(Results["TITLE_ID"].strip())
+                elif Results["PKG_CONTENT_TYPE"] == 0x5:
+                    Results["NPS_TYPE"] = "PS3 GAME"  #md_type = 5
+                    if "TITLE_ID" in Results \
+                    and Results["TITLE_ID"].strip():
+                        Results["TITLE_UPDATE_URL"] = "https://a0.ww.np.dl.playstation.net/tpl/np/{0}/{0}-ver.xml".format(Results["TITLE_ID"].strip())
+                elif Results["PKG_CONTENT_TYPE"] == 0x7 \
+                or Results["PKG_CONTENT_TYPE"] == 0xE \
+                or Results["PKG_CONTENT_TYPE"] == 0xF \
+                or Results["PKG_CONTENT_TYPE"] == 0x10:
+                    ## PSP & PSP-PCEngine / PSP-Go / PSP-Mini / PSP-NeoGeo
+                    if 0xB in Meta_Data:
+                        Results["NPS_TYPE"] = "PSP DLC"
+                    else:
+                        Results["NPS_TYPE"] = "PSP GAME"  #md_type = 9 | Also PSP DLCS : md_type = 10
+                    if "TITLE_ID" in Results \
+                    and Results["TITLE_ID"].strip():
+                        Results["TITLE_UPDATE_URL"] = "https://a0.ww.np.dl.playstation.net/tpl/np/{0}/{0}-ver.xml".format(Results["TITLE_ID"].strip())
+                elif Results["PKG_CONTENT_TYPE"] == 0x9:
+                    Results["NPS_TYPE"] = "PSP or PS3 THEME"  #md_type = 9 | Also PS3 THEMES : md_type = 9
+                elif Results["PKG_CONTENT_TYPE"] == 0xD:
+                    Results["NPS_TYPE"] = "PS3 AVATAR"  #md_type = 9
+                elif Results["PKG_CONTENT_TYPE"] == 0x15:
+                    Results["NPS_TYPE"] = "PSV GAME"  #md_type = 18
+                    if "SFO_CATEGORY" in Results \
+                    and Results["SFO_CATEGORY"] == "gp":
+                        Results["NPS_TYPE"] = "PSV UPDATE"
+                    if "TITLE_ID" in Results \
+                    and Results["TITLE_ID"].strip():
+                        Update_Hash = Cryptodome.Hash.HMAC.new(CONST_PKG3_UPDATE_KEYS[2]["KEY"], digestmod=Cryptodome.Hash.SHA256)
+                        Update_Hash.update("".join(("np_", Results["TITLE_ID"].strip())).encode("UTF-8"))
+                        Results["TITLE_UPDATE_URL"] = "http://gs-sec.ww.np.dl.playstation.net/pl/np/{0}/{1}/{0}-ver.xml".format(Results["TITLE_ID"].strip(), Update_Hash.hexdigest())
+                        del Update_Hash
+                elif Results["PKG_CONTENT_TYPE"] == 0x16:
+                    Results["NPS_TYPE"] = "PSV DLC"  #md_type = 17
+                    if "TITLE_ID" in Results \
+                    and Results["TITLE_ID"].strip():
+                        Update_Hash = Cryptodome.Hash.HMAC.new(CONST_PKG3_UPDATE_KEYS[2]["KEY"], digestmod=Cryptodome.Hash.SHA256)
+                        Update_Hash.update("".join(("np_", Results["TITLE_ID"].strip())).encode("UTF-8"))
+                        Results["TITLE_UPDATE_URL"] = "http://gs-sec.ww.np.dl.playstation.net/pl/np/{0}/{1}/{0}-ver.xml".format(Results["TITLE_ID"].strip(), Update_Hash.hexdigest())
+                        del Update_Hash
+                elif Results["PKG_CONTENT_TYPE"] == 0x1F:
+                    Results["NPS_TYPE"] = "PSV THEME"  #md_type = 17
+                elif Results["PKG_CONTENT_TYPE"] == 0x18 \
+                or Results["PKG_CONTENT_TYPE"] == 0x1D:
+                    Results["NPS_TYPE"] = "PSM GAME"  #md_type = 16
+                else:
+                    eprint("PKG content type {0}/{0:#0x} not supported.".format(Results["PKG_CONTENT_TYPE"]), Source, prefix="[UNKNOWN] ")
 
             for Output_Format in Arguments.format:
                 if Output_Format == 0:  ## Human-readable Output
                     print()
-                    print("{:13} {}".format("NPS Type:", Nps_Type))
-                    if Title_Id and Title_Id.strip():
-                        print("{:13} {}".format("Title ID:", Title_Id))
-                    if Sfo_Title:
-                        print("{:13} {}".format("Title:", Sfo_Title))
-                    if Sfo_Title_Regional:
-                        print("{:13} {}".format("Title Region:", Sfo_Title_Regional))
-                    if Content_Id and Content_Id.strip():
-                        print("{:13} {}".format("Region:", Region))
-                    if Sfo_Min_Ver >= 0:
-                        print("{:13} {:.2f}".format("Min FW:", Sfo_Min_Ver))
-                    if Sfo_Sdk_Ver >= 0:
-                        print("{:13} {:.2f}".format("SDK Ver:", Sfo_Sdk_Ver))
-                    if Sfo_Creation_Date and Sfo_Creation_Date.strip():
-                        print("{:13} {}".format("c_date:", datetime.strptime(Sfo_Creation_Date, "%Y%m%d").strftime("%Y.%m.%d")))
-                    if Sfo_Version >= 0:
-                        print("{:13} {:.2f}".format("Version:", Sfo_Version))
-                    if Sfo_App_Ver >= 0:
-                        print("{:13} {:.2f}".format("App Ver:", Sfo_App_Ver))
-                    if Psx_Title_Id and Psx_Title_Id.strip():
-                        print("{:13} {}".format("PSX Title ID:", Psx_Title_Id))
-                    if Content_Id and Content_Id.strip():
-                        print("{:13} {}".format("Content ID:", Content_Id))
-                        if Sfo_Content_Id and Sfo_Content_Id.strip() \
-                        and Pkg_Content_Id.strip() != Sfo_Content_Id.strip():
-                            print("{:13} {}".format("PKG Hdr CID:", Pkg_Content_Id))
-                    if not Pkg_Total_Size is None:
-                        print("{:13} {}".format("Size:", Pkg_Total_Size))
-                        print("{:13} {}".format("Pretty Size:", prettySize(Pkg_Total_Size)))
-                    if not File_Size is None:
-                        print("{:13} {}".format("File Size:", File_Size))
-                    if Title_Update_Url and Title_Update_Url.strip():
-                        print("{:13} {}".format("Update URL:", Title_Update_Url))
+                    print("{:13} {}".format("NPS Type:", Results["NPS_TYPE"]))
+                    if "TITLE_ID" in Results \
+                    and Results["TITLE_ID"].strip():
+                        print("{:13} {}".format("Title ID:", Results["TITLE_ID"]))
+                    if "SFO_TITLE" in Results \
+                    and Results["SFO_TITLE"].strip():
+                        print("{:13} {}".format("Title:", Results["SFO_TITLE"]))
+                    if "SFO_TITLE_REGIONAL" in Results\
+                    and Results["SFO_TITLE_REGIONAL"].strip():
+                        print("{:13} {}".format("Title Region:", Results["SFO_TITLE_REGIONAL"].strip()))
+                    if "REGION" in Results \
+                    and Results["REGION"].strip():
+                        print("{:13} {}".format("Region:", Results["REGION"]))
+                    if "SFO_MIN_VER" in Results \
+                    and Results["SFO_MIN_VER"] >= 0:
+                        print("{:13} {:.2f}".format("Min FW:", Results["SFO_MIN_VER"]))
+                    if "SFO_SDK_VER" in Results \
+                    and Results["SFO_SDK_VER"] >= 0:
+                        print("{:13} {:.2f}".format("SDK Ver:", Results["SFO_SDK_VER"]))
+                    if "SFO_CREATION_DATE" in Results \
+                    and Results["SFO_CREATION_DATE"].strip():
+                        print("{:13} {}".format("c_date:", datetime.strptime(Results["SFO_CREATION_DATE"], "%Y%m%d").strftime("%Y.%m.%d")))
+                    if "SFO_VERSION" in Results\
+                    and Results["SFO_VERSION"] >= 0:
+                        print("{:13} {:.2f}".format("Version:", Results["SFO_VERSION"]))
+                    if "SFO_APP_VER" in Results \
+                    and Results["SFO_APP_VER"] >= 0:
+                        print("{:13} {:.2f}".format("App Ver:", Results["SFO_APP_VER"]))
+                    if "PSX_TITLE_ID" in Results \
+                    and Results["PSX_TITLE_ID"].strip():
+                        print("{:13} {}".format("PSX Title ID:", Results["PSX_TITLE_ID"]))
+                    if "CONTENT_ID" in Results \
+                    and Results["CONTENT_ID"].strip():
+                        print("{:13} {}".format("Content ID:", Results["CONTENT_ID"]))
+                        if "SFO_CONTENT_ID" in Results \
+                        and Results["SFO_CONTENT_ID"].strip() \
+                        and "PKG_CONTENT_ID" in Results \
+                        and Results["PKG_CONTENT_ID"].strip() != Results["SFO_CONTENT_ID"].strip():
+                            print("{:13} {}".format("PKG Hdr CID:", Results["PKG_CONTENT_ID"]))
+                    if "PKG_TOTAL_SIZE" in Results \
+                    and Results["PKG_TOTAL_SIZE"] > 0:
+                        print("{:13} {}".format("Size:", Results["PKG_TOTAL_SIZE"]))
+                        print("{:13} {}".format("Pretty Size:", prettySize(Results["PKG_TOTAL_SIZE"])))
+                    if "FILE_SIZE" in Results:
+                        print("{:13} {}".format("File Size:", Results["FILE_SIZE"]))
+                    if "TITLE_UPDATE_URL" in Results \
+                    and Results["TITLE_UPDATE_URL"].strip():
+                        print("{:13} {}".format("Update URL:", Results["TITLE_UPDATE_URL"]))
                     print()
                 elif Output_Format == 1:  ## Linux Shell Variable Output
-                    print("PSN_PKG_SIZE='{}'".format(Pkg_Total_Size))
-                    print("PSN_PKG_NPS_TYPE='{}'".format(Nps_Type))
-                    if Title_Id and Title_Id.strip():
-                        print("PSN_PKG_TITLEID='{}'".format(Title_Id))
+                    if "PKG_TOTAL_SIZE" in Results \
+                    and Results["PKG_TOTAL_SIZE"] > 0:
+                        print("PSN_PKG_SIZE='{}'".format(Results["PKG_TOTAL_SIZE"]))
+                    else:
+                        print("unset PSN_PKG_SIZE")
+                    print("PSN_PKG_NPS_TYPE='{}'".format(Results["NPS_TYPE"]))
+                    if "TITLE_ID" in Results \
+                    and Results["TITLE_ID"].strip():
+                        print("PSN_PKG_TITLEID='{}'".format(Results["TITLE_ID"]))
                     else:
                         print("unset PSN_PKG_TITLEID")
-                    if Content_Id and Content_Id.strip():
-                        print("PSN_PKG_CONTENTID='{}'".format(Content_Id))
-                        print("PSN_PKG_REGION='{}'".format(Region.replace("(HKG)", "").replace("(KOR)", "")))
+                    if "CONTENT_ID" in Results \
+                    and Results["CONTENT_ID"].strip():
+                        print("PSN_PKG_CONTENTID='{}'".format(Results["CONTENT_ID"]))
+                        print("PSN_PKG_REGION='{}'".format(Results["REGION"].replace("(HKG)", "").replace("(KOR)", "")))
                     else:
                         print("unset PSN_PKG_CONTENTID")
                         print("unset PSN_PKG_REGION")
-                    if Sfo_Title:
-                        print("PSN_PKG_SFO_TITLE=\"\\\"{}\\\"\"".format(Sfo_Title.replace("\"", "\\\"\\\"")))
+                    if "SFO_TITLE" in Results \
+                    and Results["SFO_TITLE"].strip():
+                        print("PSN_PKG_SFO_TITLE=\"\\\"{}\\\"\"".format(Results["SFO_TITLE"].replace("\"", "\\\"\\\"")))
                     else:
                         print("unset PSN_PKG_SFO_TITLE")
-                    if Sfo_Title_Regional:
-                        print("PSN_PKG_SFO_TITLE_REGION=\"\\\"{}\\\"\"".format(Sfo_Title_Regional.replace("\"", "\\\"\\\"")))
+                    if "SFO_TITLE_REGIONAL" in Results \
+                    and Results["SFO_TITLE_REGIONAL"].strip():
+                        print("PSN_PKG_SFO_TITLE_REGION=\"\\\"{}\\\"\"".format(Results["SFO_TITLE_REGIONAL"].strip().replace("\"", "\\\"\\\"")))
                     else:
                         print("unset PSN_PKG_SFO_TITLE_REGION")
-                    if Sfo_Min_Ver >= 0:
-                        print("PSN_PKG_SFO_FW_VER='{:.2f}'".format(Sfo_Min_Ver))
+                    if "SFO_MIN_VER" in Results \
+                    and Results["SFO_MIN_VER"] >= 0:
+                        print("PSN_PKG_SFO_FW_VER='{:.2f}'".format(Results["SFO_MIN_VER"]))
                     else:
                         print("unset PSN_PKG_SFO_FW_VER")
-                    if Sfo_Version >= 0:
-                        print("PSN_PKG_SFO_VERSION='{:.2f}'".format(Sfo_Version))
+                    if "SFO_VERSION" in Results \
+                    and Results["SFO_VERSION"] >= 0:
+                        print("PSN_PKG_SFO_VERSION='{:.2f}'".format(Results["SFO_VERSION"]))
                     else:
                         print("unset PSN_PKG_SFO_VERSION")
-                    if Sfo_App_Ver >= 0:
-                        print("PSN_PKG_SFO_APP_VER='{:.2f}'".format(Sfo_App_Ver))
+                    if "SFO_APP_VER" in Results \
+                    and Results["SFO_APP_VER"] >= 0:
+                        print("PSN_PKG_SFO_APP_VER='{:.2f}'".format(Results["SFO_APP_VER"]))
                     else:
                         print("unset PSN_PKG_SFO_APP_VER")
-                    if Sfo_Sdk_Ver >= 0:
-                        print("PSN_PKG_SFO_SDK_VER='{:.2f}'".format(Sfo_Sdk_Ver))
+                    if "SFO_SDK_VER" in Results \
+                    and Results["SFO_SDK_VER"] >= 0:
+                        print("PSN_PKG_SFO_SDK_VER='{:.2f}'".format(Results["SFO_SDK_VER"]))
                     else:
                         print("unset PSN_PKG_SFO_SDK_VER")
-                    if Sfo_Category and Sfo_Category.strip():
-                        print("PSN_PKG_SFO_CATEGORY='{}'".format(Sfo_Category))
+                    if "SFO_CATEGORY" in Results \
+                    and Results["SFO_CATEGORY"].strip():
+                        print("PSN_PKG_SFO_CATEGORY='{}'".format(Results["SFO_CATEGORY"]))
                     else:
                         print("unset PSN_PKG_SFO_CATEGORY")
-                    if Sfo_Creation_Date and Sfo_Creation_Date.strip():
-                        print("PSN_PKG_SFO_CREATION='{}'".format(Sfo_Creation_Date))
+                    if "SFO_CREATION_DATE" in Results \
+                    and Results["SFO_CREATION_DATE"].strip():
+                        print("PSN_PKG_SFO_CREATION='{}'".format(Results["SFO_CREATION_DATE"]))
                     else:
                         print("unset PSN_PKG_SFO_CREATION")
-                    if Psx_Title_Id and Psx_Title_Id.strip():
-                        print("PSN_PKG_PSXTITLEID='{}'".format(Psx_Title_Id))
+                    if "PSX_TITLE_ID" in Results \
+                    and Results["PSX_TITLE_ID"].strip():
+                        print("PSN_PKG_PSXTITLEID='{}'".format(Results["PSX_TITLE_ID"]))
                     else:
                         print("unset PSN_PKG_PSXTITLEID")
-                    if not File_Size is None:
-                        print("PSN_PKG_FILESIZE='{}'".format(File_Size))
+                    if "FILE_SIZE" in Results:
+                        print("PSN_PKG_FILESIZE='{}'".format(Results["FILE_SIZE"]))
                     else:
                         print("unset PSN_PKG_FILESIZE")
                 elif Output_Format == 97 \
@@ -2218,45 +2234,60 @@ if __name__ == "__main__":
                         if File_Table:
                             JSON_Output["fileTable"] = File_Table
                     JSON_Output["nps"] = {}
-                    JSON_Output["nps"]["npsType"] = Nps_Type
-                    if Title_Id and Title_Id.strip():
-                        JSON_Output["nps"]["titleId"] = Title_Id
-                    if Sfo_Title:
-                        JSON_Output["nps"]["title"] = Sfo_Title
-                    if Sfo_Title_Regional:
-                        JSON_Output["nps"]["regionalTitle"] = Sfo_Title_Regional
-                    if Content_Id and Content_Id.strip():
-                        JSON_Output["nps"]["region"] = Region
-                    if Sfo_Min_Ver >= 0:
-                        JSON_Output["nps"]["minFw"] = Sfo_Min_Ver
-                    if Sfo_Sdk_Ver >= 0:
-                        JSON_Output["nps"]["sdkVer"] = Sfo_Sdk_Ver
-                    if Sfo_Creation_Date and Sfo_Creation_Date.strip():
-                        JSON_Output["nps"]["creationDate"] = datetime.strptime(Sfo_Creation_Date, "%Y%m%d").strftime("%Y.%m.%d")
-                    if Sfo_Version >= 0:
-                        JSON_Output["nps"]["version"] = Sfo_Version
-                    if Sfo_App_Ver >= 0:
-                        JSON_Output["nps"]["appVer"] = Sfo_App_Ver
-                    if Psx_Title_Id and Psx_Title_Id.strip():
-                        JSON_Output["nps"]["psxTitleId"] = Psx_Title_Id
-                    if Content_Id and Content_Id.strip():
-                        JSON_Output["nps"]["contentId"] = Content_Id
-                        if Sfo_Content_Id and Sfo_Content_Id.strip() \
-                        and Pkg_Content_Id.strip() != Sfo_Content_Id.strip():
-                            JSON_Output["nps"]["pkgContentId"] = Pkg_Content_Id
-                    if not Pkg_Total_Size is None:
-                        JSON_Output["nps"]["pkgTotalSize"] = Pkg_Total_Size
-                        JSON_Output["nps"]["prettySize"] = prettySize(Pkg_Total_Size)
-                    if not File_Size is None:
-                        JSON_Output["nps"]["fileSize"] = File_Size
+                    JSON_Output["nps"]["npsType"] = Results["NPS_TYPE"]
+                    if "TITLE_ID" in Results \
+                    and Results["TITLE_ID"].strip():
+                        JSON_Output["nps"]["titleId"] = Results["TITLE_ID"]
+                    if "SFO_TITLE" in Results \
+                    and Results["SFO_TITLE"].strip():
+                        JSON_Output["nps"]["title"] = Results["SFO_TITLE"]
+                    if "SFO_TITLE_REGIONAL" in Results \
+                    and Results["SFO_TITLE_REGIONAL"].strip():
+                        JSON_Output["nps"]["regionalTitle"] = Results["SFO_TITLE_REGIONAL"].strip()
+                    if "CONTENT_ID" in Results \
+                    and Results["CONTENT_ID"].strip():
+                        JSON_Output["nps"]["region"] = Results["REGION"]
+                    if "SFO_MIN_VER" in Results \
+                    and Results["SFO_MIN_VER"] >= 0:
+                        JSON_Output["nps"]["minFw"] = Results["SFO_MIN_VER"]
+                    if "SFO_SDK_VER" in Results \
+                    and Results["SFO_SDK_VER"] >= 0:
+                        JSON_Output["nps"]["sdkVer"] = Results["SFO_SDK_VER"]
+                    if "SFO_CREATION_DATE" in Results \
+                    and Results["SFO_CREATION_DATE"].strip():
+                        JSON_Output["nps"]["creationDate"] = datetime.strptime(Results["SFO_CREATION_DATE"], "%Y%m%d").strftime("%Y.%m.%d")
+                    if "SFO_VERSION" in Results \
+                    and Results["SFO_VERSION"] >= 0:
+                        JSON_Output["nps"]["version"] = Results["SFO_VERSION"]
+                    if "SFO_APP_VER" in Results \
+                    and Results["SFO_APP_VER"] >= 0:
+                        JSON_Output["nps"]["appVer"] = Results["SFO_APP_VER"]
+                    if "PSX_TITLE_ID" in Results \
+                    and Results["PSX_TITLE_ID"].strip():
+                        JSON_Output["nps"]["psxTitleId"] = Results["PSX_TITLE_ID"]
+                    if "CONTENT_ID" in Results \
+                    and Results["CONTENT_ID"].strip():
+                        JSON_Output["nps"]["contentId"] = Results["CONTENT_ID"]
+                        if "SFO_CONTENT_ID" in Results \
+                        and Results["SFO_CONTENT_ID"].strip() \
+                        and "PKG_CONTENT_ID" in Results \
+                        and Results["PKG_CONTENT_ID"].strip() != Results["SFO_CONTENT_ID"].strip():
+                            JSON_Output["nps"]["pkgContentId"] = Results["PKG_CONTENT_ID"]
+                    if "PKG_TOTAL_SIZE" in Results \
+                    and Results["PKG_TOTAL_SIZE"] > 0:
+                        JSON_Output["nps"]["pkgTotalSize"] = Results["PKG_TOTAL_SIZE"]
+                        JSON_Output["nps"]["prettySize"] = prettySize(Results["PKG_TOTAL_SIZE"])
+                    if "FILE_SIZE" in Results:
+                        JSON_Output["nps"]["fileSize"] = Results["FILE_SIZE"]
                     JSON_Output["nps"]["pkgUrl"] = Source
-                    if Title_Update_Url and Title_Update_Url.strip():
-                        JSON_Output["nps"]["titleUpdateUrl"] = Title_Update_Url
+                    if "TITLE_UPDATE_URL" in Results \
+                    and Results["TITLE_UPDATE_URL"].strip():
+                        JSON_Output["nps"]["titleUpdateUrl"] = Results["TITLE_UPDATE_URL"]
                     print(json.dumps(JSON_Output, indent=2, default=specialToJSON))
                     del JSON_Output
                 elif Output_Format == 99:  ## Analysis Output
-                    if not File_Size is None:
-                        print("File Size:", File_Size)
+                    if "FILE_SIZE" in Results:
+                        print("File Size:", Results["FILE_SIZE"])
                     if Pkg_Magic == CONST_PKG3_MAGIC:
                         dprintFieldsDict(Header_Fields, "headerfields[{KEY:14}|{INDEX:2}]", 2, None, print)
                         if Ext_Header_Fields:
