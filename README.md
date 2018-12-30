@@ -26,16 +26,21 @@ If you state URLs then only the necessary bytes are downloaded into memory. Note
 ## Requirements
 * Python Modules
   * [pycryptodomex](https://www.pycryptodome.org/) (note the X at the end)
-  * requests
+  * [requests](http://python-requests.org/)
+  * [aenum](https://bitbucket.org/stoneleaf/aenum)
 
 ### Installing on Debian
 1. Most Python modules can be installed via apt.<br>
 Install Python 3 modules via the following apt packages: python3-requests python3-cryptography.<br>
 As Python 2 is the default on Debian and this version should be used, then install apt packages: python-future python-requests python-cryptography.
 
-1. Install pycryptodomex module via pip<br>
-   Python 3: `pip3 install pycryptodomex`<br>
-   Python 2: `pip2 install pycryptodomex`
+1. Install further necessary Python modules via pip.
+   * Install pycryptodomex module:
+     * Python 3: `pip3 install --upgrade pycryptodomex`
+     * Python 2: `pip2 install --upgrade pycryptodomex`
+   * Install aenum module:
+     * Python 3: `pip3 install --upgrade aenum`
+     * Python 2: `pip2 install --upgrade aenum`
 
 ### Installing on Windows
 1. Install Python<br>
@@ -48,12 +53,13 @@ As Python 2 is the default on Debian and this version should be used, then insta
    * Advanced Options
      * Install for all users
 
-1. Install necessary Python modules
-   * Start an elevated(!!!) Command Prompt (Run As Admin via Right Click)
-   * Update PIP first: `python -m pip install --upgrade pip`
-   * Install requests module: `pip install requests`
-   * Install pycryptodomex module: `pip install pycryptodomex`
-   * Install cryptography module: `pip install cryptography`
+1. Install necessary Python modules via pip.
+   * Start an __elevated(!!!)__ Command Prompt (Run As Admin via Right Click)
+   * Update PIP itself first: `python -m pip install --upgrade pip`
+   * Install requests module: `pip install --upgrade requests`
+   * Install pycryptodomex module: `pip install --upgrade pycryptodomex`
+   * Install cryptography module: `pip install --upgrade cryptography`
+   * Install aenum module: `pip install --upgrade aenum`
    * Exit Command Prompt: `exit`
 
 Executing python scripts can be done via Windows Explorer or a Command Prompt. Normally no elevation is necessary for script execution, except when the python script wants to change something in the system internals.
