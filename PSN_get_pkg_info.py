@@ -2560,7 +2560,7 @@ if __name__ == "__main__":
                         if Item_Entries:
                             JSON_Output["itemEntries"] = copy.deepcopy(Item_Entries)
                             for Item_Entry in JSON_Output["itemEntries"]:
-                                del File_Entry["STRUCTURE_DEF"]
+                                del Item_Entry["STRUCTURE_DEF"]
                         if File_Table:
                             JSON_Output["fileTable"] = copy.deepcopy(File_Table)
                             for File_Entry in JSON_Output["fileTable"]:
