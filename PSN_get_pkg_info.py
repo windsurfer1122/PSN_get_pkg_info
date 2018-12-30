@@ -1335,7 +1335,7 @@ def parsePkg3ItemEntries(header_fields, meta_data, data_stream, function_debug_l
                 name_offset_start = temp_fields["ITEMNAMEOFS"]
             #
             if name_offset_end == -1 \
-            or temp_fields["ITEMNAMEOFS"] > name_offset_end:
+            or temp_fields["ITEMNAMEOFS"] >= name_offset_end:
                 name_offset_end = temp_fields["ITEMNAMEOFS"] + temp_fields["ITEMNAMESIZE"]
             #
             if temp_fields["ITEMNAMESIZE"] > item_name_size_max:
