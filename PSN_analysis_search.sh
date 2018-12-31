@@ -1,10 +1,47 @@
-#!/bin/sh -e
+#!/bin/sh -ue
+
+usage()
+{
+  printf -- 'usage: %s [-h] [-r] [DIR ...]\n' "$(basename "${0}")"
+  printf -- '\n'
+  printf -- 'Search info files with analysis data of package files.\n'
+  printf -- '\n'
+  printf -- 'positional arguments:\n'
+  printf -- '  dir  Path to directory to process\n'
+  printf -- '\n'
+  printf -- 'optional arguments:\n'
+  printf -- '  -h   Show this help message and exit\n'
+  printf -- '  -r   Replace default directories with dirs instead of appending these\n'
+  printf -- '\n'
+  printf -- 'default directories:\n'
+  printf -- '  %s\n' "${DEFAULTDIRS}"
+  exit 2
+}
+
+set_variable()
+{
+  local VARNAME VALUE
+
+  VARNAME="${1}"
+  shift
+  #
+  eval VALUE=\"\${${VARNAME}:-}\"
+  if [ -z "${VALUE}" ]
+   then
+    eval "${VARNAME}=\"$@\""
+  else
+    printf -- '[ERROR] %s already set\n' "${VARNAME}"
+    HELP=1
+  fi
+}
 
 main()
 {
   ## Localize and initialize variables
+  local OPTION OPTARG OPTIND
+  local HELP REPLACEDIRS
+  local DEFAULTDIRS DIRS DIR
   local IFS OLDIFS TABIFS
-  local PLATFORMS PLATFORM
   local GREP GREP_OUTPUT UNIQUE GREP_DISPLAY FILELIST NEWFILELIST
   local MAXCOUNT COUNT
   MAXCOUNT=99
@@ -17,27 +54,42 @@ main()
   #
   OLDIFS="${IFS}"
   TABIFS="$(printf -- '\t')"
-  unset PLATFORMS
 
-  ## Set variables
-  if [ -n "${1}" ]
-   then
-    PLATFORMS="${1}"
-  else
-    PLATFORMS="${PLATFORMS:+${PLATFORMS} }PS3"
-    PLATFORMS="${PLATFORMS:+${PLATFORMS} }PSX"
-    PLATFORMS="${PLATFORMS:+${PLATFORMS} }PSP"
-    PLATFORMS="${PLATFORMS:+${PLATFORMS} }PSV"
-    PLATFORMS="${PLATFORMS:+${PLATFORMS} }PSM"
-    #
-    PLATFORMS="${PLATFORMS:+${PLATFORMS} }PS4"
-  fi
+  ## Set default directories
+  unset DEFAULTDIRS
+  DEFAULTDIRS="${DEFAULTDIRS:+${DEFAULTDIRS} }PS3"
+  DEFAULTDIRS="${DEFAULTDIRS:+${DEFAULTDIRS} }PSX"
+  DEFAULTDIRS="${DEFAULTDIRS:+${DEFAULTDIRS} }PSP"
+  DEFAULTDIRS="${DEFAULTDIRS:+${DEFAULTDIRS} }PSV"
+  DEFAULTDIRS="${DEFAULTDIRS:+${DEFAULTDIRS} }PSM"
   #
-  if [ -n "${2}" ]
+  DEFAULTDIRS="${DEFAULTDIRS:+${DEFAULTDIRS} }PS4"
+  #
+  DIRS="${DEFAULTDIRS}"
+
+  ## Process command line options
+  while getopts 'hfursd:' OPTION
+   do
+    case "${OPTION}" in
+     ('h'|'?') HELP=1 ;;
+     ('r') set_variable REPLACEDIRS 1 ;;
+    esac
+  done
+  shift $(( ${OPTIND} - 1))
+
+  ## Process positional parameters
+  if [ "${REPLACEDIRS:-0}" -eq 1 ]
    then
-    PLATFORMS="${PLATFORMS:+${PLATFORMS} }${2}"
+    unset DIRS
+    if [ "${#}" -le 0 ]
+     then
+      printf -- '[ERROR] No directories stated\n'
+      HELP=1
+    fi
   fi
 
+  ## Check options
+  [ "${HELP:-0}" -eq 0 ] || usage
 
   ## Define multiple grep patterns GREP_<n> with options to determine the wanted package info files
   ##   To INCLUDE matching files use '-l' (lower case) as the first parameter
@@ -45,6 +97,7 @@ main()
   ## Define grep pattern GREP_OUTPUT for the final result output
   ##   -l/-L will be removed, so GREP_<n> can be re-used
   ## Separate parameters with TAB (TAB will be used as IFS on grep commands)
+  set +u
   ##
   ## Examples:
   ## GREP_1='-l	-e	^headerfields\[\"TYPE\".*:.* = 0x1$'
@@ -60,38 +113,48 @@ main()
   #GREP_2='-l	-e	^headerfields\[\"MAGIC\".*:.* = 0x7f504b47$'
   #GREP_OUTPUT="-e	^headerfields\\[\\\"HDRSIZE\\\".*"
   #UNIQUE=1
-
+  #
+  ## KEYINDEX
+  #GREP_OUTPUT="-o	-e	KEYINDEX.*: [[:digit:]]*	-e	Key Index [[:digit:]]*"
+  #UNIQUE=1
 
   ## Clean-up and check GREP_OUTPUT pattern
-  GREP_OUTPUT="$(printf -- '%s' "${GREP_OUTPUT}" | sed -r -e 's#(-l|-L)##g ; s#[\t]+#\t#g ; s#(^\t|\t$)##g')"
-  if [ -z "${GREP_OUTPUT}" ]
+  set -u
+  GREP_OUTPUT="$(printf -- '%s' "${GREP_OUTPUT:-}" | sed -r -e 's#(-l|-L)##g ; s#[\t]+#\t#g ; s#(^\t|\t$)##g')"
+  #
+  if [ -z "${GREP_OUTPUT:-}" ]
    then
-    printf -- "[ERROR] No OUTPUT grep pattern defined\n"
+    printf -- '[ERROR] No OUTPUT grep pattern defined\n'
     return 0
   fi
 
-  ## Process platform directories
-  for PLATFORM in ${PLATFORMS}
+  ## Process directories
+  for DIR in ${DIRS:-} "${@}"
    do
-    [ -d "${PLATFORM}/_pkginfo" ] || continue
+    if [ ! -d "${DIR}" ]
+     then
+      printf -- '[ERROR] Directory "%s" does not exist\n' "${DIR}"
+      continue
+    fi
+    [ -d "${DIR}/_pkginfo" ] || continue
     #
-    echo "# >>>>> Searching analysis data of ${PLATFORM} for grep patterns..."
+    printf -- '# >>>>> Searching analysis data in ${DIR} for grep patterns...\n'
 
     ## Determine package info files for output via GREP_<n> patterns
     ## --> Starting file list
-    [ -d "${PLATFORM}/_tmp" ] || mkdir "${PLATFORM}/_tmp"
-    FILELIST="$(tempfile -d "${PLATFORM}/_tmp")"
-    printf -- '%s' "${PLATFORM}/_pkginfo" >"${FILELIST}"
+    [ -d "${DIR}/_tmp" ] || mkdir "${DIR}/_tmp"
+    FILELIST="$(tempfile -d "${DIR}/_tmp")"
+    printf -- '%s' "${DIR}/_pkginfo" >"${FILELIST}"
     ## --> Process GREP_<n> patterns
     for COUNT in $(seq 1 "${MAXCOUNT}")
      do
       [ -s "${FILELIST}" ] || break
       #
-      eval GREP=\"\${GREP_${COUNT}}\"
+      eval GREP=\"\${GREP_${COUNT}:-}\"
       [ -n "${GREP}" ] || break
       printf -- '# > Grep %s: %s\n' "${COUNT}" "${GREP}" | sed -e 's#\t# #g'
       #
-      NEWFILELIST="$(tempfile -d "${PLATFORM}/_tmp")"
+      NEWFILELIST="$(tempfile -d "${DIR}/_tmp")"
       IFS="${TABIFS}"
       #set -x
       { cat -- "${FILELIST}" | xargs -0 -r -L 10 -- grep -R -Z ${GREP} -- >"${NEWFILELIST}" ; } || :
@@ -129,7 +192,7 @@ main()
 
     unset FILELIST
     printf -- '\n'
-  done  ## PLATFORM
+  done  ## DIR
 
   return 0  ## leave function
 }
