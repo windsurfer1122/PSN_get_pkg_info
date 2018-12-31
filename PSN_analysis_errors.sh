@@ -1,41 +1,99 @@
-#!/bin/sh -e
+#!/bin/sh -ue
+
+usage()
+{
+  printf -- 'usage: %s [-h] [-r] [dir ...]\n' "$(basename "${0}")"
+  printf -- '\n'
+  printf -- 'List error logs of info files creation.\n'
+  printf -- '\n'
+  printf -- 'positional arguments:\n'
+  printf -- '  dir  Path to directory to process\n'
+  printf -- '\n'
+  printf -- 'optional arguments:\n'
+  printf -- '  -h   Show this help message and exit\n'
+  printf -- '  -r   Replace default directories with dirs instead of appending these\n'
+  printf -- '\n'
+  printf -- 'default directories:\n'
+  printf -- '  %s\n' "${DEFAULTDIRS}"
+  exit 2
+}
+
+set_variable()
+{
+  local VARNAME VALUE
+
+  VARNAME="${1}"
+  shift
+  #
+  eval VALUE=\"\${${VARNAME}:-}\"
+  if [ -z "${VALUE}" ]
+   then
+    eval "${VARNAME}=\"$@\""
+  else
+    printf -- '[ERROR] %s already set\n' "${VARNAME}"
+    HELP=1
+  fi
+}
 
 main()
 {
   ## Localize and initialize variables
-  local PLATFORMS PLATFORM ERRORLOG
-  unset PLATFORMS
+  local OPTION OPTARG OPTIND
+  local HELP REPLACEDIRS
+  local DEFAULTDIRS DIRS DIR
+  local ERRORLOG
 
-  ## Set variables
-  if [ -n "${1}" ]
-   then
-    PLATFORMS="${1}"
-  else
-    PLATFORMS="${PLATFORMS:+${PLATFORMS} }PS3"
-    PLATFORMS="${PLATFORMS:+${PLATFORMS} }PSX"
-    PLATFORMS="${PLATFORMS:+${PLATFORMS} }PSP"
-    PLATFORMS="${PLATFORMS:+${PLATFORMS} }PSV"
-    PLATFORMS="${PLATFORMS:+${PLATFORMS} }PSM"
-    #
-    PLATFORMS="${PLATFORMS:+${PLATFORMS} }PS4"
-  fi
+  ## Set default directories
+  unset DEFAULTDIRS
+  DEFAULTDIRS="${DEFAULTDIRS:+${DEFAULTDIRS} }PS3"
+  DEFAULTDIRS="${DEFAULTDIRS:+${DEFAULTDIRS} }PSX"
+  DEFAULTDIRS="${DEFAULTDIRS:+${DEFAULTDIRS} }PSP"
+  DEFAULTDIRS="${DEFAULTDIRS:+${DEFAULTDIRS} }PSV"
+  DEFAULTDIRS="${DEFAULTDIRS:+${DEFAULTDIRS} }PSM"
   #
-  if [ -n "${2}" ]
+  DEFAULTDIRS="${DEFAULTDIRS:+${DEFAULTDIRS} }PS4"
+  #
+  DIRS="${DEFAULTDIRS}"
+
+  ## Process command line options
+  while getopts 'hr' OPTION
+   do
+    case "${OPTION}" in
+     ('h'|'?') HELP=1 ;;
+     ('r') set_variable REPLACEDIRS 1 ;;
+    esac
+  done
+  [ "${HELP:-0}" -eq 0 ] || usage
+  shift $(( ${OPTIND} - 1))
+
+  ## Process positional parameters
+  if [ "${REPLACEDIRS:-0}" -eq 1 ]
    then
-    PLATFORMS="${PLATFORMS:+${PLATFORMS} }${2}"
+    unset DIRS
+    if [ "${#}" -le 0 ]
+     then
+      printf -- '[ERROR] No directories stated\n'
+      usage
+    fi
   fi
 
-  ## Analyse packages
-  for PLATFORM in ${PLATFORMS}
+  ## Process directories
+  for DIR in ${DIRS:-} "${@}"
    do
-    [ -d "${PLATFORM}" ] || continue
+    if [ ! -d "${DIR}" ]
+     then
+      printf -- '[ERROR] Directory "%s" does not exist\n' "${DIR}"
+      continue
+    fi
     #
-    ERRORLOG="${PLATFORM}/_error_url.log"
+    ERRORLOG="${DIR}/_error_url.log"
     [ ! -s "${ERRORLOG}" ] || cat "${ERRORLOG}"
     #
-    ERRORLOG="${PLATFORM}/_error.log"
+    ERRORLOG="${DIR}/_error.log"
     [ ! -s "${ERRORLOG}" ] || cat "${ERRORLOG}"
-  done  ## PLATFORM
+  done  ## DIR
+
+  return 0  ## leave function
 }
 
 main "${@}"
