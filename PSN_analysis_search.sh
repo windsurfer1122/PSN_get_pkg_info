@@ -48,8 +48,8 @@ main()
   #
   for COUNT in $(seq 1 "${MAXCOUNT}")
    do
-    local "$(eval printf -- 'GREP_${COUNT}')"
-    unset "$(eval printf -- 'GREP_${COUNT}')"
+    local "$(eval printf -- 'GREP_%s' "${COUNT}")"
+    unset "$(eval printf -- 'GREP_%s' "${COUNT}")"
   done
   #
   OLDIFS="${IFS}"
@@ -138,7 +138,7 @@ main()
     fi
     [ -d "${DIR}/_pkginfo" ] || continue
     #
-    printf -- '# >>>>> Searching analysis data in ${DIR} for grep patterns...\n'
+    printf -- '# >>>>> Searching analysis data in "%s" for grep patterns...\n' "${DIR}"
 
     ## Determine package info files for output via GREP_<n> patterns
     ## --> Starting file list
