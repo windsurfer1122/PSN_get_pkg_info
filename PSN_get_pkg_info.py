@@ -16,7 +16,9 @@
 ### - handle prefix in kwargs manually
 ### - set system default encoding to UTF-8
 ### - define unicode() for Python 3 like in Python 2 (ugly)
-### - convert byte string of struct.pack() to bytes
+### - use bytearray() instead of bytes() to avoid dumps on JSON output
+### - convert byte string of struct.pack()/.unpack() to bytearray()
+### - must use bytes() for AES's .new()/.encrypt()/.decrypt() and hash's .update()
 ###
 ### Adopted PEP8 Coding Style: (see https://www.python.org/dev/peps/pep-0008/)
 ### * (differs to PEP8) Studly_Caps_With_Underscores for global variables
@@ -569,21 +571,22 @@ def getInteger64BitBE(data, offset):
 
 
 def specialToJSON(python_object):
-    if isinstance(python_object, bytes):
+    if isinstance(python_object, bytes) \
+    or isinstance(python_object, bytearray):
         return {'__class__': 'bytes',
                 '__value__': convertBytesToHexString(python_object, sep="")}
     if isinstance(python_object, PkgAesCtrCounter):
         return ""
     if isinstance(python_object, aenum.Enum):
-        return str(python_object)
+        return unicode(python_object)
     raise TypeError("".join((repr(python_object), " is not JSON serializable")))
 
 def convertBytesToHexString(data, format="", sep=" "):
     if isinstance(data, int):
         data = struct.pack(format, data)
-    ## Python 2 workaround: convert str to bytes
+    ## Python 2 workaround: convert byte string of struct.pack()/.unpack() to bytearray()
     if isinstance(data, str):
-        data = bytes(data)
+        data = bytearray(data)
     #
     return sep.join(["%02x" % b for b in data])
 
@@ -659,14 +662,14 @@ class PkgReader():
     def read(self, offset, size, debug_level=0):
         if self._stream_type == "file":
             self._data_stream.seek(offset, os.SEEK_SET)
-            return self._data_stream.read(size)
+            return bytearray(self._data_stream.read(size))
         elif self._stream_type == "requests":
             ## Send request in persistent session
             ## http://docs.python-requests.org/en/master/api/#requests.Session.get
             ## http://docs.python-requests.org/en/master/api/#requests.request
             reqheaders={"Range": "bytes={}-{}".format(offset, (offset + size - 1) if size > 0 else "")}
             response = self._data_stream.get(self._source, headers=reqheaders)
-            return response.content
+            return bytearray(response.content)
 
     def close(self, debug_level=0):
         return self._data_stream.close()
@@ -674,7 +677,8 @@ class PkgReader():
 
 class PkgAesCtrCounter():
     def __init__(self, key, iv):
-        self._key = key
+        ## Python 2 workaround: must use bytes() for AES's .new()/.encrypt()/.decrypt() and hash's .update()
+        self._key = bytes(key)
         self._key_size = Cryptodome.Cipher.AES.key_size[0] * 8  ## Key length 16 bytes = 128 bits
         if isinstance(iv, int):
             self._iv = iv
@@ -702,10 +706,8 @@ class PkgAesCtrCounter():
     def decrypt(self, offset, data):
         self._setOffset(offset)
         self._block_offset += len(data)
-        decrypted_data = self._aes.decrypt(data)
-        ## Python 2 workaround: convert str to bytes
-        if isinstance(decrypted_data, str):
-            decrypted_data = bytes(decrypted_data)
+        ## Python 2 workaround: must use bytes() for AES's .new()/.encrypt()/.decrypt() and hash's .update()
+        decrypted_data = bytearray(self._aes.decrypt(bytes(data)))
         return decrypted_data
 
 
@@ -738,9 +740,9 @@ def getRegion(id):
 
 def convertUtf8BytesToString(data, conversion, length = 0):
     result = ""
-    ## Python 2 workaround: convert str to bytes
+    ## Python 2 workaround: convert byte string to bytearray()
     if isinstance(data, str):
-        data = bytes(data)
+        data = bytearray(data)
     #
     if length == 0:
         length = len(data)
@@ -932,10 +934,10 @@ def convertFieldsToOrdDict(CONST_STRUCTURE_FIELDS, temp_fields):
             or field_def["CONV"] == 0x0204:  ## UTF-8 not and NUL-terminated
                 fields[key] = convertUtf8BytesToString(fields[key], field_def["CONV"])
         elif "FORMAT" in field_def:
-            ## Python 2 workaround: convert str to bytes
+            ## Python 2 workaround: convert byte string of struct.pack()/.unpack() to bytearray()
             if field_def["FORMAT"] == "s" \
             and isinstance(fields[key], str):
-                fields[key] = bytes(fields[key])
+                fields[key] = bytearray(fields[key])
     #
     fields["STRUCTURE_DEF"] = CONST_STRUCTURE_FIELDS
     #
@@ -970,12 +972,12 @@ def parsePkg4Header(header_bytes, data_stream, function_debug_level, print_unkno
             for _i in range(field_def["SUBCOUNT"]):
                 unpack_format = "".join((unpack_format, field_format))
             header_fields[key] = struct.unpack(unpack_format, header_fields[key])
-            ## Python 2 workaround: convert str to bytes
+            ## Python 2 workaround: convert byte string of struct.pack()/.unpack() to bytearray()
             if field_def["FORMAT"] == "s" \
             and isinstance(header_fields[key][0], str):
                 temp_fields = []
                 for _i in range(len(header_fields[key])):
-                    temp_fields.append(bytes(header_fields[key][_i]))
+                    temp_fields.append(bytearray(header_fields[key][_i]))
                 header_fields[key] = temp_fields
                 del temp_fields
 
@@ -1038,7 +1040,6 @@ def parsePkg4Header(header_bytes, data_stream, function_debug_level, print_unkno
             eprint("Could not get PKG4 name table at offset {:#x} with size {} from".format(file_entry["DATAOFS"], file_entry["DATASIZE"]), data_stream.getSource())
             eprint("", prefix=None)
             sys.exit(2)
-        name_table = bytes(name_table)
 
     ## Parse PKG4 Name Table Data for File Entries
     if function_debug_level >= 2:
@@ -1099,12 +1100,12 @@ def parsePkg3Header(header_bytes, data_stream, function_debug_level):
             for _i in range(field_def["SUBCOUNT"]):
                 unpack_format = "".join((unpack_format, field_format))
             header_fields[key] = struct.unpack(unpack_format, header_fields[key])
-            ## Python 2 workaround: convert str to bytes
+            ## Python 2 workaround: convert byte string of struct.pack()/.unpack() to bytearray()
             if field_def["FORMAT"] == "s" \
             and isinstance(header_fields[key][0], str):
                 temp_fields = []
                 for _i in range(len(header_fields[key])):
-                    temp_fields.append(bytes(header_fields[key][_i]))
+                    temp_fields.append(bytearray(header_fields[key][_i]))
                 header_fields[key] = temp_fields
                 del temp_fields
 
@@ -1124,9 +1125,6 @@ def parsePkg3Header(header_bytes, data_stream, function_debug_level):
     ext_header_fields = None
     main_hdr_size = CONST_PKG3_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"] + CONST_PKG3_PS3_DIGEST_FIELDS["STRUCTURE_SIZE"]
     if header_fields["TYPE"] == 0x2:
-# TODO: verify
-#    and "HDRSIZE" in header_fields \
-#    and header_fields["HDRSIZE"] >= main_hdr_size:
         if function_debug_level >= 2:
             dprint(">>>>> PKG3 Extended Main Header:")
         temp_fields = struct.unpack(CONST_PKG3_EXT_HEADER_FIELDS["STRUCTURE_UNPACK"], header_bytes[main_hdr_size:main_hdr_size+CONST_PKG3_EXT_HEADER_FIELDS["STRUCTURE_SIZE"]])
@@ -1172,10 +1170,8 @@ def parsePkg3Header(header_bytes, data_stream, function_debug_level):
         if "DERIVE" in CONST_PKG3_CONTENT_KEYS[key] \
         and CONST_PKG3_CONTENT_KEYS[key]["DERIVE"]:
             aes = Cryptodome.Cipher.AES.new(CONST_PKG3_CONTENT_KEYS[key]["KEY"], Cryptodome.Cipher.AES.MODE_ECB)
-            pkg_key = aes.encrypt(header_fields["DATARIV"])
-            ## Python 2 workaround: convert str to bytes
-            if isinstance(pkg_key, str):
-                pkg_key = bytes(pkg_key)
+            ## Python 2 workaround: must use bytes() for AES's .new()/.encrypt()/.decrypt() and hash's .update()
+            pkg_key = bytearray(aes.encrypt(bytes(header_fields["DATARIV"])))
             header_fields["AES_CTR"][key] = PkgAesCtrCounter(pkg_key, header_fields["DATARIV"])
             del aes
             if function_debug_level >= 2:
@@ -1215,7 +1211,7 @@ def parsePkg3Header(header_bytes, data_stream, function_debug_level):
                 meta_data[md_entry_type]["DESC"] = "Content Type"
             meta_data[md_entry_type]["VALUE"] = getInteger32BitBE(temp_bytes, 0)
             if md_entry_size > 0x04:
-                meta_data[md_entry_type]["UNKNOWN"] = bytes(temp_bytes[0x04:])
+                meta_data[md_entry_type]["UNKNOWN"] = temp_bytes[0x04:]
         ## TitleID (when size 0xc) (otherwise Version + App Version)
         elif md_entry_type == 0x06 \
         and md_entry_size == 0x0C:
@@ -1227,9 +1223,9 @@ def parsePkg3Header(header_bytes, data_stream, function_debug_level):
                 meta_data[md_entry_type]["DESC"] = "Items Info (SHA256 of decrypted data)"
             meta_data[md_entry_type]["OFS"] = getInteger32BitBE(temp_bytes, 0)
             meta_data[md_entry_type]["SIZE"] = getInteger32BitBE(temp_bytes, 0x04)
-            meta_data[md_entry_type]["SHA256"] = bytes(temp_bytes[0x08:0x08+0x20])
+            meta_data[md_entry_type]["SHA256"] = temp_bytes[0x08:0x08+0x20]
             if md_entry_size > 0x28:
-                meta_data[md_entry_type]["UNKNOWN"] = bytes(temp_bytes[0x28:])
+                meta_data[md_entry_type]["UNKNOWN"] = temp_bytes[0x28:]
         ## (14) PARAM.SFO Info (PS Vita)
         ## (15) Unknown Info (PS Vita)
         ## (16) Entirety Info (PS Vita)
@@ -1245,8 +1241,8 @@ def parsePkg3Header(header_bytes, data_stream, function_debug_level):
                 meta_data[md_entry_type]["DESC"] = "Self Info"
             meta_data[md_entry_type]["OFS"] = getInteger32BitBE(temp_bytes, 0)
             meta_data[md_entry_type]["SIZE"] = getInteger32BitBE(temp_bytes, 0x04)
-            meta_data[md_entry_type]["UNKNOWN"] = bytes(temp_bytes[0x08:md_entry_size - 0x20])
-            meta_data[md_entry_type]["SHA256"] = bytes(temp_bytes[md_entry_size - 0x20:])
+            meta_data[md_entry_type]["UNKNOWN"] = temp_bytes[0x08:md_entry_size - 0x20]
+            meta_data[md_entry_type]["SHA256"] = temp_bytes[md_entry_size - 0x20:]
         else:
             if md_entry_type == 0x03:
                 meta_data[md_entry_type]["DESC"] = "Package Type/Flags"
@@ -1258,7 +1254,7 @@ def parsePkg3Header(header_bytes, data_stream, function_debug_level):
                 meta_data[md_entry_type]["DESC"] = "QA Digest"
             elif md_entry_type == 0x0A:
                 meta_data[md_entry_type]["DESC"] = "Install Directory"
-            meta_data[md_entry_type]["VALUE"] = bytes(temp_bytes)
+            meta_data[md_entry_type]["VALUE"] = temp_bytes
         #
         md_offset += md_entry_size
     #
@@ -1308,7 +1304,7 @@ def parsePkg3ItemEntries(header_fields, meta_data, data_stream, function_debug_l
         sys.exit(2)
 
     ## Decrypt PKG3 Item Entries
-    decrypted_item_entries["DATA"] = header_fields["AES_CTR"][header_fields["KEYINDEX"]].decrypt(decrypted_item_entries["ALIGN"]["OFS"], bytes(encrypted_bytes))
+    decrypted_item_entries["DATA"] = header_fields["AES_CTR"][header_fields["KEYINDEX"]].decrypt(decrypted_item_entries["ALIGN"]["OFS"], encrypted_bytes)
     del encrypted_bytes
 
     ## Parse PKG3 Item Entries
@@ -1385,7 +1381,7 @@ def parsePkg3ItemEntries(header_fields, meta_data, data_stream, function_debug_l
             eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[ALIGN] ")
         offset = align["OFS"] - decrypted_item_names["ALIGN"]["OFS"]
         #
-        decrypted_item_names["DATA"][offset:offset+align["SIZE"]] = header_fields["AES_CTR"][key_index].decrypt(align["OFS"], bytes(encrypted_bytes[offset:offset+align["SIZE"]]))
+        decrypted_item_names["DATA"][offset:offset+align["SIZE"]] = header_fields["AES_CTR"][key_index].decrypt(align["OFS"], encrypted_bytes[offset:offset+align["SIZE"]])
         temp_bytes = decrypted_item_names["DATA"][offset+align["OFSDELTA"]:offset+align["OFSDELTA"]+item_entry["ITEMNAMESIZE"]]
         del align
         if function_debug_level >= 2:
@@ -1398,6 +1394,7 @@ def parsePkg3ItemEntries(header_fields, meta_data, data_stream, function_debug_l
 
     ## Calculate SHA-256 hash of decrypted data
     hash_sha256 = Cryptodome.Hash.SHA256.new()
+    ## Python 2 workaround: must use bytes() for AES's .new()/.encrypt()/.decrypt() and hash's .update()
     hash_sha256.update(bytes(decrypted_item_entries["DATA"]))
     hash_sha256.update(bytes(decrypted_item_names["DATA"]))
 
@@ -1406,7 +1403,7 @@ def parsePkg3ItemEntries(header_fields, meta_data, data_stream, function_debug_l
     dprintFieldsList(item_entries, "".join(("itementries[{KEY:", item_cnt_len, "}]")), function_debug_level, None)
     dprint("SHA-256 of decrypted items entries and names:", hash_sha256.hexdigest())
 
-    return item_entries, decrypted_item_entries, decrypted_item_names, hash_sha256.digest()
+    return item_entries, decrypted_item_entries, decrypted_item_names, bytearray(hash_sha256.digest())
 
 
 def processPkg3Item(header_fields, item_entry, data_stream, item_data, raw_stream, extract_stream, function_debug_level):
@@ -1532,7 +1529,7 @@ def parseSfo(sfo_bytes, function_debug_level):
             dprintBytesStructure(CONST_PARAM_SFO_INDEX_ENTRY_FIELDS, CONST_PARAM_SFO_ENDIAN, temp_fields, "".join(("SFO Index Entry[", cnt_format_string.format(_i), "][{:1}]: [{:#03x}|{:1}] {} = {}")), function_debug_level)
         temp_fields = convertFieldsToOrdDict(CONST_PARAM_SFO_INDEX_ENTRY_FIELDS, temp_fields)
         key_name = convertUtf8BytesToString(sfo_bytes[header_fields["KEYTBLOFS"]+temp_fields["KEYOFS"]:], 0x0204)
-        data = bytes(sfo_bytes[header_fields["DATATBLOFS"]+temp_fields["DATAOFS"]:header_fields["DATATBLOFS"]+temp_fields["DATAOFS"]+temp_fields["DATAUSEDSIZE"]])
+        data = sfo_bytes[header_fields["DATATBLOFS"]+temp_fields["DATAOFS"]:header_fields["DATATBLOFS"]+temp_fields["DATAOFS"]+temp_fields["DATAUSEDSIZE"]]
         if function_debug_level >= 2:
             dprint(format_string.format(_i, "Key Name", key_name))
             data_desc = "Data Used (Fmt {:#0x})".format(temp_fields["DATAFORMAT"])
@@ -1706,6 +1703,7 @@ if __name__ == "__main__":
             #
             Results = collections.OrderedDict()
             Results["TOOL_VERSION"] = __version__
+            Results["PYTHON_VERSION"] = ".".join((unicode(sys.version_info[0]), unicode(sys.version_info[1]), unicode(sys.version_info[2])))
             #
             Headers = {"User-Agent": "Mozilla/5.0 (PLAYSTATION 3; 4.83)"}  ## Default to PS3 headers (fits PS3/PSX/PSP/PSV packages, but not PSM packages for PSV)
 
@@ -2499,9 +2497,10 @@ if __name__ == "__main__":
                     JSON_Output = collections.OrderedDict()
                     #
                     JSON_Output["results"] = collections.OrderedDict()
-                    if "TOOL_VERSION" in Results \
-                    and Results["TOOL_VERSION"].strip():
+                    if "TOOL_VERSION" in Results:
                         JSON_Output["results"]["toolVersion"] = Results["TOOL_VERSION"]
+                    if "PYTHON_VERSION" in Results:
+                        JSON_Output["results"]["pythonVersion"] = Results["PYTHON_VERSION"]
                     if "TITLE_ID" in Results \
                     and Results["TITLE_ID"].strip():
                         JSON_Output["results"]["titleId"] = Results["TITLE_ID"]
