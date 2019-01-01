@@ -1,13 +1,13 @@
 # PSN_get_pkg_info.py - Changelog
 
-## 2018-12-31 alpha3 (planned release date)
+## 2018-12-31
 * NEW: dependency on aenum module
-* NEW: (still incomplete) pkg2zip's "-x" functionality to extract PS3/PSX/PSP/PSV/PSM packages (currently without license)
 * NEW: Rearranged format codes: 2/3 for results only; 99/98 for analysis output
 * NEW: Added meta data size to header fields
 * NEW: Added tool version
 * NEW: Added offsets, sizes and SHA-256 of items info to results
-* NEW: (still incomplete) Added separate platform and package type values to results
+* NEW: Added separate platform and package type values to results
+* NEW: Added linux shell scripts to automate creation of analysis data and to quickly analyze them
 * FIX: Off by 1 issue in parsing ItemEntries (did not affect any further processing)
 * FIX: Analysis output (-f 99) does not dump anymore on PS4 packages (added meta data check)
 * FIX: Analysis output (-f 99) shows correct file table index on PS4 packages
