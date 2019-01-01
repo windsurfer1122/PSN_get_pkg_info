@@ -287,6 +287,7 @@ CONST_PKG3_MAIN_HEADER_FIELDS = collections.OrderedDict([ \
     ( "DATARIV",   { "FORMAT": "s", "SIZE": 16, "DEBUG": 1, "DESC": "Data RIV", "SEP": "", }, ),
     #
     ( "KEYINDEX",  { "VIRTUAL": 1, "DEBUG": 1, "DESC": "Key Index for Decryption of Item Entries Table", }, ),
+    ( "AES_CTR",   { "VIRTUAL": 1, "DEBUG": 1, "DESC": "Keys for Decryption", }, ),
     ( "PARAM.SFO", { "VIRTUAL": -1, "DEBUG": 1, "DESC": "PARAM.SFO Item Name", }, ),
     ( "MDSIZE",    { "VIRTUAL": -1, "DEBUG": 1, "DESC": "Meta Data Size", }, ),
 ])
@@ -576,7 +577,7 @@ def specialToJSON(python_object):
         return {'__class__': 'bytes',
                 '__value__': convertBytesToHexString(python_object, sep="")}
     if isinstance(python_object, PkgAesCtrCounter):
-        return ""
+        return unicode(python_object)
     if isinstance(python_object, aenum.Enum):
         return unicode(python_object)
     raise TypeError("".join((repr(python_object), " is not JSON serializable")))
@@ -676,6 +677,9 @@ class PkgReader():
 
 
 class PkgAesCtrCounter():
+    def __str__(self):
+        return convertBytesToHexString(self._key, sep="")
+
     def __init__(self, key, iv):
         ## Python 2 workaround: must use bytes() for AES's .new()/.encrypt()/.decrypt() and hash's .update()
         self._key = bytes(key)
@@ -1709,7 +1713,11 @@ if __name__ == "__main__":
 
             ## If source is a JSON file then determine the first package url from it
             if Source.endswith(".json"):
-                print("# >>>>>>>>>> JSON Source:", Source)
+                if not 3 in Arguments.format \
+                and not 98 in Arguments.format:  ## Special case JSON output for parsing
+                    print("# >>>>>>>>>> JSON Source:", Source)
+                else:
+                    eprint("# >>>>>>>>>> JSON Source:", Source, prefix=None)
                 Headers = {"User-Agent": "Download/1.00 libhttp/6.02 (PlayStation 4)"}  ## Switch to PS4 headers
                 if Source.startswith("http:") \
                 or Source.startswith("https:"):
@@ -2103,7 +2111,6 @@ if __name__ == "__main__":
                         Results["PLATFORM"] = CONST_PLATFORM.PSM
                         Results["PKG_TYPE"] = CONST_PKG_TYPE.GAME
                         Results["PKG_EXTRACT_ROOT"] = os.path.join("psm", Results["TITLE_ID"])  ## TODO: maybe explicitly <PKG_|SFO_>TITLE_ID
-                        print(Results["PKG_EXTRACT_ROOT"])
                     ## UNKNOWN packages
                     else:
                         eprint("PKG content type {0}/{0:#0x} not supported.".format(Results["PKG_CONTENT_TYPE"]), Data_Stream.getSource(), prefix="[UNKNOWN] ")
