@@ -55,7 +55,7 @@ from builtins import bytes
 
 
 ## Version definition
-__version__ = "2018.12.31a3"
+__version__ = "2018.12.31"
 __author__ = "https://github.com/windsurfer1122/PSN_get_pkg_info"
 __license__ = "GPL"
 __copyright__ = "Copyright 2018, windsurfer1122"
@@ -236,7 +236,7 @@ class CONST_PLATFORM(aenum.OrderedEnum):
     PS3 = "PS3"
     PSX = "PSX"
     PSP = "PSP"
-    PSV = "VITA"
+    PSV = "PSV"
     PSM = "PSM"
     PS4 = "PS4"
 ## --> Package Types
@@ -574,6 +574,8 @@ def specialToJSON(python_object):
                 '__value__': convertBytesToHexString(python_object, sep="")}
     if isinstance(python_object, PkgAesCtrCounter):
         return ""
+    if isinstance(python_object, aenum.Enum):
+        return str(python_object)
     raise TypeError("".join((repr(python_object), " is not JSON serializable")))
 
 def convertBytesToHexString(data, format="", sep=" "):
@@ -1593,7 +1595,7 @@ def createArgParser():
     help_extract = "Extract PS3/PSX/PSP/PSV/PSM package in ux0-style hierarchy.\n\
   Specify a top path where to create the directories and files, e.g. \".\"."
     ## --> Overwrite
-    help_overwrite = "Allow options \"--raw\" to overwrite existing files."
+    help_overwrite = "Allow options \"--raw\"/\"--extract\" to overwrite existing files."
     ## --> Unclean
     help_unclean = "".join(("Do not clean up international/english tile, except for condensing\n\
 multiple white spaces incl. new line to a single space.\n\
@@ -1622,7 +1624,7 @@ If you state URLs then only the necessary bytes are downloaded into memory.\nNot
     parser.add_argument("source", nargs="+", help="Path or URL to PKG or JSON file")
     parser.add_argument("--format", "-f", metavar="CODE", type=int, action="append", choices=choices_format, help=help_format)
     parser.add_argument("--raw", metavar="TARGETPATH", help=help_raw)
-    parser.add_argument("--extract", "-x", metavar="TOPPATH", help=help_extract)
+    parser.add_argument("--extract", "-x", metavar="TOPPATH", help=argparse.SUPPRESS)  #help_extract
     parser.add_argument("--overwrite", action="store_true", help=help_overwrite)
     parser.add_argument("--unclean", "-u", action="store_true", help=help_unclean)
     parser.add_argument("--itementries", action="store_true", help=help_itementries)
@@ -2497,7 +2499,9 @@ if __name__ == "__main__":
                     JSON_Output = collections.OrderedDict()
                     #
                     JSON_Output["results"] = collections.OrderedDict()
-                    JSON_Output["results"]["npsType"] = Results["NPS_TYPE"]
+                    if "TOOL_VERSION" in Results \
+                    and Results["TOOL_VERSION"].strip():
+                        JSON_Output["results"]["toolVersion"] = Results["TOOL_VERSION"]
                     if "TITLE_ID" in Results \
                     and Results["TITLE_ID"].strip():
                         JSON_Output["results"]["titleId"] = Results["TITLE_ID"]
@@ -2531,11 +2535,6 @@ if __name__ == "__main__":
                     if "CONTENT_ID" in Results \
                     and Results["CONTENT_ID"].strip():
                         JSON_Output["results"]["contentId"] = Results["CONTENT_ID"]
-                        if "SFO_CONTENT_ID" in Results \
-                        and Results["SFO_CONTENT_ID"].strip() \
-                        and "PKG_CONTENT_ID" in Results \
-                        and Results["PKG_CONTENT_ID"].strip() != Results["SFO_CONTENT_ID"].strip():
-                            JSON_Output["results"]["pkgContentId"] = Results["PKG_CONTENT_ID"]
                     if "PKG_TOTAL_SIZE" in Results \
                     and Results["PKG_TOTAL_SIZE"] > 0:
                         JSON_Output["results"]["pkgTotalSize"] = Results["PKG_TOTAL_SIZE"]
@@ -2546,25 +2545,74 @@ if __name__ == "__main__":
                     if "TITLE_UPDATE_URL" in Results \
                     and Results["TITLE_UPDATE_URL"].strip():
                         JSON_Output["results"]["titleUpdateUrl"] = Results["TITLE_UPDATE_URL"]
+                    JSON_Output["results"]["npsType"] = Results["NPS_TYPE"]
+                    #
+                    if "PKG_CONTENT_ID" in Results \
+                    and Results["PKG_CONTENT_ID"].strip():
+                        JSON_Output["results"]["pkgContentId"] = Results["PKG_CONTENT_ID"]
+                    if "PKG_SFO_OFFSET" in Results:
+                        JSON_Output["results"]["pkgSfoOffset"] = Results["PKG_SFO_OFFSET"]
+                    if "PKG_SFO_OFFSET" in Results:
+                        JSON_Output["results"]["pkgSfoSize"] = Results["PKG_SFO_SIZE"]
+                    if "PKG_DRM_TYPE" in Results:
+                        JSON_Output["results"]["pkgDrmType"] = Results["PKG_DRM_TYPE"]
+                    if "PKG_CONTENT_TYPE" in Results:
+                        JSON_Output["results"]["pkgContentType"] = Results["PKG_CONTENT_TYPE"]
+                    if "PKG_TAIL_SIZE" in Results:
+                        JSON_Output["results"]["pkgTailSize"] = Results["PKG_TAIL_SIZE"]
+                    if "PKG_TAIL_SHA1" in Results:
+                        JSON_Output["results"]["pkgTailSha1"] = Results["PKG_TAIL_SHA1"]
+                    if "ITEMS_INFO_SHA256" in Results:
+                        JSON_Output["results"]["itemsInfoSha256"] = Results["ITEMS_INFO_SHA256"]
+                    if "ITEMS_INFO_SIZE" in Results:
+                        JSON_Output["results"]["itemsInfoSize"] = Results["ITEMS_INFO_SIZE"]
+                    if "ITEM_ENTRIES_OFS" in Results:
+                        JSON_Output["results"]["itemsEntriesOfs"] = Results["ITEM_ENTRIES_OFS"]
+                    if "ITEM_ENTRIES_SIZE" in Results:
+                        JSON_Output["results"]["itemsEntriesSize"] = Results["ITEM_ENTRIES_SIZE"]
+                    if "ITEM_NAMES_OFS" in Results:
+                        JSON_Output["results"]["itemsNamesOfs"] = Results["ITEM_NAMES_OFS"]
+                    if "ITEM_NAMES_SIZE" in Results:
+                        JSON_Output["results"]["itemsNamesSize"] = Results["ITEM_NAMES_SIZE"]
+                    if "SFO_TITLE_ID" in Results:
+                        JSON_Output["results"]["sfoTitleId"] = Results["SFO_TITLE_ID"]
+                    if "SFO_CATEGORY" in Results \
+                    and Results["SFO_CATEGORY"].strip():
+                        JSON_Output["results"]["sfoCategory"] = Results["SFO_CATEGORY"]
+                    if "SFO_CONTENT_ID" in Results \
+                    and Results["SFO_CONTENT_ID"].strip():
+                        JSON_Output["results"]["sfoContentId"] = Results["SFO_CONTENT_ID"]
+                    if "PLATFORM" in Results:
+                        JSON_Output["results"]["pkgPlatform"] = Results["PLATFORM"]
+                    if "PKG_TYPE" in Results:
+                        JSON_Output["results"]["pkgType"] = Results["PKG_TYPE"]
                     #
                     if Output_Format == 98:  ## Analysis JSON Output
-                        JSON_Output["headerFields"] = Header_Fields
-                        del JSON_Output["headerFields"]["STRUCTURE_DEF"]
+                        JSON_Output["headerFields"] = copy.copy(Header_Fields)
+                        if "STRUCTURE_DEF" in JSON_Output["headerFields"]:
+                            del JSON_Output["headerFields"]["STRUCTURE_DEF"]
                         if Ext_Header_Fields:
-                            JSON_Output["extHeaderFields"] = Ext_Header_Fields
-                            del JSON_Output["extHeaderFields"]["STRUCTURE_DEF"]
+                            JSON_Output["extHeaderFields"] = copy.copy(Ext_Header_Fields)
+                            if "STRUCTURE_DEF" in JSON_Output["extHeaderFields"]:
+                                del JSON_Output["extHeaderFields"]["STRUCTURE_DEF"]
                         if Meta_Data:
-                            JSON_Output["metaData"] = Meta_Data
+                            JSON_Output["metaData"] = copy.copy(Meta_Data)
+                            if "STRUCTURE_DEF" in JSON_Output["metaData"]:
+                                del JSON_Output["metaData"]["STRUCTURE_DEF"]
                         if Sfo_Values:
-                            JSON_Output["paramSfo"] = Sfo_Values
+                            JSON_Output["paramSfo"] = copy.copy(Sfo_Values)
+                            if "STRUCTURE_DEF" in JSON_Output["paramSfo"]:
+                                del JSON_Output["paramSfo"]["STRUCTURE_DEF"]
                         if Item_Entries:
                             JSON_Output["itemEntries"] = copy.deepcopy(Item_Entries)
                             for Item_Entry in JSON_Output["itemEntries"]:
-                                del Item_Entry["STRUCTURE_DEF"]
+                                if "STRUCTURE_DEF" in Item_Entry:
+                                    del Item_Entry["STRUCTURE_DEF"]
                         if File_Table:
                             JSON_Output["fileTable"] = copy.deepcopy(File_Table)
                             for File_Entry in JSON_Output["fileTable"]:
-                                del File_Entry["STRUCTURE_DEF"]
+                                if "STRUCTURE_DEF" in File_Entry:
+                                    del File_Entry["STRUCTURE_DEF"]
                     #
                     print(json.dumps(JSON_Output, ensure_ascii=False, indent=2, default=specialToJSON))
                     del JSON_Output
