@@ -2,7 +2,7 @@
 
 usage()
 {
-  printf -- 'usage: %s [-h] [-r] [DIR ...]\n' "$(basename "${0}")"
+  printf -- 'usage: %s [-h] [-r] [-f INPUTFILE] [DIR ...]\n' "$(basename "${0}")"
   printf -- '\n'
   printf -- 'Search info files with analysis data of package files.\n'
   printf -- '\n'
@@ -11,6 +11,7 @@ usage()
   printf -- '\n'
   printf -- 'optional arguments:\n'
   printf -- '  -h   Show this help message and exit\n'
+  printf -- '  -f   Take initial file list from specified input file (per each directory)\n'
   printf -- '  -r   Replace default directories with dirs instead of appending these\n'
   printf -- '\n'
   printf -- 'default directories:\n'
@@ -39,10 +40,10 @@ main()
 {
   ## Localize and initialize variables
   local OPTION OPTARG OPTIND
-  local HELP REPLACEDIRS
+  local HELP REPLACEDIRS INITIALFILELIST
   local DEFAULTDIRS DIRS DIR
   local IFS OLDIFS TABIFS
-  local GREP GREP_OUTPUT UNIQUE GREP_DISPLAY FILELIST NEWFILELIST
+  local GREP GREP_OUTPUT UNIQUE GREP_DISPLAY FILELIST NEWFILELIST LINE REEVAL
   local MAXCOUNT COUNT
   MAXCOUNT=99
   #
@@ -68,11 +69,12 @@ main()
   DIRS="${DEFAULTDIRS}"
 
   ## Process command line options
-  while getopts 'hfursd:' OPTION
+  while getopts 'hrf:' OPTION
    do
     case "${OPTION}" in
      ('h'|'?') HELP=1 ;;
      ('r') set_variable REPLACEDIRS 1 ;;
+     ('f') set_variable INITIALFILELIST "${OPTARG}" ;;
     esac
   done
   shift $(( ${OPTIND} - 1))
@@ -115,7 +117,17 @@ main()
   #UNIQUE=1
   #
   ## KEYINDEX
-  #GREP_OUTPUT="-o	-e	KEYINDEX.*: [[:digit:]]*	-e	Key Index [[:digit:]]*"
+  #GREP_OUTPUT='-o	-e	KEYINDEX.*: [[:digit:]]*	-e	Key Index [[:digit:]]*'
+  #UNIQUE=1
+  #
+  ## SFO Category
+  #GREP_OUTPUT='-e	SFO_CATEGORY'
+  #UNIQUE=1
+  #
+  ## Wrong platform
+  #GREP_1='-L	-e	^results\\[\\\"PLATFORM\\\".*: ${DIR%x}$'
+  #GREP_OUTPUT='-e	^results\[\"PLATFORM\".*'
+  #REEVAL=1
   #UNIQUE=1
 
   ## Clean-up and check GREP_OUTPUT pattern
@@ -144,7 +156,26 @@ main()
     ## --> Starting file list
     [ -d "${DIR}/_tmp" ] || mkdir "${DIR}/_tmp"
     FILELIST="$(tempfile -d "${DIR}/_tmp")"
-    printf -- '%s' "${DIR}/_pkginfo" >"${FILELIST}"
+    : >"${FILELIST}"
+    if [ -n "${INITIALFILELIST:-}" ]
+     then
+      printf -- '# > Initial file list taken from %s\n' "${DIR}/${INITIALFILELIST}"
+      if [ -s "${DIR}/${INITIALFILELIST}" ]
+       then
+        IFS=
+        while read -r LINE
+         do
+          if [ -n "${LINE}" ]
+           then
+            printf -- '%s\0' "${DIR}/_pkginfo/${LINE}" >>"${FILELIST}"
+            LINE=""
+          fi
+        done < "${DIR}/${INITIALFILELIST}"
+        IFS="${OLDIFS}"
+      fi
+    else
+      printf -- '%s' "${DIR}/_pkginfo" >"${FILELIST}"
+    fi
     ## --> Process GREP_<n> patterns
     for COUNT in $(seq 1 "${MAXCOUNT}")
      do
@@ -152,6 +183,7 @@ main()
       #
       eval GREP=\"\${GREP_${COUNT}:-}\"
       [ -n "${GREP}" ] || break
+      [ "${REEVAL:-0}" -eq 0 ] || eval GREP=\""${GREP}"\"
       printf -- '# > Grep %s: %s\n' "${COUNT}" "${GREP}" | sed -e 's#\t# #g'
       #
       NEWFILELIST="$(tempfile -d "${DIR}/_tmp")"

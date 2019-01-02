@@ -8,7 +8,7 @@
 * NEW: Added offsets, sizes and SHA-256 of items info to results
 * NEW: Added separate platform and package type values to results
 * NEW: Added linux shell scripts to automate creation of analysis data and to quickly analyze them
-* FIX: Off by 1 issue in parsing ItemEntries (did not affect any further processing)
+* FIX: Fixed item info size calculation for some corner cases in parsing ItemEntries (did not affect any further processing)
 * FIX: Analysis output (-f 99) does not dump anymore on PS4 packages (added meta data check)
 * FIX: Analysis output (-f 99) shows correct file table index on PS4 packages
 * FIX: Removed structure definitions from JSON output
