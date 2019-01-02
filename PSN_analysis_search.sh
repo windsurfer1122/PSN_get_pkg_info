@@ -2,7 +2,7 @@
 
 usage()
 {
-  printf -- 'usage: %s [-h] [-r] [-f INPUTFILE] [DIR ...]\n' "$(basename "${0}")"
+  printf -- 'usage: %s [-h] [-f INPUTFILE] [-u] [-r] [DIR ...]\n' "$(basename "${0}")"
   printf -- '\n'
   printf -- 'Search info files with analysis data of package files.\n'
   printf -- '\n'
@@ -12,6 +12,7 @@ usage()
   printf -- 'optional arguments:\n'
   printf -- '  -h   Show this help message and exit\n'
   printf -- '  -f   Take initial file list from specified input file (per each directory)\n'
+  printf -- '  -u   Output only unique values including count'
   printf -- '  -r   Replace default directories with dirs instead of appending these\n'
   printf -- '\n'
   printf -- 'default directories:\n'
@@ -40,10 +41,10 @@ main()
 {
   ## Localize and initialize variables
   local OPTION OPTARG OPTIND
-  local HELP REPLACEDIRS INITIALFILELIST
+  local HELP INITIALFILELIST UNIQUE REPLACEDIRS
   local DEFAULTDIRS DIRS DIR
   local IFS OLDIFS TABIFS
-  local GREP GREP_OUTPUT UNIQUE GREP_DISPLAY FILELIST NEWFILELIST LINE REEVAL
+  local GREP GREP_OUTPUT GREP_DISPLAY FILELIST NEWFILELIST LINE REEVAL
   local MAXCOUNT COUNT
   MAXCOUNT=99
   #
@@ -69,12 +70,13 @@ main()
   DIRS="${DEFAULTDIRS}"
 
   ## Process command line options
-  while getopts 'hrf:' OPTION
+  while getopts 'hf:ur' OPTION
    do
     case "${OPTION}" in
      ('h'|'?') HELP=1 ;;
-     ('r') set_variable REPLACEDIRS 1 ;;
      ('f') set_variable INITIALFILELIST "${OPTARG}" ;;
+     ('u') set_variable UNIQUE 1 ;;
+     ('r') set_variable REPLACEDIRS 1 ;;
     esac
   done
   shift $(( ${OPTIND} - 1))
@@ -107,28 +109,24 @@ main()
   #
   ## PKG3 Header Types: TYPE
   #GREP_OUTPUT="-e	^headerfields\\[\\\"TYPE\\\".*"
-  #UNIQUE=1
   #
   ## PKG3 Header Type 1 or 2: HDRSIZE
   #GREP_1='-l	-e	^headerfields\[\"TYPE\".*:.* = 0x1$'
   #GREP_1='-l	-e	^headerfields\[\"TYPE\".*:.* = 0x2$'
   #GREP_2='-l	-e	^headerfields\[\"MAGIC\".*:.* = 0x7f504b47$'
-  #GREP_OUTPUT="-e	^headerfields\\[\\\"HDRSIZE\\\".*"
-  #UNIQUE=1
+  #GREP_OUTPUT='-e	^headerfields\[\"HDRSIZE\".*'
+  #GREP_OUTPUT='-e	^headerfields\[\"HDRSIZE\".*	-e	^results\[\"PLATFORM\".*'
   #
   ## KEYINDEX
   #GREP_OUTPUT='-o	-e	KEYINDEX.*: [[:digit:]]*	-e	Key Index [[:digit:]]*'
-  #UNIQUE=1
   #
   ## SFO Category
   #GREP_OUTPUT='-e	SFO_CATEGORY'
-  #UNIQUE=1
   #
   ## Wrong platform
   #GREP_1='-L	-e	^results\\[\\\"PLATFORM\\\".*: ${DIR%x}$'
   #GREP_OUTPUT='-e	^results\[\"PLATFORM\".*'
   #REEVAL=1
-  #UNIQUE=1
 
   ## Clean-up and check GREP_OUTPUT pattern
   set -u
@@ -189,7 +187,7 @@ main()
       NEWFILELIST="$(tempfile -d "${DIR}/_tmp")"
       IFS="${TABIFS}"
       #set -x
-      { cat -- "${FILELIST}" | xargs -0 -r -L 10 -- grep -R -Z ${GREP} -- >"${NEWFILELIST}" ; } || :
+      { sort -z -- "${FILELIST}" | xargs -0 -r -L 10 -- grep -R -Z ${GREP} -- >"${NEWFILELIST}" ; } || :
       #set +x
       IFS="${OLDIFS}"
       #
@@ -197,7 +195,7 @@ main()
       FILELIST="${NEWFILELIST}"
       #
       [ -s "${FILELIST}" ] || break
-      #cat -- "${FILELIST}" | xargs -0 -r -L 1
+      #sort -z -- "${FILELIST}" | xargs -0 -r -L 1
     done  ## COUNT
 
     ## Show wanted output of remaining package info files via GREP_OUTPUT pattern
@@ -212,9 +210,9 @@ main()
       #set -x
       if [ "${UNIQUE:-0}" -eq 1 ]  ## unique values
        then
-        { cat -- "${FILELIST}" | xargs -0 -r -L 10 -- grep -R -h ${GREP_OUTPUT} -- | sort | uniq -c ; } || :
+        { sort -z -- "${FILELIST}" | xargs -0 -r -L 10 -- grep -R -h ${GREP_OUTPUT} -- | sort | uniq -c ; } || :
       else
-        { cat -- "${FILELIST}" | xargs -0 -r -L 10 -- grep -R -H ${GREP_OUTPUT} -- ; } || :
+        { sort -z -- "${FILELIST}" | xargs -0 -r -L 10 -- grep -R -H ${GREP_OUTPUT} -- | sort ; } || :
       fi
       #set +x
       IFS="${OLDIFS}"
