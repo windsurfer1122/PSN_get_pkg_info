@@ -2,25 +2,28 @@
 
 usage()
 {
-  printf -- 'usage: %s [-h] [-f INPUTFILE] [-u] [-r] [DIR ...]\n' "$(basename "${0}")"
+  printf -- 'usage: %s [-h] [-u] [-o] [-n] [-l INPUTFILE] [-v] [-r] [DIR ...]\n' "$(basename "${0}")"
   printf -- '\n'
   printf -- 'Search info files with analysis data of package files.\n'
   printf -- '\n'
   printf -- 'positional arguments:\n'
-  printf -- '  dir  Path to directory to process\n'
+  printf -- '  dir  Path to directory to process.\n'
   printf -- '\n'
   printf -- 'optional arguments:\n'
-  printf -- '  -h   Show this help message and exit\n'
-  printf -- '  -f   Take initial file list from specified input file (per each directory)\n'
-  printf -- '  -u   Output only unique values including count'
-  printf -- '  -r   Replace default directories with dirs instead of appending these\n'
+  printf -- '  -h   Show this help message and exit.\n'
+  printf -- '  -u   Output unique values only including count.\n'
+  printf -- '  -o   Use grep --only-matching for GREP_OUTPUT. Useful in combination with unique values.\n'
+  printf -- '  -n   No file names in results via grep -h for GREP_OUTPUT. Useful in combination with unique values.\n'
+  printf -- '  -l   Take initial file list from specified input file (per each directory).\n'
+  printf -- '  -v   Use xargs --verbose to show each grep command.\n'
+  printf -- '  -r   Replace default directories with dirs instead of appending these.\n'
   printf -- '\n'
   printf -- 'default directories:\n'
   printf -- '  %s\n' "${DEFAULTDIRS}"
   exit 2
 }
 
-set_variable()
+set_variable_once()
 {
   local VARNAME VALUE
 
@@ -41,10 +44,10 @@ main()
 {
   ## Localize and initialize variables
   local OPTION OPTARG OPTIND
-  local HELP INITIALFILELIST UNIQUE REPLACEDIRS
+  local HELP INITIALFILELIST UNIQUE REPLACEDIRS VERBOSE ONLYMATCHING NOFILENAMES
   local DEFAULTDIRS DIRS DIR
   local IFS OLDIFS TABIFS
-  local GREP GREP_OUTPUT GREP_DISPLAY FILELIST NEWFILELIST LINE REEVAL
+  local GREP GREP_OUTPUT GREP_DISPLAY FILELIST NEWFILELIST LINE REEVAL VALUE
   local MAXCOUNT COUNT
   MAXCOUNT=99
   #
@@ -52,6 +55,12 @@ main()
    do
     local "$(eval printf -- 'GREP_%s' "${COUNT}")"
     unset "$(eval printf -- 'GREP_%s' "${COUNT}")"
+  done
+  #
+  for COUNT in $(seq 1 "${MAXCOUNT}")
+   do
+    local "$(eval printf -- 'VALUE_%s' "${COUNT}")"
+    unset "$(eval printf -- 'VALUE_%s' "${COUNT}")"
   done
   #
   OLDIFS="${IFS}"
@@ -70,13 +79,16 @@ main()
   DIRS="${DEFAULTDIRS}"
 
   ## Process command line options
-  while getopts 'hf:ur' OPTION
+  while getopts 'hl:urvon' OPTION
    do
     case "${OPTION}" in
      ('h'|'?') HELP=1 ;;
-     ('f') set_variable INITIALFILELIST "${OPTARG}" ;;
-     ('u') set_variable UNIQUE 1 ;;
-     ('r') set_variable REPLACEDIRS 1 ;;
+     ('u') set_variable_once UNIQUE 1 ;;
+     ('o') set_variable_once ONLYMATCHING "-o" ;;
+     ('n') set_variable_once NOFILENAMES "-h" ;;
+     ('l') set_variable_once INITIALFILELIST "${OPTARG}" ;;
+     ('v') set_variable_once VERBOSE "--verbose" ;;
+     ('r') set_variable_once REPLACEDIRS 1 ;;
     esac
   done
   shift $(( ${OPTIND} - 1))
@@ -101,6 +113,9 @@ main()
   ## Define grep pattern GREP_OUTPUT for the final result output
   ##   -l/-L will be removed, so GREP_<n> can be re-used
   ## Separate parameters with TAB (TAB will be used as IFS on grep commands)
+  ## Use REEVAL=1 if ${DIR} is part of your grep statement.
+  ##   Take care of the necessary extra escaping of special chars (backslash, quotes, etc.)
+  ## Use VALUE_<n> as supporting variables.
   set +u
   ##
   ## Examples:
@@ -118,15 +133,20 @@ main()
   #GREP_OUTPUT='-e	^headerfields\[\"HDRSIZE\".*	-e	^results\[\"PLATFORM\".*'
   #
   ## KEYINDEX
-  #GREP_OUTPUT='-o	-e	KEYINDEX.*: [[:digit:]]*	-e	Key Index [[:digit:]]*'
+  #GREP_OUTPUT='-e	KEYINDEX.*: [[:digit:]]*	-e	Key Index [[:digit:]]*'
   #
+  ## Different KEYINDEX in a single package
+  #VALUE_1='2'
+  #GREP_1="-l	-P	-e	Key Index[[:space:]]+(?!${VALUE_1}[[:space:]]+)"
+  #GREP_2="-l	-E	-e	KEYINDEX.*:[[:space:]]+${VALUE_1}[[:space:]]+"
+  #GREP_OUTPUT="-E	-e	KEYINDEX.*:[[:space:]]+[[:digit:]]+	-e	Key Index[[:space:]]+[[:digit:]]+"
   ## SFO Category
   #GREP_OUTPUT='-e	SFO_CATEGORY'
   #
   ## Wrong platform
+  #REEVAL=1
   #GREP_1='-L	-e	^results\\[\\\"PLATFORM\\\".*: ${DIR%x}$'
   #GREP_OUTPUT='-e	^results\[\"PLATFORM\".*'
-  #REEVAL=1
 
   ## Clean-up and check GREP_OUTPUT pattern
   set -u
@@ -187,7 +207,7 @@ main()
       NEWFILELIST="$(tempfile -d "${DIR}/_tmp")"
       IFS="${TABIFS}"
       #set -x
-      { sort -z -- "${FILELIST}" | xargs -0 -r -L 10 -- grep -R -Z ${GREP} -- >"${NEWFILELIST}" ; } || :
+      { sort -z -- "${FILELIST}" | xargs -0 -r -L 10 ${VERBOSE:-} -- grep -R -Z ${GREP} -- >"${NEWFILELIST}" ; } || :
       #set +x
       IFS="${OLDIFS}"
       #
@@ -210,9 +230,9 @@ main()
       #set -x
       if [ "${UNIQUE:-0}" -eq 1 ]  ## unique values
        then
-        { sort -z -- "${FILELIST}" | xargs -0 -r -L 10 -- grep -R -h ${GREP_OUTPUT} -- | sort | uniq -c ; } || :
+        { sort -z -- "${FILELIST}" | xargs -0 -r -L 10 ${VERBOSE:-} -- grep -R ${NOFILENAMES:--H} ${ONLYMATCHING:-} ${GREP_OUTPUT} -- | sort | uniq -c ; } || :
       else
-        { sort -z -- "${FILELIST}" | xargs -0 -r -L 10 -- grep -R -H ${GREP_OUTPUT} -- | sort ; } || :
+        { sort -z -- "${FILELIST}" | xargs -0 -r -L 10 ${VERBOSE:-} -- grep -R ${NOFILENAMES:--H} ${ONLYMATCHING:-} ${GREP_OUTPUT} -- | sort ; } || :
       fi
       #set +x
       IFS="${OLDIFS}"
