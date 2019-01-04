@@ -133,12 +133,12 @@ main()
   #GREP_OUTPUT='-e	^headerfields\[\"HDRSIZE\".*	-e	^results\[\"PLATFORM\".*'
   #
   ## KEYINDEX
-  #GREP_OUTPUT='-e	KEYINDEX.*: [[:digit:]]*	-e	Key Index [[:digit:]]*'
+  #GREP_OUTPUT='-E	-e	KEYINDEX.*:[[:space:]]+[[:digit:]]+	-e	Key Index[[:space:]]+[[:digit:]]+'
   #
-  ## Different KEYINDEX in a single package
-  #VALUE_1='2'
-  #GREP_1="-l	-P	-e	Key Index[[:space:]]+(?!${VALUE_1}[[:space:]]+)"
-  #GREP_2="-l	-E	-e	KEYINDEX.*:[[:space:]]+${VALUE_1}[[:space:]]+"
+  ## Specific KEYINDEX (GREP_1 only) or different KEYINDEX in a single package (GREP_1 & GREP_2)
+  #VALUE_1='0'
+  #GREP_1="-l	-E	-e	KEYINDEX.*:[[:space:]]+${VALUE_1}[[:space:]]+"
+  #GREP_2="-l	-P	-e	Key Index[[:space:]]+(?!${VALUE_1}[[:space:]]+)" ; ## different KEYINDEX in a single package ("not VALUE_1" via PCRE lookahead)
   #GREP_OUTPUT="-E	-e	KEYINDEX.*:[[:space:]]+[[:digit:]]+	-e	Key Index[[:space:]]+[[:digit:]]+"
   ## SFO Category
   #GREP_OUTPUT='-e	SFO_CATEGORY'
