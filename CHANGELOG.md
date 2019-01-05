@@ -1,6 +1,12 @@
 # PSN_get_pkg_info.py - Changelog
 
-## 2018-12-31
+## 2019.01.13 alpha 1  (planned release date)
+* NEW: Added item flags to output format 99 for detailed analysis
+* NEW: Added checks for extraction targets to avoid issues before reading packages
+* INTERNAL: Moved all extraction code in one block after data determination and output, so that analysis output is present even if any extraction fails
+* INTERNAL: Adopted code further to coding style
+
+## 2018.12.31
 * NEW: dependency on aenum module
 * NEW: Rearranged format codes: 2/3 for results only; 99/98 for analysis output
 * NEW: Added meta data size to header fields
@@ -16,8 +22,8 @@
 * INTERNAL: Use meta data 0xD for item entries offset
 * INTERNAL: Added checks for items info offsets and sizes
 
-## 2018-12-26
-* NEW: pkg_dec's "--raw" functionality to create a decrypted package file of PS3/PSX/PSP/PSV/PSM package
+## 2018.12.26
+* NEW: pkg_dec's `--raw` extraction functionality to create a decrypted package file of PS3/PSX/PSP/PSV/PSM package
 * NEW: JSON output of analysis data
 * NEW: Added detection of meta data ID 13/0x0D
 * NEW: Show unaligned access, as this is not common

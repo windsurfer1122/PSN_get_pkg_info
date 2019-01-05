@@ -7,7 +7,7 @@ usage()
   printf -- 'Create info files with analysis data of package files.\n'
   printf -- '\n'
   printf -- 'positional arguments:\n'
-  printf -- '  dir  Path to directory to process\n'
+  printf -- '  DIR  Path to directory to process\n'
   printf -- '\n'
   printf -- 'optional arguments:\n'
   printf -- '  -h   Show this help message and exit\n'

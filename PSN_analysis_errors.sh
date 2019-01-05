@@ -2,12 +2,12 @@
 
 usage()
 {
-  printf -- 'usage: %s [-h] [-r] [dir ...]\n' "$(basename "${0}")"
+  printf -- 'usage: %s [-h] [-r] [DIR ...]\n' "$(basename "${0}")"
   printf -- '\n'
   printf -- 'List error logs of info files creation.\n'
   printf -- '\n'
   printf -- 'positional arguments:\n'
-  printf -- '  dir  Path to directory to process\n'
+  printf -- '  DIR  Path to directory to process\n'
   printf -- '\n'
   printf -- 'optional arguments:\n'
   printf -- '  -h   Show this help message and exit\n'

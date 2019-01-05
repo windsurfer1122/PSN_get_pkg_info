@@ -7,7 +7,7 @@ usage()
   printf -- 'Search info files with analysis data of package files.\n'
   printf -- '\n'
   printf -- 'positional arguments:\n'
-  printf -- '  dir  Path to directory to process.\n'
+  printf -- '  DIR  Path to directory to process.\n'
   printf -- '\n'
   printf -- 'optional arguments:\n'
   printf -- '  -h   Show this help message and exit.\n'
@@ -147,6 +147,16 @@ main()
   #REEVAL=1
   #GREP_1='-L	-e	^results\\[\\\"PLATFORM\\\".*: ${DIR%x}$'
   #GREP_OUTPUT='-e	^results\[\"PLATFORM\".*'
+  #
+  ## search special item/file names
+  #VALUE_1='sce_sys/package/digs.bin' ; VALUE_2='18' ; ## as it is extracted encrypted (not decrypted) as body.bin; only in PSV packages with flags 0xa0007018/0xa0007818 (no other items with 0x...18)
+  #VALUE_1='sce_sys/package/body.bin' ; VALUE_2='03' ; ## see also digs.bin; only in PSM packages with flags 0xc0000003
+  #VALUE_1='sce_sys/package/head.bin' ; VALUE_2='03' ; ## only in PSM packages with flags 0xc0000003
+  #VALUE_1='sce_sys/package/tail.bin' ; VALUE_2='03' ; ## only in PSM packages with flags 0xc0000003
+  #VALUE_1='sce_sys/package/stat.bin' ; VALUE_2='03' ; ## only in PSM packages with flags 0xc0000003
+  #VALUE_1='content_id' ; VALUE_2='' ; ## none found, no item with this name
+  #GREP_OUTPUT="-E	-e	Flags[[:space:]]+.*Name[[:space:]]+\\\".*${VALUE_1}" ; ## search item name part
+  #GREP_OUTPUT="-E	-e	Flags[[:space:]]+0x[[:xdigit:]]{6}${VALUE_2}.*\$" ; ## search item flags part
 
   ## Clean-up and check GREP_OUTPUT pattern
   set -u
