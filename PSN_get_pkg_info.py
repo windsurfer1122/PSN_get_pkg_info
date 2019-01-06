@@ -57,7 +57,7 @@ from builtins import bytes
 
 
 ## Version definition
-__version__ = "2019.01.13a1"
+__version__ = "2019.01.00a2"
 __author__ = "https://github.com/windsurfer1122/PSN_get_pkg_info"
 __license__ = "GPL"
 __copyright__ = "Copyright 2018, windsurfer1122"
@@ -214,6 +214,7 @@ OUTPUT_FORMATS = collections.OrderedDict([ \
    ( 1, "Linux Shell Variable Output" ),
    ( 2, "Results Output" ),
    ( 3, "Results Output in JSON format" ),
+   ( 50, "Additional debugging Output (Extractions, etc.)" ),
    ( 98, "Analysis Output in JSON format" ),
    ( 99, "Analysis Output" ),
 ])
@@ -234,7 +235,7 @@ CONST_DATATYPE_ENCRYPTED = "ENCRYPTED"
 CONST_DATATYPE_UNENCRYPTED = "UNENCRYPTED"
 
 ## Generic PKG definitions
-CONST_CONTENT_ID_SIZE = 0x24
+CONST_CONTENT_ID_SIZE = 0x30  ## not 0x24 anymore, due to pkg2zip's extraction code for PSM's RW/System/content_id
 CONST_SHA256_HASH_SIZE = 0x20
 #
 ## --> Platforms
@@ -290,7 +291,7 @@ CONST_PKG3_MAIN_HEADER_FIELDS = collections.OrderedDict([ \
     ( "DATAOFS",      { "FORMAT": "Q", "DEBUG": 1, "DESC": "Data Offset", }, ),
     ( "DATASIZE",     { "FORMAT": "Q", "DEBUG": 1, "DESC": "Data Size", }, ),
     ( "CONTENT_ID",   { "FORMAT": "s", "SIZE": CONST_CONTENT_ID_SIZE, "CONV": 0x0204, "DEBUG": 1, "DESC": "Content ID", }, ),
-    ( "PADDING1",     { "FORMAT": "s", "SIZE": 12, "DEBUG": 3, "DESC": "Padding", "SKIP": True, }, ),
+    #( "PADDING1",     { "FORMAT": "s", "SIZE": 12, "DEBUG": 3, "DESC": "Padding", "SKIP": True, }, ),  ## changed due to pkg2zip's extraction code for PSM's RW/System/content_id
     ( "DIGEST",       { "FORMAT": "s", "SIZE": 16, "DEBUG": 1, "DESC": "Digest", "SEP": "", }, ),
     ( "DATARIV",      { "FORMAT": "s", "SIZE": 16, "DEBUG": 1, "DESC": "Data RIV", "SEP": "", }, ),
     #
@@ -368,7 +369,7 @@ CONST_PKG4_MAIN_HEADER_FIELDS = collections.OrderedDict([ \
     ( "BODYSIZE",     { "FORMAT": "Q", "DEBUG": 1, "DESC": "Body Size", }, ),
     ( "PADDING1",     { "FORMAT": "s", "SIZE": 16, "DEBUG": 3, "DESC": "Padding", "SKIP": True, }, ),
     ( "CONTENT_ID",   { "FORMAT": "s", "SIZE": CONST_CONTENT_ID_SIZE, "DEBUG": 1, "CONV": 0x0204, "DESC": "Content ID", }, ),
-    ( "PADDING2",     { "FORMAT": "s", "SIZE": 12, "DEBUG": 3, "DESC": "Padding", }, ),
+    #( "PADDING2",     { "FORMAT": "s", "SIZE": 12, "DEBUG": 3, "DESC": "Padding", }, ),  ## changed due to pkg2zip's extraction code for PSM's RW/System/content_id
     ( "DRMTYPE",      { "FORMAT": "L", "DEBUG": 1, "DESC": "DRM Type", }, ),
     ( "CONTTYPE",     { "FORMAT": "L", "DEBUG": 1, "DESC": "Content Type", }, ),
     ( "CONTFLAGS",    { "FORMAT": "L", "DEBUG": 1, "DESC": "Content Flags", }, ),
@@ -1419,7 +1420,7 @@ def parsePkg3ItemEntries(header_fields, meta_data, input_stream, function_debug_
     return item_entries, item_entries_bytes, item_names_bytes, bytearray(hash_sha256.digest())
 
 
-def processPkg3Item(header_fields, item_entry, input_stream, item_data, raw_stream, extract_ux0_stream, extract_content_stream, function_debug_level):
+def processPkg3Item(header_fields, item_entry, input_stream, item_data, extractions, function_debug_level):
     if function_debug_level >= 2:
         dprint(">>>>> PKG3 Body Item Entry #{} {}:".format(item_entry["INDEX"], item_entry["NAME"]))
 
@@ -1428,16 +1429,17 @@ def processPkg3Item(header_fields, item_entry, input_stream, item_data, raw_stre
     and not item_data is None:
         item_data[CONST_DATATYPE_ENCRYPTED] = bytearray()
         item_data[CONST_DATATYPE_DECRYPTED] = bytearray()
+    #
+    if extractions:
+        for key in extractions:
+            extract = extractions[key]
+            extract["ITEM_BYTES_WRITTEN"] = 0
+        del extract
+        del key
 
     ## Retrieve PKG3 Item Data from input stream
     if function_debug_level >= 2:
         dprint("{} PKG3 item data from encrypted data with offset {:#x}-{:#x}+{:#x}={:#x} and size {}+{}={}".format("Get" if input_stream else "Process",item_entry["DATAOFS"], item_entry["ALIGN"]["OFSDELTA"], header_fields["DATAOFS"], header_fields["DATAOFS"]+item_entry["ALIGN"]["OFS"], item_entry["DATASIZE"], item_entry["ALIGN"]["SIZEDELTA"], item_entry["ALIGN"]["SIZE"]))
-        if raw_stream:
-            dprint("Write PKG3 decrypted item data from offset {:#x} and size {}".format(header_fields["DATAOFS"]+item_entry["ALIGN"]["OFS"], item_entry["ALIGN"]["SIZE"]), prefix="[RAW] ")
-        if extract_ux0_stream:
-            dprint("Write PKG3 decrypted item data from offset {:#x} and size {}".format(header_fields["DATAOFS"]+item_entry["ALIGN"]["OFS"], item_entry["ALIGN"]["SIZE"]), prefix="[UX0] ")
-        if extract_content_stream:
-            dprint("Write PKG3 decrypted item data from offset {:#x} and size {}".format(header_fields["DATAOFS"]+item_entry["ALIGN"]["OFS"], item_entry["ALIGN"]["SIZE"]), prefix="[CONTENT] ")
     #
     data_offset = item_entry["ALIGN"]["OFS"]
     file_offset = header_fields["DATAOFS"]+data_offset
@@ -1491,14 +1493,26 @@ def processPkg3Item(header_fields, item_entry, input_stream, item_data, raw_stre
         #    hash decrypted_bytes
 
         ## Write extractions
-        if raw_stream:
-            raw_stream.write(decrypted_bytes)
-        #
-        if extract_ux0_stream:
-            extract_ux0_stream.write(decrypted_bytes[block_data_ofs:block_data_ofs+block_data_size])
-        #
-        if extract_content_stream:
-            extract_content_stream.write(decrypted_bytes[block_data_ofs:block_data_ofs+block_data_size])
+        if extractions:
+            for key in extractions:
+                extract = extractions[key]
+                if not "STREAM" in extract:
+                    continue
+                #
+                write_bytes = None
+                if extract["DATATYPE"] == CONST_DATATYPE_ENCRYPTED:
+                    write_bytes = encrypted_bytes
+                elif extract["DATATYPE"] == CONST_DATATYPE_DECRYPTED:
+                    write_bytes = decrypted_bytes
+                else:
+                    continue  ## TODO: error handling
+                #
+                if extract["ALIGNED"]:
+                    extract["ITEM_BYTES_WRITTEN"] += extract["STREAM"].write(write_bytes)
+                else:
+                    extract["ITEM_BYTES_WRITTEN"] += extract["STREAM"].write(write_bytes[block_data_ofs:block_data_ofs+block_data_size])
+            del key
+            del extract
 
         ## Prepare for next data block
         rest_size -= block_size
@@ -1508,6 +1522,18 @@ def processPkg3Item(header_fields, item_entry, input_stream, item_data, raw_stre
     #
     del encrypted_bytes
     del decrypted_bytes
+
+    ## Clean-up extractions
+    if extractions:
+        for key in extractions:
+            extract = extractions[key]
+            if "STREAM" in extract:
+                extract["BYTES_WRITTEN"] += extract["ITEM_BYTES_WRITTEN"]
+                if function_debug_level >= 2:
+                    dprint("[{}] Wrote {} PKG3 item data with {}size {}".format(extract["KEY"], extract["DATATYPE"].lower(), "aligned " if extract["ALIGNED"] else "", extract["ITEM_BYTES_WRITTEN"]))
+            del extract["ITEM_BYTES_WRITTEN"]
+        del extract
+        del key
 
     return
 
@@ -1598,33 +1624,67 @@ def parseSfo(sfo_bytes, function_debug_level):
     return sfo_values
 
 
-def createDirectory(target, dirtype, extracttype, overwrite, function_debug_level):
+def createDirectory(extract, dirtype, extracttype, overwrite, quiet, function_debug_level):
     result = None
 
+    if isinstance(extract, dict):
+        target_display = extract["ITEM_NAME"]
+        target = extract["TARGET"] = os.path.join(extract["ROOT"], extract["ITEM_EXTRACT_PATH"])
+    else:
+        target_display = target = extract
+
     if not os.path.exists(target):
-        result = True
-        eprint("Creating {} extraction directory:".format(dirtype), target, prefix="[{}] ".format(extracttype))
+        result = 0
+        if quiet <= 0:
+            eprint("Create {} directory \"{}\"".format(dirtype, target_display), prefix="[{}] ".format(extracttype))
         os.makedirs(target)
     elif os.path.isdir(target):
-        result = overwrite
-        #
         xprint = None
         if overwrite:
-            xprint = dprint
+            result = 0
+            if function_debug_level >= 2:
+                xprint = dprint
         else:
+            result = 1
             xprint = eprint
         #
         if xprint:
-            xprint("[{}] {} extraction directory already exists and will".format(extracttype, dirtype.capitalize()), end=" ")
+            xprint("[{}] {}{} directory already exists and will".format(extracttype, dirtype[0].upper(), dirtype[1:]), end=" ")
             if not overwrite:
                 xprint("*NOT*", end=" ", prefix=None)
             xprint("be written:", target, prefix=None)
     else:
-        result = False
-        eprint("[{}] {} extraction path already exists and is NOT a DIRECTORY:".format(extracttype, dirtype.capitalize()), target)
+        result = -1
+        eprint("[{}] {}{} path already exists and is NOT a DIRECTORY:".format(extracttype, dirtype[0].upper(), dirtype[1:]), target)
 
     return result
 
+
+def checkExtractFile(extract, overwrite, quiet, function_debug_level):
+    result = None
+    if "STREAM" in extract:
+        del extract["STREAM"]
+
+    extract["TARGET_EXISTS"] = os.path.exists(extract["TARGET"])
+    if extract["TARGET_EXISTS"] \
+    and os.path.isdir(extract["TARGET"]):
+        result = -1
+        eprint("[{}] Target file path already exists and is A DIRECTORY.".format(extract["KEY"]), extract["TARGET"] if quiet >= 1 else "")
+    elif extract["TARGET_EXISTS"] \
+    and not overwrite:
+        result = 1
+        eprint("[{}] Target file already exists and will *NOT* be overwritten.".format(extract["KEY"]), extract["TARGET"] if quiet >= 1 else "")
+    else:
+        result = 0
+
+        if extract["TARGET_EXISTS"] \
+        and overwrite \
+        and function_debug_level >= 1:
+            dprint("[{}] Target file already exists and will be OVERWRITTEN.".format(extract["KEY"]), extract["TARGET"] if quiet >= 1 else "")
+
+        extract["STREAM"] = io.open(extract["TARGET"], mode="wb", buffering=-1, encoding=None, errors=None, newline=None, closefd=True)
+
+    return result
 
 def createArgParser():
     ## argparse: https://docs.python.org/3/library/argparse.html
@@ -1647,6 +1707,11 @@ def createArgParser():
   Specify a top dir where to create the directories and files, e.g. \".\"."
     ## --> Overwrite
     help_overwrite = "Allow extract options, e.g. \"--raw\"/\"--ux0\", to overwrite existing files."
+    ## --> Quiet
+    help_quiet = "Extraction messages suppress level.\n\
+  0 = All extraction messages [default]\n\
+  1 = Only main extraction messages\n\
+  2 = No extraction messages\n\."
     ## --> Unclean
     help_unclean = "".join(("Do not clean up international/english tile, except for condensing\n\
 multiple white spaces incl. new line to a single space.\n\
@@ -1657,7 +1722,7 @@ Default is to clean up by replacing ", unicode(Replace_List), "\nand condensing 
     help_unknown = "Print unknown file ids in PS4 packages.\nUseful for analysis."
     ## --> Debug
     choices_debug = range(4)
-    help_debug = "Debug verbosity level\n\
+    help_debug = "Debug verbosity level.\n\
   0 = No debug info [default]\n\
   1 = Show parsed results only\n\
   2 = Additionally show raw PKG and SFO data plus read/write actions\n\
@@ -1678,6 +1743,7 @@ If you state URLs then only the necessary bytes are downloaded into memory.\nNot
     parser.add_argument("--ux0", metavar="TOPDIR", help=help_ux0)
     parser.add_argument("--content", metavar="TOPDIR", help=help_content)
     parser.add_argument("--overwrite", action="store_true", help=help_overwrite)
+    parser.add_argument("--quiet", metavar="LEVEL", type=int, default=0, help=help_quiet)
     parser.add_argument("--unclean", action="store_true", help=help_unclean)
     parser.add_argument("--itementries", action="store_true", help=help_itementries)
     parser.add_argument("--unknown", action="store_true", help=help_unknown)
@@ -1731,11 +1797,11 @@ if __name__ == "__main__":
                     Arguments.raw = -1
         if Arguments.ux0:
             Arguments.ux0 = os.path.normpath(Arguments.ux0)
-            if not createDirectory(Arguments.ux0, "top", CONST_EXTRACT_UX0, True, max(0, Debug_Level)):
+            if createDirectory(Arguments.ux0, "top extraction", CONST_EXTRACT_UX0, True, Arguments.quiet, max(0, Debug_Level)) != 0:
                 Arguments.ux0 = -1
         if Arguments.content:
             Arguments.content = os.path.normpath(Arguments.content)
-            if not createDirectory(Arguments.content, "top", CONST_EXTRACT_CONTENT, True, max(0, Debug_Level)):
+            if createDirectory(Arguments.content, "top extraction", CONST_EXTRACT_CONTENT, True, Arguments.quiet, max(0, Debug_Level)) != 0:
                 Arguments.content = -1
         if Arguments.raw == -1 \
         or Arguments.ux0 == -1 \
@@ -1764,7 +1830,7 @@ if __name__ == "__main__":
         for Source in Arguments.source:
             ## Initialize per-package variables
             Input_Stream = None
-            Raw_Stream = None
+            Extractions = {}
             #
             Header_Fields = None
             Header_Bytes = None
@@ -1836,6 +1902,7 @@ if __name__ == "__main__":
                 print("# >>>>>>>>>> PKG Source:", Source)
             else:
                 eprint("# >>>>>>>>>> PKG Source:", Source, prefix=None)
+            #
             Input_Stream = PkgReader(Source, Headers, Debug_Level)
             Results["FILE_SIZE"] = Input_Stream.getSize(Debug_Level)
             if Results["FILE_SIZE"] is None:
@@ -1925,6 +1992,7 @@ if __name__ == "__main__":
                 and (Arguments.itementries \
                      or Arguments.raw \
                      or Arguments.ux0 \
+                     or Arguments.content \
                      or Retrieve_Encrypted_Param_Sfo ):
                     Item_Entries, Item_Entries_Bytes, Item_Names_Bytes, Results["ITEMS_INFO_SHA256"] = parsePkg3ItemEntries(Header_Fields, Meta_Data, Input_Stream, max(0, Debug_Level))
                     #
@@ -1952,7 +2020,7 @@ if __name__ == "__main__":
                             Item_Data = {}
                         #
                         if not Item_Data is None:
-                            processPkg3Item(Header_Fields, Item_Entry, Input_Stream, Item_Data, None, None, None, max(0, Debug_Level))
+                            processPkg3Item(Header_Fields, Item_Entry, Input_Stream, Item_Data, None, max(0, Debug_Level))
                             #
                             if Retrieve_Encrypted_Param_Sfo \
                             and "NAME" in Item_Entry \
@@ -1998,6 +2066,7 @@ if __name__ == "__main__":
                 ## --> Content Type
                 if "CONTTYPE" in Header_Fields:
                     Results["PKG_CONTENT_TYPE"] = Header_Fields["CONTTYPE"]
+            #
             if "PKG_CONTENT_ID" in Results \
             and Results["PKG_CONTENT_ID"].strip():
                 Results["CONTENT_ID"] = Results["PKG_CONTENT_ID"].strip()
@@ -2123,20 +2192,34 @@ if __name__ == "__main__":
                             Results["PKG_TYPE"] = CONST_PKG_TYPE.PATCH
                         else:
                             Results["PKG_TYPE"] = CONST_PKG_TYPE.DLC
+                        #
+                        Results["PKG_EXTRACT_ROOT_CONT"] =  Header_Fields["CONTENT_ID"][7:]
                     elif Results["PKG_CONTENT_TYPE"] == 0x5:
                         Results["PLATFORM"] = CONST_PLATFORM.PS3
                         Results["PKG_TYPE"] = CONST_PKG_TYPE.GAME
+                        #
+                        Results["PKG_EXTRACT_ROOT_CONT"] =  Header_Fields["CONTENT_ID"][7:]
                     elif Results["PKG_CONTENT_TYPE"] == 0x9:
                         Results["PKG_TYPE"] = CONST_PKG_TYPE.DLC  #md_entry_type = 9 | Also PS3 THEMES : md_entry_type = 9
+                        #
+                        Results["PKG_EXTRACT_ROOT_CONT"] =  Header_Fields["CONTENT_ID"][7:]
                     elif Results["PKG_CONTENT_TYPE"] == 0xD:
                         Results["PKG_TYPE"] = CONST_PKG_TYPE.AVATAR  #md_entry_type = 9
+                        #
+                        Results["PKG_EXTRACT_ROOT_CONT"] =  Header_Fields["CONTENT_ID"][7:]
                     ## --> PSX packages
                     elif Results["PKG_CONTENT_TYPE"] == 0x1 \
                     or Results["PKG_CONTENT_TYPE"] == 0x6:
                         Results["PLATFORM"] = CONST_PLATFORM.PSX
                         Results["PKG_TYPE"] = CONST_PKG_TYPE.GAME
-                        ## TODO: find_psp_info > title id
-                        Results["PKG_EXTRACT_ROOT_UX0"] = os.path.join("pspemu", "PSP", "GAME", Results["TITLE_ID"])  ## TODO: maybe explicitly <PKG_|PSP_>TITLE_ID
+                        ## TODO:
+                        ## a) pkg2zip: uses
+                        ##    * [title] id = Results["PKG_CID_TITLE_ID1"] = Header_Fields["CONTENT_ID"][7:16]
+                        ##    *        id2 = VITA DLC ID = Results["PKG_CID_TITLE_ID2"] = Header_Fields["CONTENT_ID"][7+13:]
+                        ##    * no content
+                        Results["PKG_EXTRACT_ROOT_UX0"] = os.path.join("pspemu", "PSP", "GAME", Results["PKG_CID_TITLE_ID1"])
+                        #
+                        Results["PKG_EXTRACT_ROOT_CONT"] =  Header_Fields["CONTENT_ID"][7:]
                     ## --> PSP packages
                     elif Results["PKG_CONTENT_TYPE"] == 0x7 \
                     or Results["PKG_CONTENT_TYPE"] == 0xE \
@@ -2145,49 +2228,75 @@ if __name__ == "__main__":
                         Results["PLATFORM"] = CONST_PLATFORM.PSP
                         Results["PKG_TYPE"] = CONST_PKG_TYPE.GAME
                         Results["PKG_EXTRACT_ROOT_UX0"] = os.path.join("pspemu", "ISO")
+                        ## TODO:
+                        ## a) pkg2zip: uses
+                        ##    * [title] id = Results["PKG_CID_TITLE_ID1"] = Header_Fields["CONTENT_ID"][7:16]
+                        ##    *        id2 = VITA DLC ID = Results["PKG_CID_TITLE_ID2"] = Header_Fields["CONTENT_ID"][7+13:]
+                        ##    * no content
                         if Results["PKG_CONTENT_TYPE"] == 0x7:
-                            ## TODO: find_psp_info > category == "HG" ? "PSP-PCEngine" : "PSP"
 ## TODO: from AnalogMan's script via Licence data
 #                            if 0xB in Meta_Data:
 #                                Results["PKG_TYPE"] = CONST_PKG_TYPE.DLC
 # #md_entry_type = 9 | Also PSP DLCS : md_entry_type = 10
-                            if False:
+                            if "SFO_CATEGORY" in Results \
+                            and Results["SFO_CATEGORY"] == "HG":
                                 Results["PKG_SUB_TYPE"] = CONST_PKG_SUB_TYPE.PSP_PC_ENGINE
-                            else:
-                                ## TODO: find_psp_info > title id
-                                Results["PKG_EXTRACT_ROOT_UX0"] = os.path.join("pspemu", "PSP", "GAME", Results["TITLE_ID"])  ## TODO: maybe explicitly <PKG_|PSP_>TITLE_ID
+                                Results["PKG_EXTRACT_ROOT_UX0"] = os.path.join("pspemu", "PSP", "GAME", Results["PKG_CID_TITLE_ID1"])
                         elif Results["PKG_CONTENT_TYPE"] == 0xE:
                             Results["PKG_SUB_TYPE"] = CONST_PKG_SUB_TYPE.PSP_GO
                         elif Results["PKG_CONTENT_TYPE"] == 0xF:
                             Results["PKG_SUB_TYPE"] = CONST_PKG_SUB_TYPE.PSP_MINI
                         elif Results["PKG_CONTENT_TYPE"] == 0x10:
                             Results["PKG_SUB_TYPE"] = CONST_PKG_SUB_TYPE.PSP_NEOGEO
+                        #
+                        Results["PKG_EXTRACT_ROOT_CONT"] =  Header_Fields["CONTENT_ID"][7:]
                     ## --> PSV packages
                     elif Results["PKG_CONTENT_TYPE"] == 0x15:
                         Results["PLATFORM"] = CONST_PLATFORM.PSV
+                        ## TODO:
+                        ## a) pkg2zip: uses
+                        ##    * content [id] = Sfo_Values["CONTENT_ID"]
+                        ##    * [title] id = Sfo_Values["CONTENT_ID"][7:16]
+                        ##    *        id2 = VITA DLC ID = Sfo_Values["CONTENT_ID"][7+13:]
                         if "SFO_CATEGORY" in Results \
                         and Results["SFO_CATEGORY"] == "gp":
                             Results["PKG_TYPE"] = CONST_PKG_TYPE.PATCH
-                            Results["PKG_EXTRACT_ROOT_UX0"] = os.path.join("patch", Results["TITLE_ID"])  ## TODO: maybe explicitly <PKG_|SFO_>TITLE_ID
+                            Results["PKG_EXTRACT_ROOT_UX0"] = os.path.join("patch", Results["CID_TITLE_ID1"])
                         else:
                             Results["PKG_TYPE"] = CONST_PKG_TYPE.GAME
-                            Results["PKG_EXTRACT_ROOT_UX0"] = os.path.join("app", Results["TITLE_ID"])  ## TODO: maybe explicitly <PKG_|SFO_>TITLE_ID
+                            Results["PKG_EXTRACT_ROOT_UX0"] = os.path.join("app", Results["CID_TITLE_ID1"])
+                        #
+                        Results["PKG_EXTRACT_ROOT_CONT"] =  Header_Fields["CONTENT_ID"][7:]
                     elif Results["PKG_CONTENT_TYPE"] == 0x16:
                         Results["PLATFORM"] = CONST_PLATFORM.PSV
                         Results["PKG_TYPE"] = CONST_PKG_TYPE.DLC
-                        Results["PKG_EXTRACT_ROOT_UX0"] = os.path.join("addcont", Results["TITLE_ID"], Results["CONTENT_ID"])  ## TODO: maybe explicitly <PKG_|SFO_><TITLE_ID|CONTENT_ID>
+                        Results["PKG_EXTRACT_ROOT_UX0"] = os.path.join("addcont", Results["CID_TITLE_ID1"], Results["CID_TITLE_ID2"])
+                        #
+                        Results["PKG_EXTRACT_ROOT_CONT"] =  Header_Fields["CONTENT_ID"][7:]
                     elif Results["PKG_CONTENT_TYPE"] == 0x1F:
                         Results["PLATFORM"] = CONST_PLATFORM.PSV
                         Results["PKG_TYPE"] = CONST_PKG_TYPE.THEME
+                        Results["PKG_EXTRACT_ROOT_UX0"] = os.path.join("theme", "-".join((Results["CID_TITLE_ID1"], Results["CID_TITLE_ID2"])))
+                        #
+                        Results["PKG_EXTRACT_ROOT_CONT"] =  Header_Fields["CONTENT_ID"][7:]
                     ## --> PSM packages
                     elif Results["PKG_CONTENT_TYPE"] == 0x18 \
                     or Results["PKG_CONTENT_TYPE"] == 0x1D:
                         Results["PLATFORM"] = CONST_PLATFORM.PSM
                         Results["PKG_TYPE"] = CONST_PKG_TYPE.GAME
-                        Results["PKG_EXTRACT_ROOT_UX0"] = os.path.join("psm", Results["TITLE_ID"])  ## TODO: maybe explicitly <PKG_|SFO_>TITLE_ID
+                        ## TODO:
+                        ## a) pkg2zip: uses
+                        ##    * [title] id = Results["PKG_CID_TITLE_ID1"] = Header_Fields["CONTENT_ID"][7:16]
+                        ##    *        id2 = VITA DLC ID = Results["PKG_CID_TITLE_ID2"] = Header_Fields["CONTENT_ID"][7+13:]
+                        ##    * content [id] = Results["PKG_CONTENT_ID"] = Header_Fields["CONTENT_ID"]
+                        Results["PKG_EXTRACT_ROOT_UX0"] = os.path.join("psm", Results["PKG_CID_TITLE_ID1"])
+                        #
+                        Results["PKG_EXTRACT_ROOT_CONT"] =  Header_Fields["CONTENT_ID"][7:]
                     ## --> UNKNOWN packages
                     else:
-                        eprint("PKG content type {0}/{0:#0x} not supported.".format(Results["PKG_CONTENT_TYPE"]), Input_Stream.getSource(), prefix="[UNKNOWN] ")
+                        eprint("PKG content type {0}/{0:#0x}.".format(Results["PKG_CONTENT_TYPE"]), Input_Stream.getSource(), prefix="[UNKNOWN] ")
+                        #
+                        Results["PKG_EXTRACT_ROOT_CONT"] =  Header_Fields["CONTENT_ID"][7:]
             ## --> PKG4
             elif Pkg_Magic == CONST_PKG4_MAGIC:
                 Results["PLATFORM"] = CONST_PLATFORM.PS4
@@ -2462,10 +2571,6 @@ if __name__ == "__main__":
                     JSON_Output = collections.OrderedDict()
                     #
                     JSON_Output["results"] = collections.OrderedDict()
-                    if "TOOL_VERSION" in Results:
-                        JSON_Output["results"]["toolVersion"] = Results["TOOL_VERSION"]
-                    if "PYTHON_VERSION" in Results:
-                        JSON_Output["results"]["pythonVersion"] = Results["PYTHON_VERSION"]
                     if "TITLE_ID" in Results \
                     and Results["TITLE_ID"].strip():
                         JSON_Output["results"]["titleId"] = Results["TITLE_ID"]
@@ -2510,7 +2615,15 @@ if __name__ == "__main__":
                     and Results["TITLE_UPDATE_URL"].strip():
                         JSON_Output["results"]["titleUpdateUrl"] = Results["TITLE_UPDATE_URL"]
                     JSON_Output["results"]["npsType"] = Results["NPS_TYPE"]
+                    if "PLATFORM" in Results:
+                        JSON_Output["results"]["pkgPlatform"] = Results["PLATFORM"]
+                    if "PKG_TYPE" in Results:
+                        JSON_Output["results"]["pkgType"] = Results["PKG_TYPE"]
                     #
+                    if "TOOL_VERSION" in Results:
+                        JSON_Output["results"]["toolVersion"] = Results["TOOL_VERSION"]
+                    if "PYTHON_VERSION" in Results:
+                        JSON_Output["results"]["pythonVersion"] = Results["PYTHON_VERSION"]
                     if "PKG_CONTENT_ID" in Results \
                     and Results["PKG_CONTENT_ID"].strip():
                         JSON_Output["results"]["pkgContentId"] = Results["PKG_CONTENT_ID"]
@@ -2558,10 +2671,6 @@ if __name__ == "__main__":
                            JSON_Output["results"]["sfoCidDiffer"] = Results["SFO_CID_DIFFER"]
                         if "SFO_TID_DIFFER" in Results:
                            JSON_Output["results"]["sfoTidDiffer"] = Results["SFO_TID_DIFFER"]
-                    if "PLATFORM" in Results:
-                        JSON_Output["results"]["pkgPlatform"] = Results["PLATFORM"]
-                    if "PKG_TYPE" in Results:
-                        JSON_Output["results"]["pkgType"] = Results["PKG_TYPE"]
                     #
                     if Output_Format == 98:  ## Analysis JSON Output
                         JSON_Output["headerFields"] = copy.copy(Header_Fields)
@@ -2629,56 +2738,83 @@ if __name__ == "__main__":
                             for File_Entry in File_Table:
                                 print("".join(("filetable[", Format_String, "]: ID {:#06x} Ofs {:#012x} Size {:12} {}")).format(File_Entry["INDEX"], File_Entry["FILEID"], File_Entry["DATAOFS"], File_Entry["DATASIZE"], "".join(("Name \"", File_Entry["NAME"], "\"")) if "NAME" in File_Entry else ""))
                             dprintFieldsDict(File_Table_Map, "filetablemap[{KEY:#06x}]", 2, None, print_func=print)
-                    dprintFieldsDict(Results, "results[{KEY:22}]", 2, None, print_func=print, sep="")
+                    dprintFieldsDict(Results, "results[{KEY:23}]", 2, None, print_func=print, sep="")
             ## --> Ensure that all messages are output
             sys.stdout.flush()
             sys.stderr.flush()
 
             ## Extract GAME PKG
             ## --> PKG3
+            #Debug_Level = 1  ## TODO: remove
+            Process_Extractions = False
+            #
             if Pkg_Magic == CONST_PKG3_MAGIC:
-                ## Determine decrypted PKG3 target
+                dprint("Extractions....")
+                ## RAW decrypted PKG3 package
                 if Arguments.raw:
-                    if Raw_Is_Dir:
-                        Target = "".join((Input_Stream.getPkgName(), ".decrypted"))
-                        Target = os.path.join(Arguments.raw, Target)
+                    Extractions[CONST_EXTRACT_RAW] = {}
+                    Extract = Extractions[CONST_EXTRACT_RAW]
+                    Extract["KEY"] = CONST_EXTRACT_RAW
+                    Extract["FUNCTION"] = "Write"
+                    Extract["PROCESS"] = False
+                    Extract["DIRS"] = False
+                    Extract["SEPARATE_FILES"] = False
+                    Extract["BYTES_WRITTEN"] = 0
+                    Extract["ALIGNED"] = True
+                    Extract["DATATYPE"] = CONST_DATATYPE_DECRYPTED
+                    #
+                    Extract["ROOT"] = Arguments.raw
+                    Extract["ROOT_IS_DIR"] = Raw_Is_Dir
+                    #
+                    if Extract["ROOT_IS_DIR"]:
+                        Extract["TARGET"] = os.path.join(Extract["ROOT"], "".join((Input_Stream.getPkgName(), ".decrypted")))
                     else:
-                        Target = Arguments.raw
-                    if not 3 in Arguments.format \
-                    and not 98 in Arguments.format:  ## Special case JSON output for parsing
-                        print("# >>> Decrypted Target File:", Target)
-                    else:
-                        eprint("# >>> Decrypted Target File:", Target, prefix=None)
-                    if not os.path.exists(Target) \
-                    or Arguments.overwrite:
-                        Raw_Stream = io.open(Target, mode="wb", buffering=-1, encoding=None, errors=None, newline=None, closefd=True)
+                        Extract["TARGET"] = Extract["ROOT"]
+                    if Arguments.quiet <= 1:
+                        eprint(">>>>> Target File:", Extract["TARGET"], prefix="[{}] ".format(Extract["KEY"]))
+                    #
+                    Extract["TARGET_CHECK"] = checkExtractFile(Extract, Arguments.overwrite, Arguments.quiet, max(0, Debug_Level))
+                    if Extract["TARGET_CHECK"] == 0:
+                        Process_Extractions = Extract["PROCESS"] = True
                         #
-                        if Debug_Level >= 2:
-                            dprint("Write unencrypted PKG3 header data from offset {:#x} and size {}".format(0, len(Header_Bytes)), prefix="[RAW] ")
-                        Raw_Stream.write(Header_Bytes)
+                        if Arguments.quiet <= 0:
+                            eprint("{} unencrypted PKG3 header data from offset {:#x} and size {}".format(Extract["FUNCTION"], 0, len(Header_Bytes)), prefix="[{}] ".format(Extract["KEY"]))
+                        Extract["BYTES_WRITTEN"] += Extract["STREAM"].write(Header_Bytes)
                         #
-                        if Debug_Level >= 2:
-                            dprint("Write decrypted PKG3 item entries from offset {:#x} and size {}".format(Item_Entries_Bytes["ALIGN"]["OFS"]+Header_Fields["DATAOFS"], len(Item_Entries_Bytes[CONST_DATATYPE_DECRYPTED])), prefix="[RAW] ")
-                        Raw_Stream.write(Item_Entries_Bytes[CONST_DATATYPE_DECRYPTED])
-                        if Debug_Level >= 2:
-                            dprint("Write decrypted PKG3 item names from offset {:#x} and size {}".format(Item_Names_Bytes["ALIGN"]["OFS"]+Header_Fields["DATAOFS"], len(Item_Names_Bytes[CONST_DATATYPE_DECRYPTED])), prefix="[RAW] ")
-                        Raw_Stream.write(Item_Names_Bytes[CONST_DATATYPE_DECRYPTED])
-                    else:
-                        eprint("Target File already exists and will NOT be WRITTEN.", Target)
-                    del Target
+                        if Arguments.quiet <= 0:
+                            eprint("{} {} PKG3 item entries from offset {:#x} and size {}".format(Extract["FUNCTION"], Extract["DATATYPE"].lower(), Item_Entries_Bytes["ALIGN"]["OFS"]+Header_Fields["DATAOFS"], len(Item_Entries_Bytes[Extract["DATATYPE"]])), prefix="[{}] ".format(Extract["KEY"]))
+                        Extract["BYTES_WRITTEN"] += Extract["STREAM"].write(Item_Entries_Bytes[Extract["DATATYPE"]])
+                        if Arguments.quiet <= 0:
+                            eprint("{} {} PKG3 item names from offset {:#x} and size {}".format(Extract["FUNCTION"], Extract["DATATYPE"].lower(), Item_Names_Bytes["ALIGN"]["OFS"]+Header_Fields["DATAOFS"], len(Item_Names_Bytes[Extract["DATATYPE"]])), prefix="[{}] ".format(Extract["KEY"]))
+                        Extract["BYTES_WRITTEN"] += Extract["STREAM"].write(Item_Names_Bytes[Extract["DATATYPE"]])
+                    #
+                    del Extract
 
-                ## Determine package UX0 extraction directory
+                ## UX0 extraction
                 if Arguments.ux0:
                     if "PKG_EXTRACT_ROOT_UX0" in Results:
-                        Results["PKG_EXTRACT_PATH_UX0"] = os.path.join(Arguments.ux0, Results["PKG_EXTRACT_ROOT_UX0"])
-                        if not 3 in Arguments.format \
-                        and not 98 in Arguments.format:  ## Special case JSON output for parsing
-                            print("# >>> Extraction ux0 path for package:", Results["PKG_EXTRACT_PATH_UX0"])
-                        else:
-                            eprint("# >>> Extraction ux0 path for package:", Results["PKG_EXTRACT_PATH_UX0"], prefix=None)
+                        Extractions[CONST_EXTRACT_UX0] = {}
+                        Extract = Extractions[CONST_EXTRACT_UX0]
+                        Extract["KEY"] = CONST_EXTRACT_UX0
+                        Extract["FUNCTION"] = "Extract"
+                        Extract["PROCESS"] = False
+                        Extract["DIRS"] = True
+                        Extract["SEPARATE_FILES"] = True
+                        Extract["BYTES_WRITTEN"] = 0
+                        Extract["ALIGNED"] = False
+                        Extract["DATATYPE"] = CONST_DATATYPE_DECRYPTED
+                        Extract["SCESYS_PACKAGE_CREATED"] = False
                         #
-                        if not createDirectory(Results["PKG_EXTRACT_PATH_UX0"], "package", CONST_EXTRACT_UX0, True, max(0, Debug_Level)):
-                            del Results["PKG_EXTRACT_PATH_UX0"]
+                        Extract["TOPDIR"] = Arguments.ux0
+                        #
+                        Extract["ROOT"] = os.path.join(Extract["TOPDIR"], Results["PKG_EXTRACT_ROOT_UX0"])
+                        if Arguments.quiet <= 1:
+                            eprint(">>>>> Extraction Directory:", Extract["ROOT"], prefix="[{}] ".format(Extract["KEY"]))
+                        #
+                        if createDirectory(Extract["ROOT"], "package extraction", Extract["KEY"], True, Arguments.quiet, max(0, Debug_Level)) == 0:
+                            Process_Extractions = Extract["PROCESS"] = True
+                        #
+                        del Extract
                     else:
                         eprint("[{}] Extraction not supported for package type".format(CONST_EXTRACT_UX0), end=" ")
                         if "PLATFORM" in Results:
@@ -2689,77 +2825,481 @@ if __name__ == "__main__":
                             eprint(Results["PKG_SUB_TYPE"], end=" ", prefix=None)
                         eprint(prefix=None)
 
+                ## CONTENT extraction
+                if Arguments.content:
+                    if "PKG_EXTRACT_ROOT_CONT" in Results:
+                        Extractions[CONST_EXTRACT_CONTENT] = {}
+                        Extract = Extractions[CONST_EXTRACT_CONTENT]
+                        Extract["KEY"] = CONST_EXTRACT_CONTENT
+                        Extract["FUNCTION"] = "Extract"
+                        Extract["PROCESS"] = False
+                        Extract["DIRS"] = True
+                        Extract["SEPARATE_FILES"] = True
+                        Extract["BYTES_WRITTEN"] = 0
+                        Extract["ALIGNED"] = False
+                        Extract["DATATYPE"] = CONST_DATATYPE_DECRYPTED
+                        Extract["SCESYS_PACKAGE_CREATED"] = False
+                        #
+                        Extract["TOPDIR"] = Arguments.content
+                        #
+                        Extract["ROOT"] = os.path.join(Extract["TOPDIR"], Results["PKG_EXTRACT_ROOT_CONT"])
+                        if Arguments.quiet <= 1:
+                            eprint(">>>>> Extraction Directory:", Extract["ROOT"], prefix="[{}] ".format(Extract["KEY"]))
+                        #
+                        if createDirectory(Extract["ROOT"], "package extraction", Extract["KEY"], True, Arguments.quiet, max(0, Debug_Level)) == 0:
+                            Process_Extractions = Extract["PROCESS"] = True
+                        #
+                        del Extract
+                    else:
+                        eprint("[{}] Extraction not supported for package type".format(CONST_EXTRACT_CONTENT), end=" ")
+                        if "PLATFORM" in Results:
+                            eprint(Results["PLATFORM"], end=" ", prefix=None)
+                        if "PKG_TYPE" in Results:
+                            eprint(Results["PKG_TYPE"], end=" ", prefix=None)
+                        if "PKG_SUB_TYPE" in Results:
+                            eprint(Results["PKG_SUB_TYPE"], end=" ", prefix=None)
+                        eprint(prefix=None)
+
                 ## Extract PKG3 items
                 if not Item_Entries is None \
-                and (Raw_Stream \
-                     or "PKG_EXTRACT_PATH_UX0" in Results):
+                and Process_Extractions:
                     Item_Entries_Sorted = sorted(Item_Entries, key=lambda x: x["DATAOFS"])
                     for Item_Entry in Item_Entries_Sorted:
                         ## Initialize per-item variables
                         Use_Input_Stream = Input_Stream
                         Item_Data = None
-                        Extract_Ux0_Stream = None
-                        Extract_Content_Stream = None
+                        Use_Extractions = None
                         #
-                        if Item_Entry["DATASIZE"] <= 0:
-                            if "PKG_EXTRACT_PATH_UX0" in Results:
-                                pass ## TODO
+                        Item_Flags = Item_Entry["FLAGS"] & 0xff
+                        Item_Name_Parts = Item_Entry["NAME"].split("/")
+                        #
+                        if Item_Flags == 0x04 \
+                        or Item_Flags == 0x12:  ## Directory
+                            for Key in Extractions:
+                                Extract = Extractions[Key]
+                                #
+                                if Extract["SEPARATE_FILES"] \
+                                and "STREAM" in Extract:
+                                    del Extract["STREAM"]
+                                if "ITEM_EXTRACT_PATH" in Extract:
+                                    del Extract["ITEM_EXTRACT_PATH"]
+                                #
+                                if not Extract["DIRS"] \
+                                or not Extract["PROCESS"]:
+                                    continue  ## next extract
+
+                                ## Process item name
+                                Name_Parts = copy.copy(Item_Name_Parts)
+                                #
+                                if (Key == CONST_EXTRACT_UX0 \
+                                    or Key == CONST_EXTRACT_CONTENT) \
+                                and "PLATFORM" in Results:  ## UX0/CONTENT extraction
+                                    ## Process name parts depending on platform
+                                    ## --> PSV packages
+                                    if Results["PLATFORM"] == CONST_PLATFORM.PSV:
+                                        if not Extract["SCESYS_PACKAGE_CREATED"] \
+                                        and len(Name_Parts) >= 2 \
+                                        and Name_Parts[0] == "sce_sys" \
+                                        and Name_Parts[1] == "package" :
+                                            Extract["SCESYS_PACKAGE_CREATED"] = True
+                                    ## --> PSM packages
+                                    elif Results["PLATFORM"] == CONST_PLATFORM.PSM \
+                                    and Key == CONST_EXTRACT_UX0:  ## UX0-only PSM extraction
+                                        if len(Name_Parts) > 0 \
+                                        and Name_Parts[0] == "contents":
+                                            Name_Parts[0] = "RO"
+                                    ## --> TODO: PSX/PSP extraction
+                                    elif Results["PLATFORM"] == CONST_PLATFORM.PSX \
+                                    or Results["PLATFORM"] == CONST_PLATFORM.PSP:
+                                        Name_Parts = None
+
+                                ## Build and check item extract path
+                                if Name_Parts:
+                                    Extract["ITEM_EXTRACT_PATH"] = os.path.join(*Name_Parts)
+                                    Extract["ITEM_NAME"] = "/".join(Name_Parts)
+                                del Name_Parts
+                                #
+                                if not "ITEM_EXTRACT_PATH" in Extract \
+                                or not Extract["ITEM_EXTRACT_PATH"]:
+                                    if "ITEM_EXTRACT_PATH" in Extract:
+                                        del Extract["ITEM_EXTRACT_PATH"]
+                                    continue  ## next extract
+
+                                ## Create directory
+                                Extract["TARGET"] = os.path.join(Extract["ROOT"], Extract["ITEM_EXTRACT_PATH"])
+                                #
+                                if createDirectory(Extract, "items", Key, True, Arguments.quiet, max(0, Debug_Level)) != 0:
+                                    eprint("[{}] ABORT extraction".format(Extract["KEY"]))
+                                    Extract["PROCESS"] = False
+                                del Extract["ITEM_EXTRACT_PATH"]
+                            ## Clean-up
+                            del Extract
+                            del Key
+                            del Item_Name_Parts
+                            del Item_Flags
                             #
-                            continue
+                            continue  ## next extract
+                        else:  ## should all be files
+                            ## taken from pkg_dec 1.3.2 from Weaknespase
+                            ## 0x00:
+                            ## 0x01:
+                            ## 0x03: all regular data files have this type
+                            ## 0x0E: user-mode executables have this type (eboot.bin, sce_modules contents)
+                            ## 0x0F:
+                            ## 0x10: keystone have this type
+                            ## 0x11: PFS files have this type (files.db, unicv.db, pflist)
+                            ## 0x13: temp.bin have this type
+                            ## 0x14:
+                            ## 0x15: clearsign have this type
+                            ## 0x16: right.suprx have this type
+                            ## 0x18: digs.bin have this type, unpack encrypted
+                            for Key in Extractions:
+                                Extract = Extractions[Key]
+                                #
+                                if Extract["SEPARATE_FILES"] \
+                                and "STREAM" in Extract:
+                                    del Extract["STREAM"]
+                                if "ITEM_EXTRACT_PATH" in Extract:
+                                    del Extract["ITEM_EXTRACT_PATH"]
+                                #
+                                if not Extract["PROCESS"]:
+                                    continue  ## next extract
+
+                                ## Process item name
+                                Name_Parts = copy.copy(Item_Name_Parts)
+                                #
+                                if Key == CONST_EXTRACT_UX0 \
+                                or Key == CONST_EXTRACT_CONTENT:  ## UX0/CONTENT extraction
+                                    Extract["DATATYPE"] = CONST_DATATYPE_DECRYPTED
+
+                                    ## Process name parts depending on platform
+                                    if "PLATFORM" in Results:
+                                        ## --> PSV packages
+                                        if Results["PLATFORM"] == CONST_PLATFORM.PSV:
+                                            ## Special case: PSV encrypted sce_sys/package/digs.bin as body.bin
+                                            if len(Name_Parts) == 3 \
+                                            and Name_Parts[0] == "sce_sys" \
+                                            and Name_Parts[1] == "package" \
+                                            and Name_Parts[2] == "digs.bin":  ## Item_Flags == 0x18
+                                                Extract["DATATYPE"] = CONST_DATATYPE_ENCRYPTED
+                                                Name_Parts[2] = "body.bin"
+                                        ## --> PSM packages
+                                        elif Results["PLATFORM"] == CONST_PLATFORM.PSM \
+                                        and Key == CONST_EXTRACT_UX0:  ## UX0-only PSM extraction
+                                            if len(Name_Parts) > 0 \
+                                            and Name_Parts[0] == "contents":
+                                                Name_Parts[0] = "RO"
+                                        ## --> TODO: PSX/PSP extraction
+                                        elif Results["PLATFORM"] == CONST_PLATFORM.PSX \
+                                        or Results["PLATFORM"] == CONST_PLATFORM.PSP:
+                                            Name_Parts = None
+
+                                ## Build and check item extract path
+                                if Name_Parts:
+                                    Extract["ITEM_EXTRACT_PATH"] = os.path.join(*Name_Parts)
+                                    Extract["ITEM_NAME"] = "/".join(Name_Parts)
+                                del Name_Parts
+                                #
+                                ## Special case: always write for RAW decrypted PKG3 package
+                                if Key == CONST_EXTRACT_RAW:
+                                    if "STREAM" in Extract \
+                                    and Item_Entry["DATASIZE"] > 0:
+                                        pass  ## write
+                                    else:
+                                        continue  ## next extract
+                                elif not "ITEM_EXTRACT_PATH" in Extract \
+                                or not Extract["ITEM_EXTRACT_PATH"]:
+                                    if "ITEM_EXTRACT_PATH" in Extract:
+                                        del Extract["ITEM_EXTRACT_PATH"]
+                                    continue  ## next extract
+
+                                ## Display item extract path
+                                if Arguments.quiet <= 0:
+                                    if Extract["ITEM_NAME"].strip():
+                                        Item_Name = "\"{}\"".format(Extract["ITEM_NAME"])
+                                    else:
+                                        Item_Name = "item[{}]".format(Item_Entry["INDEX"])
+                                    if Extract["ALIGNED"]:
+                                        Values = ["aligned ", Header_Fields["DATAOFS"]+Item_Entry["ALIGN"]["OFS"], Item_Entry["ALIGN"]["SIZE"]]
+                                    else:
+                                        Values = ["", Header_Fields["DATAOFS"]+Item_Entry["DATAOFS"], Item_Entry["DATASIZE"]]
+                                    eprint("{} {} {} from {}offset {:#x} and size {}".format(Extract["FUNCTION"], Extract["DATATYPE"].lower(), Item_Name, *Values), prefix="[{}] ".format(Extract["KEY"]))
+                                    del Values
+                                    del Item_Name
+
+                                if Key != CONST_EXTRACT_RAW:
+                                    ## Build and check target path
+                                    Extract["TARGET"] = os.path.join(Extract["ROOT"], Extract["ITEM_EXTRACT_PATH"])
+                                    Extract["TARGET_CHECK"] = checkExtractFile(Extract, Arguments.overwrite, Arguments.quiet, max(0, Debug_Level))
+                                    if Extract["TARGET_CHECK"] != 0:
+                                        if Extract["TARGET_CHECK"] < 0:
+                                            eprint("[{}] BROKEN extraction".format(Extract["KEY"]))
+                                        del Extract["ITEM_EXTRACT_PATH"]
+                                        continue  ## next extract
+                                #
+                                if "STREAM" in Extract:
+                                    Use_Extractions = Extractions
+                            ## Clean-up
+                            del Extract
+                            del Key
+                            del Item_Name_Parts
+                            del Item_Flags
                         #
-                        if Sfo_Item_Data \
-                        and "NAME" in Item_Entry \
-                        and Item_Entry["NAME"] == Header_Fields["PARAM.SFO"] \
-                        and Item_Entry["DATASIZE"] > 0:
-                            Use_Input_Stream = None
-                            Item_Data = Sfo_Item_Data
-                        #
-                        if Item_Entry["DATASIZE"] > 0 \
-                        and (Raw_Stream \
-                             or Extract_Ux0_Stream \
-                             or Extract_Content_Stream):
-                            processPkg3Item(Header_Fields, Item_Entry, Use_Input_Stream, Item_Data, Raw_Stream, Extract_Ux0_Stream, Extract_Content_Stream, max(0, Debug_Level))
-                        #
-                        if Extract_Ux0_Stream:
-                            Extract_Ux0_Stream.close()
-                        #
-                        if Extract_Content_Stream:
-                            Extract_Content_Stream.close()
-                        #
-                        del Item_Data
-                        del Use_Input_Stream
+                        if not Use_Extractions:
+                            continue  ## next item
+
+                        ## Process item data
+                        if Item_Entry["DATASIZE"] > 0:
+                            ## --> Special cases: already read data
+                            if Sfo_Item_Data \
+                            and "NAME" in Item_Entry \
+                            and Item_Entry["NAME"] == Header_Fields["PARAM.SFO"]:
+                                Use_Input_Stream = None
+                                Item_Data = Sfo_Item_Data
+                            #
+                            processPkg3Item(Header_Fields, Item_Entry, Use_Input_Stream, Item_Data, Use_Extractions, max(0, Debug_Level))
+
+                        ## Close streams
+                        for Key in Extractions:
+                            Extract = Extractions[Key]
+                            #
+                            if Extract["SEPARATE_FILES"] \
+                            and "STREAM" in Extract:
+                                Extract["STREAM"].close()
+                                del Extract["STREAM"]
+                            if "ITEM_EXTRACT_PATH" in Extract:
+                                del Extract["ITEM_EXTRACT_PATH"]
+                        del Extract
+                        del Key
+                    #
+                    del Use_Extractions
+                    del Item_Data
+                    del Use_Input_Stream
                     #
                     del Item_Entry
                     del Item_Entries_Sorted
 
-                ## Write PKG3 unencrypted tail data
-                if Raw_Stream:
-                    if Debug_Level >= 2:
-                        dprint("Write unencrypted PKG3 tail data from offset {:#x} and size {}".format(Header_Fields["DATAOFS"]+Header_Fields["DATASIZE"], Results["PKG_TAIL_SIZE"]), prefix="[RAW] ")
-                    Raw_Stream.write(Tail_Bytes)
-                    Raw_Size_Written = Raw_Stream.tell()
-                    Raw_Stream.close()
-                    if ("PKG_TOTAL_SIZE" in Results \
-                        and Raw_Size_Written != Results["PKG_TOTAL_SIZE"]) \
-                    or ("FILE_SIZE" in Results \
-                        and Raw_Size_Written != Results["FILE_SIZE"]):
-                        eprint("Written size {} of unencrypted/decrypted data from".format(Raw_Size_Written), Input_Stream.getSource())
-                        if ("PKG_TOTAL_SIZE" in Results \
-                            and Raw_Size_Written != Results["PKG_TOTAL_SIZE"]):
-                            eprint("mismatches package total size of", Results["PKG_TOTAL_SIZE"])
-                        if ("FILE_SIZE" in Results \
-                            and Raw_Size_Written != Results["FILE_SIZE"]):
-                            eprint("mismatches file size of", Results["FILE_SIZE"])
-                        eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info")
-                    del Raw_Size_Written
+                ## Special cases: additional items, clean-up, etc.
+                if Process_Extractions:
+                    for Key in Extractions:
+                        Extract = Extractions[Key]
+                        #
+                        if Extract["SEPARATE_FILES"] \
+                        and "STREAM" in Extract:
+                            del Extract["STREAM"]
+                        if "ITEM_EXTRACT_PATH" in Extract:
+                            del Extract["ITEM_EXTRACT_PATH"]
+                        #
+                        if not Extract["PROCESS"]:
+                            continue  ## next extract
+
+                        if (Key == CONST_EXTRACT_UX0 \
+                            or Key == CONST_EXTRACT_CONTENT) \
+                        and "PLATFORM" in Results:  ## UX0/CONTENT extraction
+                            ## --> PSV packages
+                            if Results["PLATFORM"] == CONST_PLATFORM.PSV:
+                                ## Dirs
+                                Dirs = []
+                                if not Extract["SCESYS_PACKAGE_CREATED"]:
+                                    Dirs.append(["sce_sys", "package"])
+                                #
+                                Name_Parts = None
+                                for Name_Parts in Dirs:
+                                    ## Build and check item extract path
+                                    if Name_Parts:
+                                        Extract["ITEM_EXTRACT_PATH"] = os.path.join(*Name_Parts)
+                                        Extract["ITEM_NAME"] = "/".join(Name_Parts)
+                                    #
+                                    if not "ITEM_EXTRACT_PATH" in Extract \
+                                    or not Extract["ITEM_EXTRACT_PATH"]:
+                                        if "ITEM_EXTRACT_PATH" in Extract:
+                                            del Extract["ITEM_EXTRACT_PATH"]
+                                        continue  ## next dir
+
+                                    ## Create directory
+                                    if createDirectory(Extract, "items", Key, True, Arguments.quiet, max(0, Debug_Level)) != 0:
+                                        eprint("[{}] ABORT extraction".format(Extract["KEY"]))
+                                        Extract["PROCESS"] = False
+                                    del Extract["ITEM_EXTRACT_PATH"]
+                                #
+                                del Name_Parts
+                                del Dirs
+                                #
+                                if not Extract["PROCESS"]:
+                                    continue  ## next extract
+
+                                ## Files
+                                File_Number = 0
+                                for Name_Parts in [["sce_sys", "package", "head.bin"], ["sce_sys", "package", "tail.bin"], ["sce_sys", "package", "stat.bin"]]:
+                                    File_Number += 1
+
+                                    ## Build and check item extract path
+                                    if Name_Parts:
+                                        Extract["ITEM_EXTRACT_PATH"] = os.path.join(*Name_Parts)
+                                        Extract["ITEM_NAME"] = "/".join(Name_Parts)
+                                    #
+                                    if not "ITEM_EXTRACT_PATH" in Extract \
+                                    or not Extract["ITEM_EXTRACT_PATH"]:
+                                        if not "ITEM_EXTRACT_PATH" in Extract:
+                                            del Extract["ITEM_EXTRACT_PATH"]
+                                        continue  ## next file
+
+                                    ## Display item extract path
+                                    if Arguments.quiet <= 0:
+                                        Values = None
+                                        if File_Number == 1:  ## head.bin
+                                            Values = ["unencrypted header + encrypted items info", "\"{}\"".format(Extract["ITEM_NAME"]), "", 0, len(Header_Bytes)+len(Item_Entries_Bytes[CONST_DATATYPE_ENCRYPTED])+len(Item_Names_Bytes[CONST_DATATYPE_ENCRYPTED])]
+                                        elif File_Number == 2:  ## tail.bin
+                                            Values = ["unencrypted tail", "\"{}\"".format(Extract["ITEM_NAME"]), "", Header_Fields["DATAOFS"]+Header_Fields["DATASIZE"], len(Tail_Bytes)]
+                                        elif File_Number == 3:  ## stat.bin
+                                            Values = ["fake zeroes", "\"{}\"".format(Extract["ITEM_NAME"]), "", 0, 0x300]
+                                        eprint("{} {} {} from {}offset {:#x} and size {}".format(Extract["FUNCTION"], *Values), prefix="[{}] ".format(Extract["KEY"]))
+                                        del Values
+
+                                    ## Build and check target path
+                                    Extract["TARGET"] = os.path.join(Extract["ROOT"], Extract["ITEM_EXTRACT_PATH"])
+                                    Extract["TARGET_CHECK"] = checkExtractFile(Extract, Arguments.overwrite, Arguments.quiet, max(0, Debug_Level))
+                                    if Extract["TARGET_CHECK"] != 0:
+                                        if Extract["TARGET_CHECK"] < 0:
+                                            eprint("[{}] BROKEN extraction".format(Extract["KEY"]))
+                                        del Extract["ITEM_EXTRACT_PATH"]
+                                        continue  ## next file
+
+                                    ## Write data
+                                    if File_Number == 1:  ## head.bin
+                                        Extract["STREAM"].write(Header_Bytes)
+                                        Extract["STREAM"].write(Item_Entries_Bytes[CONST_DATATYPE_ENCRYPTED])
+                                        Extract["STREAM"].write(Item_Names_Bytes[CONST_DATATYPE_ENCRYPTED])
+                                        Extract["STREAM"].close()
+                                        del Extract["STREAM"]
+                                    elif File_Number == 2:  ## tail.bin
+                                        Extract["STREAM"].write(Tail_Bytes)
+                                        Extract["STREAM"].close()
+                                        del Extract["STREAM"]
+                                    elif File_Number == 3:  ## stat.bin
+                                        Extract["STREAM"].write(bytearray(0x300))
+                                        Extract["STREAM"].close()
+                                        del Extract["STREAM"]
+                                    del Extract["ITEM_EXTRACT_PATH"]
+                                #
+                                del Name_Parts
+                                del File_Number
+                            ## --> PSM packages
+                            elif Results["PLATFORM"] == CONST_PLATFORM.PSM \
+                            and Key == CONST_EXTRACT_UX0:  ## UX0-only PSM extraction
+                                ## Dirs
+                                Dirs = [["RW", "Documents"], ["RW", "Temp"], ["RW", "System"]]
+                                #
+                                for Name_Parts in Dirs:
+                                    ## Build and check item extract path
+                                    if Name_Parts:
+                                        Extract["ITEM_EXTRACT_PATH"] = os.path.join(*Name_Parts)
+                                        Extract["ITEM_NAME"] = "/".join(Name_Parts)
+                                    #
+                                    if not "ITEM_EXTRACT_PATH" in Extract \
+                                    or not Extract["ITEM_EXTRACT_PATH"]:
+                                        if "ITEM_EXTRACT_PATH" in Extract:
+                                            del Extract["ITEM_EXTRACT_PATH"]
+                                        continue  ## next dir
+
+                                    ## Create directory
+                                    if createDirectory(Extract, "PSM RW", Key, True, Arguments.quiet, max(0, Debug_Level)) != 0:
+                                        eprint("[{}] ABORT extraction".format(Extract["KEY"]))
+                                        Extract["PROCESS"] = False
+                                    del Extract["ITEM_EXTRACT_PATH"]
+                                #
+                                del Name_Parts
+                                del Dirs
+                                #
+                                if not Extract["PROCESS"]:
+                                    continue  ## next extract
+
+                                ## Files
+                                File_Number = 0
+                                for Name_Parts in [["RW", "System", "content_id"], ["RW", "System", "pm.dat"]]:
+                                    File_Number += 1
+
+                                    ## Build and check item extract path
+                                    if Name_Parts:
+                                        Extract["ITEM_EXTRACT_PATH"] = os.path.join(*Name_Parts)
+                                        Extract["ITEM_NAME"] = "/".join(Name_Parts)
+                                    #
+                                    if not "ITEM_EXTRACT_PATH" in Extract \
+                                    or not Extract["ITEM_EXTRACT_PATH"]:
+                                        if not "ITEM_EXTRACT_PATH" in Extract:
+                                            del Extract["ITEM_EXTRACT_PATH"]
+                                        continue  ## next file
+
+                                    ## Display item extract path
+                                    if Arguments.quiet <= 0:
+                                        Values = None
+                                        if File_Number == 1:  ## content_id
+                                            Values = ["unencrypted header + encrypted items info", "\"{}\"".format(Extract["ITEM_NAME"]), "", 0, len(Header_Bytes)+len(Item_Entries_Bytes[CONST_DATATYPE_ENCRYPTED])+len(Item_Names_Bytes[CONST_DATATYPE_ENCRYPTED])]
+                                        elif File_Number == 2:  ## pm.dat
+                                            Values = ["unencrypted tail", "\"{}\"".format(Extract["ITEM_NAME"]), "", Header_Fields["DATAOFS"]+Header_Fields["DATASIZE"], len(Tail_Bytes)]
+                                        eprint("{} {} {} from {}offset {:#x} and size {}".format(Extract["FUNCTION"], *Values), prefix="[{}] ".format(Extract["KEY"]))
+                                        del Values
+
+                                    ## Build and check target path
+                                    Extract["TARGET"] = os.path.join(Extract["ROOT"], Extract["ITEM_EXTRACT_PATH"])
+                                    Extract["TARGET_CHECK"] = checkExtractFile(Extract, Arguments.overwrite, Arguments.quiet, max(0, Debug_Level))
+                                    if Extract["TARGET_CHECK"] != 0:
+                                        if Extract["TARGET_CHECK"] < 0:
+                                            eprint("[{}] BROKEN extraction".format(Extract["KEY"]))
+                                        del Extract["ITEM_EXTRACT_PATH"]
+                                        continue  ## next file
+
+                                    ## Write data
+                                    if File_Number == 1:  ## content_id
+                                        Extract["STREAM"].write(Header_Bytes[CONST_PKG3_MAIN_HEADER_FIELDS["CONTENT_ID"]["OFFSET"]:CONST_PKG3_MAIN_HEADER_FIELDS["CONTENT_ID"]["OFFSET"]+CONST_PKG3_MAIN_HEADER_FIELDS["CONTENT_ID"]["SIZE"]])
+                                        Extract["STREAM"].close()
+                                        del Extract["STREAM"]
+                                    elif File_Number == 2:  ## pm.dat
+                                        Extract["STREAM"].write(bytearray(0x10000))
+                                        Extract["STREAM"].close()
+                                        del Extract["STREAM"]
+                                    del Extract["ITEM_EXTRACT_PATH"]
+                                #
+                                del Name_Parts
+                                del File_Number
+                        #
+                        elif Key == CONST_EXTRACT_RAW:
+                            ## Write PKG3 unencrypted tail data
+                            if Arguments.quiet <= 0:
+                                eprint("{} unencrypted PKG3 tail data from offset {:#x} and size {}".format(Extract["FUNCTION"], Header_Fields["DATAOFS"]+Header_Fields["DATASIZE"], Results["PKG_TAIL_SIZE"]), prefix="[{}] ".format(Extract["KEY"]))
+                            Extract["BYTES_WRITTEN"] += Extract["STREAM"].write(Tail_Bytes)
+                            Extract["STREAM"].close()
+                            del Extract["STREAM"]
+
+                            ## Check written package size
+                            if ("PKG_TOTAL_SIZE" in Results \
+                                and Extract["BYTES_WRITTEN"] != Results["PKG_TOTAL_SIZE"]) \
+                            or ("FILE_SIZE" in Results \
+                                and Extract["BYTES_WRITTEN"] != Results["FILE_SIZE"]):
+                                eprint("Written size {} of unencrypted/decrypted data from".format(Extract["BYTES_WRITTEN"]), Input_Stream.getSource())
+                                if ("PKG_TOTAL_SIZE" in Results \
+                                    and Extract["BYTES_WRITTEN"] != Results["PKG_TOTAL_SIZE"]):
+                                    eprint("mismatches package total size of", Results["PKG_TOTAL_SIZE"])
+                                if ("FILE_SIZE" in Results \
+                                    and Extract["BYTES_WRITTEN"] != Results["FILE_SIZE"]):
+                                    eprint("mismatches file size of", Results["FILE_SIZE"])
+                                eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info")
+                    ## Clean-up
+                    del Extract
+                    del Key
             ## --> PKG4
             elif Pkg_Magic == CONST_PKG4_MAGIC:
-                pass  ## TODO: not supported yet
+                pass  ## TODO: PS4 extraction not supported yet
 
             ## Close input stream
             Input_Stream.close(Debug_Level)
 
-            ## Ensure that all messages are output
+            ## Output additional results
+            for Output_Format in Arguments.format:
+                if Output_Format == 50:  ## Additional debugging Output
+                    if Extractions:
+                        dprintFieldsDict(Extractions, "extractions[{KEY:9}]", 2, None, print_func=print, sep="")
+            ## --> Ensure that all messages are output
             sys.stdout.flush()
             sys.stderr.flush()
 

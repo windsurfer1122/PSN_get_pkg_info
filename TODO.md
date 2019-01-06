@@ -14,12 +14,17 @@
   * Extracted all data via -f 99 to separate text files and grep'ed through them
 
 ## Wishlist
-- [ ] -x/--extract functionality from pkg2zip
-  * How to recognize directories and other non-files?
-  * Analyze itementries of test examples.
-  * Needs to read complete file.
-  * https://github.com/mmozeiko/pkg2zip/blob/master/pkg2zip.c#L873
-  * https://github.com/weaknespase/PkgDecrypt/blob/master/pkg_dec.c#L256
+- [ ] `-x` extract functionality from pkg2zip (similar to `--make-dirs=ux` extract functionality from pkg_dec)
+  * [ ] zrif support
+  * [x] for PSV/PSM packages
+  * [ ] for PSX/PSP packages
+  * [ ] bgdl support
+  * [ ] zip support
+- [ ] `--make-dirs=id` extract functionality from pkg_dec
+  * [ ] zrif support
+  * [x] for PSV/PSM packages
+  * [ ] for PSX/PSP packages
+  * [ ] for PS3 packages
 - [ ] Extend PS4 package support
   * Decrypt files (not necessary, nice-to-have)
     http://www.psdevwiki.com/ps4/PKG_files#PFS

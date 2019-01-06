@@ -1,4 +1,4 @@
-# PSN_get_pkg_info.py (c) 2018 by "windsurfer1122"
+# PSN_get_pkg_info.py (c) 2018-2019 by "windsurfer1122"
 Extract package information from header and PARAM.SFO of PS3/PSX/PSP/PSV/PSM and PS4 packages.
 
 ## Goals
@@ -25,14 +25,14 @@ If you state URLs then only the necessary bytes are downloaded into memory. Note
 
 ## Requirements
 * Python Modules
-  * [pycryptodomex](https://www.pycryptodome.org/) (note the X at the end)
+  * [pycryptodomex](https://www.pycryptodome.org/) (note the X at the end of the module name)
   * [requests](http://python-requests.org/)
   * [aenum](https://bitbucket.org/stoneleaf/aenum)
 
 ### Installing on Debian
 1. Most Python modules can be installed via apt.<br>
-Install Python 3 modules via the following apt packages: python3-requests python3-cryptography.<br>
-As Python 2 is the default on Debian and this version should be used, then install apt packages: python-future python-requests python-cryptography.
+Install Python 3 modules via the following apt packages: python3-requests.<br>
+As Python 2 is the default on Debian and this version should be used, then install apt packages: python-future python-requests.
 
 1. Install further necessary Python modules via pip.
    * Install pycryptodomex module:
@@ -58,7 +58,6 @@ As Python 2 is the default on Debian and this version should be used, then insta
    * Update PIP itself first: `python -m pip install --upgrade pip`
    * Install requests module: `pip install --upgrade requests`
    * Install pycryptodomex module: `pip install --upgrade pycryptodomex`
-   * Install cryptography module: `pip install --upgrade cryptography`
    * Install aenum module: `pip install --upgrade aenum`
    * Exit Command Prompt: `exit`
 
