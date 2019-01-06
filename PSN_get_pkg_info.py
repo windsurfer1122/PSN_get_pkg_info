@@ -2619,6 +2619,8 @@ if __name__ == "__main__":
                         JSON_Output["results"]["pkgPlatform"] = Results["PLATFORM"]
                     if "PKG_TYPE" in Results:
                         JSON_Output["results"]["pkgType"] = Results["PKG_TYPE"]
+                    if "PKG_SUB_TYPE" in Results:
+                        JSON_Output["results"]["pkgSubType"] = Results["PKG_SUB_TYPE"]
                     #
                     if "TOOL_VERSION" in Results:
                         JSON_Output["results"]["toolVersion"] = Results["TOOL_VERSION"]
