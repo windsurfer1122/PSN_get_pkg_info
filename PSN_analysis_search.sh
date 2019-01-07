@@ -12,6 +12,7 @@ usage()
   printf -- 'optional arguments:\n'
   printf -- '  -h   Show this help message and exit.\n'
   printf -- '  -u   Output unique values only including count.\n'
+  printf -- '  -c   Additionally count unique values.\n'
   printf -- '  -o   Use grep --only-matching for GREP_OUTPUT. Useful in combination with unique values.\n'
   printf -- '  -n   No file names in results via grep -h for GREP_OUTPUT. Useful in combination with unique values.\n'
   printf -- '  -l   Take initial file list from specified input file (per each directory).\n'
@@ -44,7 +45,7 @@ main()
 {
   ## Localize and initialize variables
   local OPTION OPTARG OPTIND
-  local HELP INITIALFILELIST UNIQUE REPLACEDIRS VERBOSE ONLYMATCHING NOFILENAMES
+  local HELP INITIALFILELIST UNIQUE DOCOUNT REPLACEDIRS VERBOSE ONLYMATCHING NOFILENAMES
   local DEFAULTDIRS DIRS DIR
   local IFS OLDIFS TABIFS
   local GREP GREP_OUTPUT GREP_DISPLAY FILELIST NEWFILELIST LINE REEVAL VALUE
@@ -79,11 +80,12 @@ main()
   DIRS="${DEFAULTDIRS}"
 
   ## Process command line options
-  while getopts 'hl:urvon' OPTION
+  while getopts 'hl:ucrvon' OPTION
    do
     case "${OPTION}" in
      ('h'|'?') HELP=1 ;;
      ('u') set_variable_once UNIQUE 1 ;;
+     ('c') set_variable_once DOCOUNT 1 ;;
      ('o') set_variable_once ONLYMATCHING "-o" ;;
      ('n') set_variable_once NOFILENAMES "-h" ;;
      ('l') set_variable_once INITIALFILELIST "${OPTARG}" ;;
@@ -157,6 +159,9 @@ main()
   #VALUE_1='content_id' ; VALUE_2='' ; ## none found, no item with this name
   #GREP_OUTPUT="-E	-e	Flags[[:space:]]+.*Name[[:space:]]+\\\".*${VALUE_1}" ; ## search item name part
   #GREP_OUTPUT="-E	-e	Flags[[:space:]]+0x[[:xdigit:]]{6}${VALUE_2}.*\$" ; ## search item flags part
+  #
+  ## Determine read-ahead size for python script
+  #GREP_OUTPUT='-e	^headerfields\[\"DATAOFS\".*	-e	^metadata\[0x0d\].*SHA256	-e	^results\[\"ITEMS_INFO_SIZE\".*'
 
   ## Clean-up and check GREP_OUTPUT pattern
   set -u
@@ -240,7 +245,12 @@ main()
       #set -x
       if [ "${UNIQUE:-0}" -eq 1 ]  ## unique values
        then
-        { sort -z -- "${FILELIST}" | xargs -0 -r -L 10 ${VERBOSE:-} -- grep -R ${NOFILENAMES:--H} ${ONLYMATCHING:-} ${GREP_OUTPUT} -- | sort | uniq -c ; } || :
+        if [ "${DOCOUNT:-0}" -eq 1 ]  ## count unique values
+         then
+          { sort -z -- "${FILELIST}" | xargs -0 -r -L 10 ${VERBOSE:-} -- grep -R ${NOFILENAMES:--H} ${ONLYMATCHING:-} ${GREP_OUTPUT} -- | sort | uniq -c ; } || :
+        else
+          { sort -z -- "${FILELIST}" | xargs -0 -r -L 10 ${VERBOSE:-} -- grep -R ${NOFILENAMES:--H} ${ONLYMATCHING:-} ${GREP_OUTPUT} -- | sort | uniq ; } || :
+        fi
       else
         { sort -z -- "${FILELIST}" | xargs -0 -r -L 10 ${VERBOSE:-} -- grep -R ${NOFILENAMES:--H} ${ONLYMATCHING:-} ${GREP_OUTPUT} -- | sort ; } || :
       fi

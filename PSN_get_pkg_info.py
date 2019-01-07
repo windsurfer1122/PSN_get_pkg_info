@@ -225,6 +225,7 @@ CONST_FMT_UINT64, CONST_FMT_UINT32, CONST_FMT_UINT16, CONST_FMT_UINT8 = 'Q', 'L'
 CONST_FMT_INT64, CONST_FMT_INT32, CONST_FMT_INT16, CONST_FMT_INT8 = 'q', 'l', 'h', 'b'
 #
 CONST_READ_SIZE = random.randint(50,100) * 0x100000  ## Read in 50-100 MiB chunks to reduce memory usage and swapping
+CONST_READ_AHEAD_SIZE = 5 * 0x100000  ## Read first 5 MiB to reduce read requests
 #
 CONST_EXTRACT_RAW = "RAW"
 CONST_EXTRACT_UX0 = "UX0"
@@ -620,15 +621,17 @@ def calculateAesAlignedOffsetAndSize(offset, size):
     return align
 
 
-class PkgReader():
+class InputReader():
     def __init__(self, source, headers, debug_level=0):
         self._source = source
         self._size = None
+        self._buffer = None
+        self._buffer_size = 0
 
         if self._source.startswith("http:") \
         or self._source.startswith("https:"):
             if debug_level >= 2:
-                dprint("Opening source as URL data stream")
+                dprint("[INPUT] Opening source as URL data stream")
             self._stream_type = "requests"
             self._pkg_name = os.path.basename(requests.utils.urlparse(self._source).path)
             ## Persistent session
@@ -636,25 +639,25 @@ class PkgReader():
             try:
                 self._input_stream = requests.Session()
             except:
-                eprint("Could not create HTTP/S session for PKG URL", self._source)
+                eprint("[INPUT] Could not create HTTP/S session for PKG URL", self._source)
                 eprint("", prefix=None)
                 sys.exit(2)
             self._input_stream.headers = headers
             response = self._input_stream.head(self._source)
             if debug_level >= 2:
-                dprint(response)
-                dprint("Response headers:", response.headers)
+                dprint("[INPUT]", response)
+                dprint("[INPUT] Response headers:", response.headers)
             if "content-length" in response.headers:
                 self._size = int(response.headers["content-length"])
         else:
             if debug_level >= 2:
-                dprint("Opening source as FILE data stream")
+                dprint("[INPUT] Opening source as FILE data stream")
             self._stream_type = "file"
             self._pkg_name = os.path.basename(self._source)
             try:
                 self._input_stream = io.open(self._source, mode="rb", buffering=-1, encoding=None, errors=None, newline=None, closefd=True)
             except:
-                eprint("Could not open PKG FILE", self._source)
+                eprint("[INPUT] Could not open PKG FILE", self._source)
                 eprint("", prefix=None)
                 sys.exit(2)
             #
@@ -662,7 +665,13 @@ class PkgReader():
             self._size = self._input_stream.tell()
 
         if debug_level >= 3:
-            dprint("Data stream is of class", self._input_stream.__class__.__name__)
+            dprint("[INPUT] Data stream is of class", self._input_stream.__class__.__name__)
+
+        if CONST_READ_AHEAD_SIZE > 0:
+            self._buffer = self.read(0, CONST_READ_AHEAD_SIZE, debug_level)
+            self._buffer_size = len(self._buffer)
+            if debug_level >= 3:
+                dprint("[INPUT] Buffered first {} bytes of data stream".format(self._buffer_size), "(max {})".format(CONST_READ_AHEAD_SIZE) if self._buffer_size != CONST_READ_AHEAD_SIZE else "")
 
     def getSize(self, debug_level=0):
         return self._size
@@ -670,20 +679,51 @@ class PkgReader():
     def getSource(self, debug_level=0):
         return self._source
 
-    def getPkgName(self, debug_level=0):
+    def getBaseName(self, debug_level=0):
         return self._pkg_name
 
     def read(self, offset, size, debug_level=0):
-        if self._stream_type == "file":
-            self._input_stream.seek(offset, os.SEEK_SET)
-            return bytearray(self._input_stream.read(size))
-        elif self._stream_type == "requests":
-            ## Send request in persistent session
-            ## http://docs.python-requests.org/en/master/api/#requests.Session.get
-            ## http://docs.python-requests.org/en/master/api/#requests.request
-            reqheaders={"Range": "bytes={}-{}".format(offset, (offset + size - 1) if size > 0 else "")}
-            response = self._input_stream.get(self._source, headers=reqheaders)
-            return bytearray(response.content)
+        result = bytearray()
+        read_offset = offset
+        read_size = size
+        read_done = False
+
+        if self._buffer \
+        and self._buffer_size > read_offset:
+            if read_size < 0:
+                read_buffer_size = self._buffer_size-read_offset
+            else:
+                if self._buffer_size < (read_offset+read_size):
+                    read_buffer_size = self._buffer_size-read_offset
+                else:
+                    read_buffer_size = read_size
+                    read_done = True
+            #
+            if debug_level >= 3:
+                dprint("[INPUT] Get offset {:#010x} size {}/{} bytes from buffer".format(read_offset, read_buffer_size, size))
+            #
+            result.extend(self._buffer[read_offset:read_offset+read_buffer_size])
+            #
+            read_offset += read_buffer_size
+            if read_size > 0:
+                read_size -= read_buffer_size
+
+        if not read_done:
+            if debug_level >= 3:
+                dprint("[INPUT] Read offset {:#010x} size {}/{} bytes".format(read_offset, read_size, size))
+            #
+            if self._stream_type == "file":
+                self._input_stream.seek(read_offset, os.SEEK_SET)
+                result.extend(self._input_stream.read(read_size))
+            elif self._stream_type == "requests":
+                ## Send request in persistent session
+                ## http://docs.python-requests.org/en/master/api/#requests.Session.get
+                ## http://docs.python-requests.org/en/master/api/#requests.request
+                reqheaders={"Range": "bytes={}-{}".format(read_offset, (read_offset + read_size - 1) if read_size > 0 else "")}
+                response = self._input_stream.get(self._source, headers=reqheaders)
+                result.extend(response.content)
+
+        return result
 
     def close(self, debug_level=0):
         return self._input_stream.close()
@@ -1461,8 +1501,6 @@ def processPkg3Item(header_fields, item_entry, input_stream, item_data, extracti
 
         ## Get and process encrypted data block
         if input_stream:
-            if function_debug_level >= 3:
-                dprint("...read offset {:#010x} size {}".format(file_offset, block_size))
             ## Read encrypted data block
             try:
                 encrypted_bytes = input_stream.read(file_offset, block_size, function_debug_level)
@@ -1903,7 +1941,7 @@ if __name__ == "__main__":
             else:
                 eprint("# >>>>>>>>>> PKG Source:", Source, prefix=None)
             #
-            Input_Stream = PkgReader(Source, Headers, Debug_Level)
+            Input_Stream = InputReader(Source, Headers, Debug_Level)
             Results["FILE_SIZE"] = Input_Stream.getSize(Debug_Level)
             if Results["FILE_SIZE"] is None:
                 del Results["FILE_SIZE"]
@@ -2769,7 +2807,7 @@ if __name__ == "__main__":
                     Extract["ROOT_IS_DIR"] = Raw_Is_Dir
                     #
                     if Extract["ROOT_IS_DIR"]:
-                        Extract["TARGET"] = os.path.join(Extract["ROOT"], "".join((Input_Stream.getPkgName(), ".decrypted")))
+                        Extract["TARGET"] = os.path.join(Extract["ROOT"], "".join((Input_Stream.getBaseName(), ".decrypted")))
                     else:
                         Extract["TARGET"] = Extract["ROOT"]
                     if Arguments.quiet <= 1:
