@@ -5,6 +5,7 @@ Extract package information from header and PARAM.SFO of PS3/PSX/PSP/PSV/PSM and
 * One-for-all solution to retrieve all header data and PARAM.SFO data from PSN packages
 * Decryption of PS3 encrypted data to get all data
 * Support of all known package types: PS3/PSX/PSP, PSV/PSM, PS4
+* Extraction of PS3/PSX/PSP/PSV/PSM packages similar to pkg2zip and pkg_dec
 * Easy enhancement of interpreting data (=done at the very end with all data at hand)
 * Support http download streaming to avoid harddisk usage
 * Support multiple output formats
@@ -23,6 +24,10 @@ It is recommended to place `--` before the package sources, to avoid them being 
 Use at your own risk!<br>
 If you state URLs then only the necessary bytes are downloaded into memory. Note that the options "--raw" downloads the complete package once without storing the original data on the file system.
 
+## Contributions welcome
+* Especially information about how to interpret data is needed, e.g. content id
+* See TODO.MD what is still left to do
+
 ## Requirements
 * Python Modules
   * [pycryptodomex](https://www.pycryptodome.org/) (note the X at the end of the module name)
@@ -30,9 +35,20 @@ If you state URLs then only the necessary bytes are downloaded into memory. Note
   * [aenum](https://bitbucket.org/stoneleaf/aenum)
 
 ### Installing on Debian
-1. Most Python modules can be installed via apt.<br>
-Install Python 3 modules via the following apt packages: python3-requests.<br>
-As Python 2 is the default on Debian and this version should be used, then install apt packages: python-future python-requests.
+1. Python 3, which is the recommended version, and most modules can be installed via apt.<br>
+Install Python 3 and some modules via the following apt packages: `python3 python3-pip python3-requests`.<br>
+
+1. Python 2 is the default on Debian, but comes with an outdated pip version until Debian 8.<br>
+Note that with Python 2 ZRIF support is not possible at all.<br>
+__Starting with Debian 9 "Stretch"__ install Python 2 modules via the following apt packages: `python-pip python-future python-requests`.<br>
+For __Debian up to 8 "Jessie"__ use the pip version from the original [PyPi](https://pypi.org/project/pip/) source:<br>
+   ```
+   apt-get purge python-pip python-dev python-future
+   apt-get autoremove
+   wget https://bootstrap.pypa.io/get-pip.py
+   python2 get-pip.py
+   pip2 install --upgrade future
+   ```
 
 1. Install further necessary Python modules via pip.
    * Install pycryptodomex module:

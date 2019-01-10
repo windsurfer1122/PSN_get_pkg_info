@@ -2,11 +2,35 @@
 
 ## To Do
 - [ ] Recognize more package types
-  * PSP: PKG content type 15/0xf not supported. PSP/Minis/PC Engine/Neo Geo
+  * [ ] PS4: all content types
+  * [ ] PS3:
+    * [ ] 0x12  (~120)
+      * http://zeus.dl.playstation.net/cdn/EP0082/NPED00074_00/VoMyrXCrWATePvUyryZuDHHxDALraMWTDGFGwFnaHKyopFrDccwRrCTXAvAPxcje.pkg
+      * http://zeus.dl.playstation.net/cdn/EP0082/NPED00075_00/grcqGWaHzewtoNdvZNWSgXXZMgCSEckKhcLbsHhDRsfymtOUPHPTWsbbIbhttiJw.pkg
+      * http://zeus.dl.playstation.net/cdn/EP0102/NPED00052_00/ZaZbieaYFakfVgarWgAitqWPQdQUnaFUPHIjlOUmyeJJZMnzNeWmlwuOTMSAfMmk.pkg
+      * http://zeus.dl.playstation.net/cdn/EP0102/NPED00053_00/zXHDGKwawTmGxFRdvzrbFDMwFRZoKeRXjLYsjehijcEKLRYUkCCXGYInEaQluPqt.pkg
+      * http://zeus.dl.playstation.net/cdn/UP9000/NPUC97264_00/NPhIMQZdoQiKhozFlXZEmIubFOADKIxDSgRYOCrsMHKgupvOFEpllnvigLXOkRgPeTNawvsMIIiqwyAzBNptyZZsQZCxHLnZiguWp.pkg
+      * http://zeus.dl.playstation.net/cdn/UP9000/NPUC97355_00/pkMXkKUtHHiKLdNxPxdLRtryBKdgnVyCKDSofgNyOpPLovIYRBFIlsMrsqGzCxUL.pkg
+      * http://zeus.dl.playstation.net/cdn/UP9000/NPUD00294_00/UP9000-NPUD00294_00-GSUIKODEN3000001_bg_1_49c2d881b0828e5a0caafd59311b08605ec1b1da.pkg
+    * [ ] 0x13 (4)
+      * http://zeus.dl.playstation.net/cdn/EP0700/NPEB01202_00/USQeayptvnilvJYHZhbDGsLJkhnVxGUYyqAMVEMCTyjZMKYcgBMAViDHppMgKArB.pkg
+      * http://zeus.dl.playstation.net/cdn/JP9000/NPJA00102_00/XYEnBIbgQzQZBByvAoJqqYPrDImdimIeSNDKRtaqayKkyqNkiTYUqhWKRbjrtChwpRzoOqhwjAxjCezuDfhRiKxSOftekvvGQxmYO.pkg
+      * http://zeus.dl.playstation.net/cdn/JP9000/NPJA00104_00/wzhwRwKebinCHvOxRmvATaHYuMeTDokliWioWHUylTNNFazDJikZShgBZvwKUoawZIIixneZFVeSCUBzpIXuRIwCwEQIpKBlCpaQC.pkg
+      * http://zeus.dl.playstation.net/cdn/UP0005/NPUB30910_00/MfxrUDwAWCgSWmixQoFdiKbaBdrkFAvAfoiXLUXaDBYJzYOkIvGqlbOyfrquqXgv.pkg
+    * [ ] 0x14 (1)
+      * http://zeus.dl.playstation.net/cdn/JP0102/NPJB00370_00/dhuyqrqbzuyFjxqfAiFbvDvkBAWJAUAufQrECuurDgNzZtVIRVPwgSScAVVGwZuizwEWRBnugnsqyAqRdpZBAqyzPzxNWyJYSedsr.pkg
+  * [x] PSP: PKG content type 15/0xf not supported. PSP/Minis/PC Engine/Neo Geo
     * UP4128/NPUZ00242_00/GSknEkVAKwcEGLQVjxbSnOJFFvmtRYSsfCfCkCURuVKgBrKDJuNgrbmUyadjTzIYTQglsNZTWaMfIjacotTAArwGtyPWSIZTOVMVy.pkg (Game Mini)
     * UP4128/NPUZ00193_00/NTPIvymtsQUIyYqhGucTmnidjuSdWhcnpFEBZwFDfkkAbpUnBrBOvueSpAAKWFapwYWvuFUvbhiqWeaufJShHxBwrzwfcBhTXXOxT.pkg (Game Mini)
     * JP0805/NPJJ30059_00/hGkJbqgmXJYjRBTOmUmPvqrLwUhFBiHNNSiAeBuaezdPyvmyVlzYvKgYuoBBOdEFEltRyPeWSKluetJvVrbuPSQiAZgSSKKEjeyTF.pkg (PC Engine)
     * JP0576/NPJH70002_00/EpdkZDkoEKlZtxUVKzdIqeCuFXiSzhjrWwNoANeOHvFjLnPsydXwtAtYfLbklqLMBlQEHaoxtEqsRnRLCUTLvklkSEJgtQNWMWtMB.pkg (Neo Geo)
+- [ ] `-x` extract functionality from pkg2zip (similar to `--make-dirs=ux` extract functionality from pkg_dec)
+  * [x] extraction of PSV/PSM packages
+  * [x] zrif support for PSV/PSM packages
+  * [x] extraction of PSX packages
+  * [ ] extraction of PSP packages
+  * [ ] zip support (see pkg2zip_out.c, variable out_zipped)
+- [ ] Read PSM's "contents/Application/app.info" for details (wiki entries present)
 - [x] Switch from unmaintained module pycrypto to pycryptodomex
   * pycrypto has not been maintained since 2014
 - [x] Find package that uses PKG3 Key #03
@@ -14,22 +38,16 @@
   * Extracted all data via -f 99 to separate text files and grep'ed through them
 
 ## Wishlist
-- [ ] `-x` extract functionality from pkg2zip (similar to `--make-dirs=ux` extract functionality from pkg_dec)
-  * [ ] zrif support
-  * [x] for PSV/PSM packages
-  * [ ] for PSX/PSP packages
-  * [ ] bgdl support
-  * [ ] zip support
-- [ ] `--make-dirs=id` extract functionality from pkg_dec
-  * [ ] zrif support
-  * [x] for PSV/PSM packages
-  * [ ] for PSX/PSP packages
-  * [ ] for PS3 packages
 - [ ] Extend PS4 package support
   * Decrypt files (not necessary, nice-to-have)
     http://www.psdevwiki.com/ps4/PKG_files#PFS
     https://github.com/xvortex/ps4-dumper-vtx/blob/master/source/dump.c
     https://github.com/n1ghty/pkg_tools/blob/master/lib/pkg_parser.py
   * ~~Correct HTTP headers (difficult, PKG type only known when already accessed)~~
+- [x] `--make-dirs=id` extract functionality from pkg_dec
+  * [x] extraction of PSV/PSM packages
+  * [x] zrif support for PSV/PSM packages
+  * [x] extraction of PSX/PSP packages
+  * [x] extraction of PS3 packages
 - [x] --raw functionality from pkg2dec
   * Needs to read complete file.

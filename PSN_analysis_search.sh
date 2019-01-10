@@ -118,7 +118,6 @@ main()
   ## Use REEVAL=1 if ${DIR} is part of your grep statement.
   ##   Take care of the necessary extra escaping of special chars (backslash, quotes, etc.)
   ## Use VALUE_<n> as supporting variables.
-  set +u
   ##
   ## Examples:
   ## GREP_1='-l	-e	^headerfields\[\"TYPE\".*:.* = 0x1$'
@@ -152,19 +151,18 @@ main()
   #
   ## search special item/file names
   #VALUE_1='sce_sys/package/digs.bin' ; VALUE_2='18' ; ## as it is extracted encrypted (not decrypted) as body.bin; only in PSV packages with flags 0xa0007018/0xa0007818 (no other items with 0x...18)
-  #VALUE_1='sce_sys/package/body.bin' ; VALUE_2='03' ; ## see also digs.bin; only in PSM packages with flags 0xc0000003
-  #VALUE_1='sce_sys/package/head.bin' ; VALUE_2='03' ; ## only in PSM packages with flags 0xc0000003
-  #VALUE_1='sce_sys/package/tail.bin' ; VALUE_2='03' ; ## only in PSM packages with flags 0xc0000003
-  #VALUE_1='sce_sys/package/stat.bin' ; VALUE_2='03' ; ## only in PSM packages with flags 0xc0000003
+  #VALUE_1='sce_sys/package/body.bin' ; VALUE_2='03' ; ## see also digs.bin; only in PSM packages in contents/runtime/ with flags 0xc0000003
+  #VALUE_1='sce_sys/package/head.bin' ; VALUE_2='03' ; ## only in PSM packages in contents/runtime/ with flags 0xc0000003
+  #VALUE_1='sce_sys/package/tail.bin' ; VALUE_2='03' ; ## only in PSM packages in contents/runtime/ with flags 0xc0000003
+  #VALUE_1='sce_sys/package/stat.bin' ; VALUE_2='03' ; ## only in PSM packages in contents/runtime/ with flags 0xc0000003
   #VALUE_1='content_id' ; VALUE_2='' ; ## none found, no item with this name
   #GREP_OUTPUT="-E	-e	Flags[[:space:]]+.*Name[[:space:]]+\\\".*${VALUE_1}" ; ## search item name part
   #GREP_OUTPUT="-E	-e	Flags[[:space:]]+0x[[:xdigit:]]{6}${VALUE_2}.*\$" ; ## search item flags part
   #
   ## Determine read-ahead size for python script
-  #GREP_OUTPUT='-e	^headerfields\[\"DATAOFS\".*	-e	^metadata\[0x0d\].*SHA256	-e	^results\[\"ITEMS_INFO_SIZE\".*'
+  #GREP_OUTPUT='-e	^headerfields\[\"DATAOFS\".*	-e	^metadata\[0x0d\].*SHA256	-e	^results\[\"ITEMS_INFO_SIZE\".* ='
 
   ## Clean-up and check GREP_OUTPUT pattern
-  set -u
   GREP_OUTPUT="$(printf -- '%s' "${GREP_OUTPUT:-}" | sed -r -e 's#(-l|-L)##g ; s#[\t]+#\t#g ; s#(^\t|\t$)##g')"
   #
   if [ -z "${GREP_OUTPUT:-}" ]

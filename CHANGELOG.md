@@ -1,12 +1,20 @@
 # PSN_get_pkg_info.py - Changelog
 
-## 2019.01.00 alpha 2
+## 2019.01.00 alpha 3
+* NEW: Added zrif support to extraction functionality for PSV/PSM packages
+* NEW: Added pkg2zip's `--ux0` extraction functionality for PSX/PSV/PSM packages (PSP still missing)
+* NEW: Added pkg_dec's "makedir=id" `--content` extraction functionality for PS3/PSX/PSP/PSV/PSM packages
+* NEW: Read first 1 MiB of each package to reduce HTTP/S request while keeping download time short (size fits 99% of known packages)
+* FIX: Updated and corrected content id recognition
+
+(alpha 2)
 * NEW: (preliminary) Added pkg2zip's `--ux0` extraction functionality for PSV/PSM packages
 * NEW: (preliminary) Added pkg_dec's "makedir=id" `--content` extraction functionality for PSV/PSM packages
 * NEW: Added option `--quiet` to suppress extraction messages
 * FIX: Content ID in header fields is 48 bytes long and not 36 (derived from PSM extraction)
 * INTERAL: Used dictionary for all extractions and adopted code to generic extraction routines
 * INTERAL: output format code 50 for debugging extractions
+
 (alpha 1)
 * NEW: Added item flags to output format 99 for detailed analysis
 * NEW: Added checks for extraction targets to avoid issues before reading packages
