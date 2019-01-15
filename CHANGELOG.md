@@ -1,6 +1,14 @@
 # PSN_get_pkg_info.py - Changelog
 
-## 2019.01.00 alpha 3
+## 2019.01.00 alpha 4
+* FIX: avoid leading spaces on metadata output (-f 99)
+* FIX: Read only first 128 KiB to reduce download time (size fits unecrypted header size of all known packages)
+* FIX: Fine-tuned messages for remaining data and unaligned access
+* FIX: Corrected extraction messages for PSM additional special files
+* INTERNAL: Items Info changes: rename function and variables, handle encrypted offset > 0 correctly, single bytearray for Items Info (entries plus names), use Items Info size from meta data if available, moved existing checks into function, added new checks, placed data about Items Info in own results dictionary, removed unneccesary internal data from JSON output
+* INTERNAL: Extraction: create all directories before extracting any file, added item index to extraction messages
+
+(alpha 3)
 * NEW: Added zrif support to extraction functionality for PSV/PSM packages
 * NEW: Added pkg2zip's `--ux0` extraction functionality for PSX/PSV/PSM packages (PSP still missing)
 * NEW: Added pkg_dec's "makedir=id" `--content` extraction functionality for PS3/PSX/PSP/PSV/PSM packages
@@ -12,8 +20,8 @@
 * NEW: (preliminary) Added pkg_dec's "makedir=id" `--content` extraction functionality for PSV/PSM packages
 * NEW: Added option `--quiet` to suppress extraction messages
 * FIX: Content ID in header fields is 48 bytes long and not 36 (derived from PSM extraction)
-* INTERAL: Used dictionary for all extractions and adopted code to generic extraction routines
-* INTERAL: output format code 50 for debugging extractions
+* INTERNAL: Used dictionary for all extractions and adopted code to generic extraction routines
+* INTERNAL: output format code 50 for debugging extractions
 
 (alpha 1)
 * NEW: Added item flags to output format 99 for detailed analysis

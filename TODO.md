@@ -44,6 +44,12 @@
     https://github.com/xvortex/ps4-dumper-vtx/blob/master/source/dump.c
     https://github.com/n1ghty/pkg_tools/blob/master/lib/pkg_parser.py
   * ~~Correct HTTP headers (difficult, PKG type only known when already accessed)~~
+- [ ] Determine package's details URL in Store
+  * https://store.playstation.com/valkyrie-api/en/GB/25/resolve/EP9000-PCSF00214_00-PREORDER0AMAZON0?depth=2
+  * https://store.playstation.com/valkyrie-api/en/US/25/resolve/UP9000-PCSA00002_00-MLB12THESHOWVITA?depth=2
+  * https://store.playstation.com/valkyrie-api/en/HK/25/resolve/JP0106-PCSG00002_00-MUSOUNEXT0000000?depth=2
+  * https://store.playstation.com/valkyrie-api/en/HK/25/resolve/HP0106-PCSH10027_00-TOUKIDEN2F2P0000?depth=2
+  * Korea?
 - [x] `--make-dirs=id` extract functionality from pkg_dec
   * [x] extraction of PSV/PSM packages
   * [x] zrif support for PSV/PSM packages

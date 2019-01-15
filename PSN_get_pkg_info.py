@@ -57,7 +57,7 @@ from builtins import bytes
 
 
 ## Version definition
-__version__ = "2019.01.00a3"
+__version__ = "2019.01.00a4"
 __author__ = "https://github.com/windsurfer1122/PSN_get_pkg_info"
 __license__ = "GPL"
 __copyright__ = "Copyright 2018, windsurfer1122"
@@ -238,7 +238,7 @@ CONST_FMT_UINT64, CONST_FMT_UINT32, CONST_FMT_UINT16, CONST_FMT_UINT8 = 'Q', 'L'
 CONST_FMT_INT64, CONST_FMT_INT32, CONST_FMT_INT16, CONST_FMT_INT8 = 'q', 'l', 'h', 'b'
 #
 CONST_READ_SIZE = random.randint(50,100) * 0x100000  ## Read in 50-100 MiB chunks to reduce memory usage and swapping
-CONST_READ_AHEAD_SIZE = 1 * 0x100000  ## Read first 1 MiB to reduce read requests (fits 99% of known packages)
+CONST_READ_AHEAD_SIZE = 128 * 0x400 ## Read first 128 KiB to reduce read requests (fits header of known packages; Kib/Mib = 0x400/0x100000; biggest header + Items Info found was 2759936 = 0x2a1d00 = ~2.7 MiB)
 #
 CONST_EXTRACT_RAW = "RAW"
 CONST_EXTRACT_UX0 = "UX0"
@@ -352,16 +352,22 @@ CONST_PKG3_ITEM_ENTRY_FIELDS = collections.OrderedDict([ \
 ## http://www.psdevwiki.com/ps3/Keys#gpkg-key
 ## https://playstationdev.wiki/psvitadevwiki/index.php?title=Keys#Content_PKG_Keys
 CONST_PKG3_CONTENT_KEYS = {
-   0: { "KEY": bytes.fromhex("2e7b71d7c9c9a14ea3221f188828b8f8"), "DESC": "PS3",     },
-   1: { "KEY": bytes.fromhex("07f2c68290b50d2c33818d709b60e62b"), "DESC": "PSX/PSP", },
-   2: { "KEY": bytes.fromhex("e31a70c9ce1dd72bf3c0622963f2eccb"), "DESC": "PSV",     "DERIVE": True, },
-   3: { "KEY": bytes.fromhex("423aca3a2bd5649f9686abad6fd8801f"), "DESC": "Unknown", "DERIVE": True, },
-   4: { "KEY": bytes.fromhex("af07fd59652527baf13389668b17d9ea"), "DESC": "PSM",     "DERIVE": True, },
+   0: { "KEY": "Lntx18nJoU6jIh8YiCi4+A==", "DESC": "PS3",     },
+   1: { "KEY": "B/LGgpC1DSwzgY1wm2DmKw==", "DESC": "PSX/PSP", },
+   2: { "KEY": "4xpwyc4d1yvzwGIpY/Lsyw==", "DESC": "PSV",     "DERIVE": True, },
+   3: { "KEY": "QjrKOivVZJ+Whqutb9iAHw==", "DESC": "Unknown", "DERIVE": True, },
+   4: { "KEY": "rwf9WWUlJ7rxM4lmixfZ6g==", "DESC": "PSM",     "DERIVE": True, },
 }
+for Key in CONST_PKG3_CONTENT_KEYS:
+    CONST_PKG3_CONTENT_KEYS[Key]["KEY"] = base64.standard_b64decode(CONST_PKG3_CONTENT_KEYS[Key]["KEY"])
+del Key
 ## --> PKG Update Keys
 CONST_PKG3_UPDATE_KEYS = {
-   2: { "KEY": bytes.fromhex("e5e278aa1ee34082a088279c83f9bbc806821c52f2ab5d2b4abd995450355114"), "DESC": "PSV", },
+   2: { "KEY": "5eJ4qh7jQIKgiCecg/m7yAaCHFLyq10rSr2ZVFA1URQ=", "DESC": "PSV", },
 }
+for Key in CONST_PKG3_UPDATE_KEYS:
+    CONST_PKG3_UPDATE_KEYS[Key]["KEY"] = base64.standard_b64decode(CONST_PKG3_UPDATE_KEYS[Key]["KEY"])
+del Key
 ## --> RIF
 CONST_RIF_TYPE_OFFSET = 0x04
 CONST_RIF0_CID_OFFSET = 0x50  ## PSM license
@@ -734,10 +740,18 @@ class InputReader():
             if self._stream_type == "file":
                 self._input_stream.seek(read_offset, os.SEEK_SET)
                 result.extend(self._input_stream.read(read_size))
+                ## supports the following.
+                ## * offset=9000 + size=-1 => all bytes from offset 9000 to the end
+                ## does *NOT* support the following, have to calculate size from file size.
+                ## * bytes=-32 => last 32 bytes
             elif self._stream_type == "requests":
                 ## Send request in persistent session
                 ## http://docs.python-requests.org/en/master/api/#requests.Session.get
                 ## http://docs.python-requests.org/en/master/api/#requests.request
+                ## https://www.rfc-editor.org/info/rfc7233
+                ## supports the following.
+                ## * bytes=9000- => all bytes from offset 9000 to the end
+                ## * bytes=-32 => last 32 bytes
                 reqheaders={"Range": "bytes={}-{}".format(read_offset, (read_offset + read_size - 1) if read_size > 0 else "")}
                 response = self._input_stream.get(self._source, headers=reqheaders)
                 result.extend(response.content)
@@ -1186,14 +1200,15 @@ def parsePkg3Header(header_bytes, input_stream, function_debug_level):
                 del temp_fields
 
     ## Retrieve PKG3 Unencrypted Data from input stream
+    read_size = header_fields["DATAOFS"] - CONST_PKG3_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"]
     if function_debug_level >= 2:
-        dprint("Get PKG3 remaining unencrypted data with size", header_fields["DATAOFS"])
+        dprint("Get PKG3 remaining unencrypted data with size {}/{}".format(read_size, header_fields["DATAOFS"]))
     unencrypted_bytes = header_bytes
     try:
-        unencrypted_bytes.extend(input_stream.read(CONST_PKG3_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"], header_fields["DATAOFS"]-CONST_PKG3_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"], function_debug_level))
+        unencrypted_bytes.extend(input_stream.read(CONST_PKG3_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"], read_size, function_debug_level))
     except:
         input_stream.close(function_debug_level)
-        eprint("Could not get PKG3 unencrypted data at offset {:#x} with size {} from".format(CONST_PKG3_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"], header_fields["DATAOFS"] - CONST_PKG3_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"]), input_stream.getSource())
+        eprint("Could not get PKG3 unencrypted data at offset {:#x} with size {} from".format(CONST_PKG3_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"], read_size), input_stream.getSource())
         eprint("", prefix=None)
         sys.exit(2)
 
@@ -1347,9 +1362,9 @@ def parsePkg3Header(header_bytes, input_stream, function_debug_level):
     return header_fields, ext_header_fields, meta_data, unencrypted_bytes
 
 
-def parsePkg3ItemEntries(header_fields, meta_data, input_stream, function_debug_level):
+def parsePkg3ItemsInfo(header_fields, meta_data, input_stream, function_debug_level):
     if function_debug_level >= 2:
-        dprint(">>>>> PKG3 Body Item Entries:")
+        dprint(">>>>> PKG3 Body Items Info:")
 
     ## For definition see http://www.psdevwiki.com/ps3/PKG_files#File_Body
 
@@ -1357,57 +1372,74 @@ def parsePkg3ItemEntries(header_fields, meta_data, input_stream, function_debug_
     item_cnt_len = unicode(len(unicode(header_fields["ITEMCNT"])))
     item_cnt_format_string = "".join(("{:", item_cnt_len, "}"))
 
-    ## Retrieve PKG3 Item Entries from input stream
-    item_entries_bytes = {}
+    ## Retrieve PKG3 Items Info (or Item Entries and Names separately) from input stream
+    items_info_bytes = collections.OrderedDict()
+    #
+    items_info_bytes["OFS"] = 0
+    items_info_bytes["SIZE"] = header_fields["ITEMCNT"] * CONST_PKG3_ITEM_ENTRY_FIELDS["STRUCTURE_SIZE"]
+    items_info_bytes["ALIGN"] = {}
+    items_info_bytes["ENTRIES_SIZE"] = header_fields["ITEMCNT"] * CONST_PKG3_ITEM_ENTRY_FIELDS["STRUCTURE_SIZE"]
+    #
     if 0xD in meta_data:
-        item_entries_bytes["OFS"] = meta_data[0xD]["OFS"]
-    else:
-        item_entries_bytes["OFS"] = 0
-    item_entries_bytes["SIZE"] = header_fields["ITEMCNT"] * CONST_PKG3_ITEM_ENTRY_FIELDS["STRUCTURE_SIZE"]
-    item_entries_bytes["ALIGN"] = calculateAesAlignedOffsetAndSize(item_entries_bytes["OFS"], item_entries_bytes["SIZE"])
+        items_info_bytes["OFS"] = meta_data[0xD]["OFS"]
+        if items_info_bytes["SIZE"] < meta_data[0xD]["SIZE"]:
+            items_info_bytes["SIZE"] = meta_data[0xD]["SIZE"]
+    #
+    items_info_bytes["ALIGN"] = calculateAesAlignedOffsetAndSize(items_info_bytes["OFS"], items_info_bytes["SIZE"])
+    #
     if function_debug_level >= 2:
-        dprint("Get PKG3 item entries from encrypted data with offset {:#x}-{:#x}+{:#x}={:#x} with count {} and size {}+{}={}".format(item_entries_bytes["OFS"], item_entries_bytes["ALIGN"]["OFSDELTA"], header_fields["DATAOFS"], header_fields["DATAOFS"]+item_entries_bytes["ALIGN"]["OFS"], header_fields["ITEMCNT"], item_entries_bytes["SIZE"], item_entries_bytes["ALIGN"]["SIZEDELTA"], item_entries_bytes["ALIGN"]["SIZE"]))
-    if item_entries_bytes["ALIGN"]["OFSDELTA"] > 0:
-        eprint("Unaligned offset {:#x}-{:#x}+{:#x}={:#x} for item entries in".format(item_entries_bytes["OFS"], item_entries_bytes["ALIGN"]["OFSDELTA"], header_fields["DATAOFS"], header_fields["DATAOFS"]+item_entries_bytes["ALIGN"]["OFS"]), input_stream.getSource(), prefix="[ALIGN] ")
+        dprint("Get PKG3 Items Info/Item Entries from encrypted data with offset {:#x}-{:#x}+{:#x}={:#x} with count {} and size {}+{}={}".format(items_info_bytes["OFS"], items_info_bytes["ALIGN"]["OFSDELTA"], header_fields["DATAOFS"], header_fields["DATAOFS"]+items_info_bytes["ALIGN"]["OFS"], header_fields["ITEMCNT"], items_info_bytes["SIZE"], items_info_bytes["ALIGN"]["SIZEDELTA"], items_info_bytes["ALIGN"]["SIZE"]))
+    if items_info_bytes["ALIGN"]["OFSDELTA"] > 0:
+        eprint("Unaligned encrypted offset {:#x}-{:#x}={:#x}(+{:#x}) for Items Info/Item Entries.".format(items_info_bytes["OFS"], items_info_bytes["ALIGN"]["OFSDELTA"], items_info_bytes["ALIGN"]["OFS"], header_fields["DATAOFS"]), input_stream.getSource(), prefix="[ALIGN] ")
         eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[ALIGN] ")
-    item_entries_bytes[CONST_DATATYPE_ENCRYPTED] = bytearray()
+    #
+    items_info_bytes[CONST_DATATYPE_ENCRYPTED] = bytearray()
     try:
-        item_entries_bytes[CONST_DATATYPE_ENCRYPTED].extend(input_stream.read(header_fields["DATAOFS"]+item_entries_bytes["ALIGN"]["OFS"], item_entries_bytes["ALIGN"]["SIZE"], function_debug_level))
+        items_info_bytes[CONST_DATATYPE_ENCRYPTED].extend(input_stream.read(header_fields["DATAOFS"]+items_info_bytes["ALIGN"]["OFS"], items_info_bytes["ALIGN"]["SIZE"], function_debug_level))
     except:
         input_stream.close(function_debug_level)
-        eprint("Could not get PKG3 encrypted data at offset {:#x} with size {} from".format(header_fields["DATAOFS"]+item_entries_bytes["ALIGN"]["OFS"], item_entries_bytes["ALIGN"]["SIZE"]), input_stream.getSource())
+        eprint("Could not get PKG3 encrypted data at offset {:#x} with size {} from".format(header_fields["DATAOFS"]+items_info_bytes["ALIGN"]["OFS"], items_info_bytes["ALIGN"]["SIZE"]), input_stream.getSource())
         eprint("", prefix=None)
         sys.exit(2)
 
     ## Decrypt PKG3 Item Entries
-    item_entries_bytes[CONST_DATATYPE_DECRYPTED] = header_fields["AES_CTR"][header_fields["KEYINDEX"]].decrypt(item_entries_bytes["ALIGN"]["OFS"], item_entries_bytes[CONST_DATATYPE_ENCRYPTED])
+    items_info_bytes[CONST_DATATYPE_DECRYPTED] = header_fields["AES_CTR"][header_fields["KEYINDEX"]].decrypt(items_info_bytes["ALIGN"]["OFS"], items_info_bytes[CONST_DATATYPE_ENCRYPTED])
 
     ## Parse PKG3 Item Entries
     item_entries = []
-    offset = item_entries_bytes["ALIGN"]["OFSDELTA"]
-    name_offset_start = -1
-    name_offset_end = -1
+    offset = items_info_bytes["ALIGN"]["OFSDELTA"]
+    items_info_bytes["NAMES_OFS"] = None
+    name_offset_end = None
     item_name_size_max = 0
     #
     for _i in range(header_fields["ITEMCNT"]):  ## 0 to <item count - 1>
-        temp_fields = struct.unpack(CONST_PKG3_ITEM_ENTRY_FIELDS["STRUCTURE_UNPACK"], item_entries_bytes[CONST_DATATYPE_DECRYPTED][offset:offset+CONST_PKG3_ITEM_ENTRY_FIELDS["STRUCTURE_SIZE"]])
+        temp_fields = struct.unpack(CONST_PKG3_ITEM_ENTRY_FIELDS["STRUCTURE_UNPACK"], items_info_bytes[CONST_DATATYPE_DECRYPTED][offset:offset+CONST_PKG3_ITEM_ENTRY_FIELDS["STRUCTURE_SIZE"]])
         if function_debug_level >= 2:
-            dprintBytesStructure(CONST_PKG3_ITEM_ENTRY_FIELDS, CONST_PKG3_HEADER_ENDIAN, temp_fields, "".join(("PKG3 Body Item Entry[", item_cnt_format_string.format(_i), "][{:1}]: [", "{:#06x}+".format(header_fields["DATAOFS"] + offset), "{:#04x}|{:1}] {} = {}")), function_debug_level)
+            dprintBytesStructure(CONST_PKG3_ITEM_ENTRY_FIELDS, CONST_PKG3_HEADER_ENDIAN, temp_fields, "".join(("PKG3 Body Item Entry[", item_cnt_format_string.format(_i), "][{:1}]: [", "{:#06x}+".format(header_fields["DATAOFS"]+items_info_bytes["ALIGN"]["OFS"]+offset), "{:#04x}|{:1}] {} = {}")), function_debug_level)
         temp_fields = convertFieldsToOrdDict(CONST_PKG3_ITEM_ENTRY_FIELDS, temp_fields)
         temp_fields["INDEX"] = _i
         temp_fields["KEYINDEX"] = (temp_fields["FLAGS"] >> 28) & 0x7
         temp_fields["ALIGN"] = calculateAesAlignedOffsetAndSize(temp_fields["DATAOFS"], temp_fields["DATASIZE"])
         if temp_fields["ALIGN"]["OFSDELTA"] > 0:
-            eprint("Unaligned offset {:#x}-{:#x}+{:#x}={:#x} for item data {} in".format(temp_fields["ALIGN"]["OFS"], temp_fields["ALIGN"]["OFSDELTA"], header_fields["DATAOFS"], header_fields["DATAOFS"]+temp_fields["ALIGN"]["OFS"]), input_stream.getSource(), prefix="[ALIGN] ")
+            eprint("Unaligned encrypted offset {:#x}-{:#x}={:#x}(+{:#x}) for #{} item data.".format(temp_fields["DATAOFS"], temp_fields["ALIGN"]["OFSDELTA"], temp_fields["ALIGN"]["OFS"], header_fields["DATAOFS"], temp_fields["INDEX"]), input_stream.getSource(), prefix="[ALIGN] ")
             eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[ALIGN] ")
+        #
+        item_flags = temp_fields["FLAGS"] & 0xff
+        if item_flags == 0x04 \
+        or item_flags == 0x12:  ## Directory
+            temp_fields["IS_FILE_OFS"] = -1
+        else:  ## Files
+            temp_fields["IS_FILE_OFS"] = temp_fields["DATAOFS"]
+        del item_flags
+        #
         item_entries.append(temp_fields)
         #
         if temp_fields["ITEMNAMESIZE"] > 0:
-            if name_offset_start == -1 \
-            or temp_fields["ITEMNAMEOFS"] < name_offset_start:
-                name_offset_start = temp_fields["ITEMNAMEOFS"]
+            if items_info_bytes["NAMES_OFS"] is None \
+            or temp_fields["ITEMNAMEOFS"] < items_info_bytes["NAMES_OFS"]:
+                items_info_bytes["NAMES_OFS"] = temp_fields["ITEMNAMEOFS"]
             #
-            if name_offset_end == -1 \
+            if name_offset_end is None \
             or temp_fields["ITEMNAMEOFS"] >= name_offset_end:
                 name_offset_end = temp_fields["ITEMNAMEOFS"] + temp_fields["ITEMNAMESIZE"]
             #
@@ -1418,49 +1450,71 @@ def parsePkg3ItemEntries(header_fields, meta_data, input_stream, function_debug_
         #
         offset += CONST_PKG3_ITEM_ENTRY_FIELDS["STRUCTURE_SIZE"]
     #
-    name_size = name_offset_end - name_offset_start
+    items_info_bytes["NAMES_SIZE"] = name_offset_end - items_info_bytes["NAMES_OFS"]
 
-    ## Retrieve PKG3 Item Names from input stream
-    item_names_bytes = {}
-    item_names_bytes["OFS"] = name_offset_start
-    item_names_bytes["SIZE"] = name_size
-    item_names_bytes["ALIGN"] = calculateAesAlignedOffsetAndSize(item_names_bytes["OFS"], item_names_bytes["SIZE"])
-    if function_debug_level >= 2:
-        dprint("Get PKG3 item names from encrypted data with offset {:#x}-{:#x}+{:#x}={:#x} and size {}+{}={}".format(item_names_bytes["OFS"], item_names_bytes["ALIGN"]["OFSDELTA"], header_fields["DATAOFS"], header_fields["DATAOFS"]+item_names_bytes["ALIGN"]["OFS"], item_names_bytes["SIZE"], item_names_bytes["ALIGN"]["SIZEDELTA"], item_names_bytes["ALIGN"]["SIZE"]))
-    if item_names_bytes["ALIGN"]["OFSDELTA"] > 0:
-        eprint("Unaligned offset {:#x}-{:#x}+{:#x}={:#x} for item names in".format(item_names_bytes["OFS"], item_names_bytes["ALIGN"]["OFSDELTA"], header_fields["DATAOFS"], header_fields["DATAOFS"]+item_names_bytes["ALIGN"]["OFS"]), input_stream.getSource(), prefix="[ALIGN] ")
-        eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[ALIGN] ")
-    item_names_bytes[CONST_DATATYPE_ENCRYPTED] = bytearray()
-    try:
-        item_names_bytes[CONST_DATATYPE_ENCRYPTED].extend(input_stream.read(header_fields["DATAOFS"]+item_names_bytes["ALIGN"]["OFS"], item_names_bytes["ALIGN"]["SIZE"], function_debug_level))
-    except:
-        input_stream.close(function_debug_level)
-        eprint("Could not get PKG3 encrypted data at offset {:#x} with size {} from".format(header_fields["DATAOFS"]+item_names_bytes["ALIGN"]["OFS"], item_names_bytes["ALIGN"]["SIZE"]), input_stream.getSource())
-        eprint("", prefix=None)
-        sys.exit(2)
+    ## Check if Item Names follow immediately after Item Entries (relative offsets inside Items Info)
+    if items_info_bytes["NAMES_OFS"] < items_info_bytes["ENTRIES_SIZE"]:
+        eprint("Item Names with offset {:#0x} are INTERLEAVED with the Item Entries of size {:#0x}.".format(items_info_bytes["NAMES_OFS"], items_info_bytes["ENTRIES_SIZE"]), Input_Stream.getSource())
+        eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info")
+    elif items_info_bytes["NAMES_OFS"] > items_info_bytes["ENTRIES_SIZE"]:
+        eprint("Item Names with offset {:#0x} are not directly following the Item Entries with size {:#0x}.".format(items_info_bytes["NAMES_OFS"], items_info_bytes["ENTRIES_SIZE"]), Input_Stream.getSource(), prefix="[UNKNOWN] ")
+        eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[UNKNOWN] ")
+
+    ## Retrieve PKG3 remaining Items Info data (if any) for Item Names from input stream
+    ## Calculate complete size via first relative name offset inside Items Info plus names size
+    read_size = items_info_bytes["NAMES_OFS"] + items_info_bytes["NAMES_SIZE"]
+    if read_size > items_info_bytes["SIZE"]:
+        if 0xD in meta_data \
+        and meta_data[0xD]["SIZE"] >= items_info_bytes["ENTRIES_SIZE"]:
+            ## meta data size too small for whole Items Info
+            eprint("Items Info size {} from meta data 0xD is too small for complete Items Info (Entries+Names) with total size of {}.".format(meta_data[0xD]["SIZE"], read_size), Input_Stream.getSource())
+            eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info")
+        #
+        items_info_bytes["SIZE"] = read_size
+        items_info_bytes["ALIGN"] = calculateAesAlignedOffsetAndSize(items_info_bytes["OFS"], items_info_bytes["SIZE"])
+        read_offset = items_info_bytes["ALIGN"]["OFS"] + len(items_info_bytes[CONST_DATATYPE_ENCRYPTED])
+        read_size = items_info_bytes["ALIGN"]["SIZE"] - len(items_info_bytes[CONST_DATATYPE_ENCRYPTED])
+        #
+        if function_debug_level >= 2:
+            dprint("Get PKG3 remaining Items Info/Item Names data with size {}/{} ".format(read_size, items_info_bytes["ALIGN"]["SIZE"]))
+        try:
+            items_info_bytes[CONST_DATATYPE_ENCRYPTED].extend(input_stream.read(header_fields["DATAOFS"]+read_offset, read_size, function_debug_level))
+        except:
+            input_stream.close(function_debug_level)
+            eprint("Could not get PKG3 encrypted data at offset {:#x} with size {} from".format(header_fields["DATAOFS"]+read_offset, read_size), input_stream.getSource())
+            eprint("", prefix=None)
+            sys.exit(2)
+        #
+        items_info_bytes[CONST_DATATYPE_DECRYPTED].extend(items_info_bytes[CONST_DATATYPE_ENCRYPTED][len(items_info_bytes[CONST_DATATYPE_DECRYPTED]):])
+    else:
+        if 0xD in meta_data:
+            align = calculateAesAlignedOffsetAndSize(items_info_bytes["OFS"], read_size)
+            if align["SIZE"] != meta_data[0xD]["SIZE"]:
+                eprint("Determined aligned Items Info size {:#} <> {:#} from meta data 0xD.".format(align["SIZE"], meta_data[0xD]["SIZE"]), Input_Stream.getSource())
+                eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info")
 
     ## Decrypt and Parse PKG3 Item Names
     item_name_size_cnt_len = unicode(len(unicode(item_name_size_max)))
     item_name_size_format_string = "".join(("{:", item_name_size_cnt_len, "}"))
     #
-    item_names_bytes[CONST_DATATYPE_DECRYPTED] = bytearray()
-    item_names_bytes[CONST_DATATYPE_DECRYPTED].extend(item_names_bytes[CONST_DATATYPE_ENCRYPTED])
     for item_entry in item_entries:
         if item_entry["ITEMNAMESIZE"] <= 0:
             continue
         #
         key_index = item_entry["KEYINDEX"]
-        align = calculateAesAlignedOffsetAndSize(item_entry["ITEMNAMEOFS"], item_entry["ITEMNAMESIZE"])
+        offset = items_info_bytes["OFS"] + item_entry["ITEMNAMEOFS"]
+        align = calculateAesAlignedOffsetAndSize(offset, item_entry["ITEMNAMESIZE"])
         if align["OFSDELTA"] > 0:
-            eprint("Unaligned offset {:#x}-{:#x}+{:#x}={:#x} for item name {} in".format(item_entry["ITEMNAMEOFS"], align["OFSDELTA"], header_fields["DATAOFS"], header_fields["DATAOFS"]+align["OFS"], item_entry["INDEX"]), input_stream.getSource(), prefix="[ALIGN] ")
+            eprint("Unaligned encrypted offset {:#x}-{:#x}={:#x}(+{:#x}) for #{} item name.".format(offset, align["OFSDELTA"], align["OFS"], header_fields["DATAOFS"], item_entry["INDEX"]), input_stream.getSource(), prefix="[ALIGN] ")
             eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[ALIGN] ")
-        offset = align["OFS"] - item_names_bytes["ALIGN"]["OFS"]
         #
-        item_names_bytes[CONST_DATATYPE_DECRYPTED][offset:offset+align["SIZE"]] = header_fields["AES_CTR"][key_index].decrypt(align["OFS"], item_names_bytes[CONST_DATATYPE_ENCRYPTED][offset:offset+align["SIZE"]])
-        temp_bytes = item_names_bytes[CONST_DATATYPE_DECRYPTED][offset+align["OFSDELTA"]:offset+align["OFSDELTA"]+item_entry["ITEMNAMESIZE"]]
+        offset = align["OFS"] - items_info_bytes["ALIGN"]["OFS"]
+        items_info_bytes[CONST_DATATYPE_DECRYPTED][offset:offset+align["SIZE"]] = header_fields["AES_CTR"][key_index].decrypt(align["OFS"], items_info_bytes[CONST_DATATYPE_ENCRYPTED][offset:offset+align["SIZE"]])
+        temp_bytes = items_info_bytes[CONST_DATATYPE_DECRYPTED][offset+align["OFSDELTA"]:offset+align["OFSDELTA"]+item_entry["ITEMNAMESIZE"]]
         del align
+        #
         if function_debug_level >= 2:
-            dprint("".join(("PKG3 Body Item Name[", item_cnt_format_string, "]: key {:#} [{:#06x}|", item_name_size_format_string, "] {}")).format(item_entry["INDEX"], key_index, header_fields["DATAOFS"]+item_entry["ITEMNAMEOFS"], item_entry["ITEMNAMESIZE"], temp_bytes))
+            dprint("".join(("PKG3 Body Item Name[", item_cnt_format_string, "]: key {:#} [{:#06x}|", item_name_size_format_string, "] {}")).format(item_entry["INDEX"], key_index, header_fields["DATAOFS"]+items_info_bytes["OFS"]+item_entry["ITEMNAMEOFS"], item_entry["ITEMNAMESIZE"], temp_bytes))
         item_entry["NAME"] = convertUtf8BytesToString(temp_bytes, 0x0004, length=item_entry["ITEMNAMESIZE"])
         #
         del temp_bytes
@@ -1468,15 +1522,23 @@ def parsePkg3ItemEntries(header_fields, meta_data, input_stream, function_debug_
     ## Calculate SHA-256 hash of decrypted data
     hash_sha256 = Cryptodome.Hash.SHA256.new()
     ## Python 2 workaround: must use bytes() for AES's .new()/.encrypt()/.decrypt() and hash's .update()
-    hash_sha256.update(bytes(item_entries_bytes[CONST_DATATYPE_DECRYPTED]))
-    hash_sha256.update(bytes(item_names_bytes[CONST_DATATYPE_DECRYPTED]))
+    hash_sha256.update(bytes(items_info_bytes[CONST_DATATYPE_DECRYPTED]))
+    items_info_bytes["SHA256"] = bytearray(hash_sha256.digest())
+    if 0xD in meta_data \
+    and items_info_bytes["SHA256"] != meta_data[0xD]["SHA256"]:
+        eprint("Calculated SHA-256 of decrypted Items Info does not match the one from meta data 0xD.", Input_Stream.getSource())
+        eprint("{} <> {}".format(convertBytesToHexString(items_info_bytes["SHA256"], sep=""), convertBytesToHexString(meta_data[0xD]["SHA256"], sep="")))
+        eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info")
+
+    ## Further analysis data
+    items_info_bytes["FILE_OFS"] = header_fields["DATAOFS"] + items_info_bytes["OFS"]
+    items_info_bytes["FILE_OFS_END"] = items_info_bytes["FILE_OFS"] + items_info_bytes["SIZE"]
 
     ## Debug print results
-    dprint(">>>>> parsePkg3ItemEntries results:")
+    dprint(">>>>> parsePkg3ItemsInfo results:")
     dprintFieldsList(item_entries, "".join(("itementries[{KEY:", item_cnt_len, "}]")), function_debug_level, None)
-    dprint("SHA-256 of decrypted items entries and names:", hash_sha256.hexdigest())
 
-    return item_entries, item_entries_bytes, item_names_bytes, bytearray(hash_sha256.digest())
+    return item_entries, items_info_bytes
 
 
 def processPkg3Item(header_fields, item_entry, input_stream, item_data, extractions, function_debug_level):
@@ -1928,8 +1990,7 @@ if __name__ == "__main__":
             Ext_Header_Fields = None
             Meta_Data = None
             Item_Entries = None
-            Item_Entries_Bytes = None
-            Item_Names_Bytes = None
+            Items_Info_Bytes = None
             Retrieve_Encrypted_Param_Sfo = False
             File_Table = None
             File_Table_Map = None
@@ -2069,10 +2130,16 @@ if __name__ == "__main__":
                 ## --> Title ID
                 if 0x6 in Meta_Data:  ## Version + App Version / TitleID (on size 0xC)
                     Results["MD_TITLE_ID"] = Meta_Data[0x6]["VALUE"]
-                ## --> Items Info offset (inside encrypted data)
-                if 0xD in Meta_Data \
-                and Meta_Data[0xD]["OFS"] != 0:
-                    eprint("Items Info offset (in encrypted data) {:#0x} <> 0x0.".format(Meta_Data[0xD]["OFS"]), Input_Stream.getSource(), prefix="[UNKNOWN] ")
+                ## --> Items Info checks
+                if 0xD in Meta_Data:
+                    ## a) offset inside encrypted data
+                    if Meta_Data[0xD]["OFS"] != 0:
+                        eprint("Items Info start offset inside encrypted data {:#0x} <> 0x0.".format(Meta_Data[0xD]["OFS"]), Input_Stream.getSource(), prefix="[UNKNOWN] ")
+                        eprint("Please report this unknown case at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[UNKNOWN] ")
+                    ## b) size
+                    if Meta_Data[0xD]["SIZE"] < (Header_Fields["ITEMCNT"]*CONST_PKG3_ITEM_ENTRY_FIELDS["STRUCTURE_SIZE"]):
+                        eprint("Items Info size {} from meta data 0xD is too small for {} Item Entries with total size of {}.".format(Meta_Data[0xD]["SIZE"], Header_Fields["ITEMCNT"], Header_Fields["ITEMCNT"]*CONST_PKG3_ITEM_ENTRY_FIELDS["STRUCTURE_SIZE"]), Input_Stream.getSource())
+                        eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info")
                 ## If PARAM.SFO not present in unencrypted data, then search in encrypted item entries
                 if not "PKG_SFO_OFFSET" in Results \
                 and "PARAM.SFO" in Header_Fields \
@@ -2085,19 +2152,13 @@ if __name__ == "__main__":
                      or Arguments.ux0 \
                      or Arguments.content \
                      or Retrieve_Encrypted_Param_Sfo ):
-                    Item_Entries, Item_Entries_Bytes, Item_Names_Bytes, Results["ITEMS_INFO_SHA256"] = parsePkg3ItemEntries(Header_Fields, Meta_Data, Input_Stream, max(0, Debug_Level))
+                    Item_Entries, Items_Info_Bytes = parsePkg3ItemsInfo(Header_Fields, Meta_Data, Input_Stream, max(0, Debug_Level))
                     #
-                    Results["ITEM_ENTRIES_OFS"] = Item_Entries_Bytes["ALIGN"]["OFS"]
-                    Results["ITEM_ENTRIES_SIZE"] = Item_Entries_Bytes["ALIGN"]["SIZE"]
-                    Results["ITEM_NAMES_OFS"] = Item_Names_Bytes["ALIGN"]["OFS"]
-                    Results["ITEM_NAMES_SIZE"] = Item_Names_Bytes["ALIGN"]["SIZE"]
-                    Results["ITEMS_INFO_SIZE"] = Results["ITEM_ENTRIES_SIZE"]+Results["ITEM_NAMES_SIZE"]
-                    #
-                    if (Results["ITEM_ENTRIES_OFS"]+Results["ITEM_ENTRIES_SIZE"] != Results["ITEM_NAMES_OFS"]):
-                        eprint("Item Names are not directly following the Item Entries {:#0x} <> {:#0x}+{:#0x}={:#0x}.".format(Results["ITEM_NAMES_OFS"], Results["ITEM_ENTRIES_OFS"], Results["ITEM_ENTRIES_SIZE"], Results["ITEM_ENTRIES_OFS"]+Results["ITEM_ENTRIES_SIZE"]), Input_Stream.getSource(), prefix="[UNKNOWN] ")
-                    if 0xD in Meta_Data \
-                    and Results["ITEMS_INFO_SIZE"] != Meta_Data[0xD]["SIZE"]:
-                        eprint("Calculated Items Info size {:#} <> {:#} from match meta data 0xD.".format(Results["ITEMS_INFO_SIZE"], Meta_Data[0xD]["SIZE"]), Input_Stream.getSource())
+                    Results["ITEMS_INFO"] = copy.copy(Items_Info_Bytes)
+                    if CONST_DATATYPE_ENCRYPTED in Results["ITEMS_INFO"]:
+                        del Results["ITEMS_INFO"][CONST_DATATYPE_ENCRYPTED]
+                    if CONST_DATATYPE_DECRYPTED in Results["ITEMS_INFO"]:
+                        del Results["ITEMS_INFO"][CONST_DATATYPE_DECRYPTED]
                 #
                 if not Item_Entries is None \
                 and Retrieve_Encrypted_Param_Sfo:
@@ -2421,7 +2482,7 @@ if __name__ == "__main__":
                             Results["PKG_TYPE"] = CONST_PKG_TYPE.GAME
                             Nps_Type = "PSP GAME"  #md_entry_type = 9 | Also PSP DLCS : md_entry_type = 10
                         #
-                        ## TODO: Verify when ISO and when GAME directory
+                        ## TODO: Verify when ISO and when GAME directory has to be used?
                         Results["PKG_EXTRACT_ROOT_UX0"] = os.path.join("pspemu", "PSP", "GAME", Results["PKG_CID_TITLE_ID1"])
                         Results["PKG_EXTRACT_ISOR_UX0"] = os.path.join("pspemu", "ISO")
                         Results["PKG_EXTRACT_ISO_NAME"] = "".join((Results["SFO_TITLE"], " [", Results["PKG_CID_TITLE_ID1"], "]", ".iso"))
@@ -2721,18 +2782,10 @@ if __name__ == "__main__":
                         JSON_Output["results"]["pkgTailSize"] = Results["PKG_TAIL_SIZE"]
                     if "PKG_TAIL_SHA1" in Results:
                         JSON_Output["results"]["pkgTailSha1"] = Results["PKG_TAIL_SHA1"]
-                    if "ITEMS_INFO_SHA256" in Results:
-                        JSON_Output["results"]["itemsInfoSha256"] = Results["ITEMS_INFO_SHA256"]
-                    if "ITEMS_INFO_SIZE" in Results:
-                        JSON_Output["results"]["itemsInfoSize"] = Results["ITEMS_INFO_SIZE"]
-                    if "ITEM_ENTRIES_OFS" in Results:
-                        JSON_Output["results"]["itemsEntriesOfs"] = Results["ITEM_ENTRIES_OFS"]
-                    if "ITEM_ENTRIES_SIZE" in Results:
-                        JSON_Output["results"]["itemsEntriesSize"] = Results["ITEM_ENTRIES_SIZE"]
-                    if "ITEM_NAMES_OFS" in Results:
-                        JSON_Output["results"]["itemsNamesOfs"] = Results["ITEM_NAMES_OFS"]
-                    if "ITEM_NAMES_SIZE" in Results:
-                        JSON_Output["results"]["itemsNamesSize"] = Results["ITEM_NAMES_SIZE"]
+                    if "ITEMS_INFO" in Results:
+                        JSON_Output["results"]["itemsInfo"] = copy.copy(Results["ITEMS_INFO"])
+                        if "ALIGN" in JSON_Output["results"]["itemsInfo"]:
+                            del JSON_Output["results"]["itemsInfo"]["ALIGN"]
                     if "SFO_TITLE_ID" in Results:
                         JSON_Output["results"]["sfoTitleId"] = Results["SFO_TITLE_ID"]
                     if "SFO_CATEGORY" in Results \
@@ -2769,6 +2822,10 @@ if __name__ == "__main__":
                             for Item_Entry in JSON_Output["itemEntries"]:
                                 if "STRUCTURE_DEF" in Item_Entry:
                                     del Item_Entry["STRUCTURE_DEF"]
+                                if "ALIGN" in Item_Entry:
+                                    del Item_Entry["ALIGN"]
+                                if "IS_FILE_OFS" in Item_Entry:
+                                    del Item_Entry["IS_FILE_OFS"]
                         if File_Table:
                             JSON_Output["fileTable"] = copy.deepcopy(File_Table)
                             for File_Entry in JSON_Output["fileTable"]:
@@ -2785,23 +2842,23 @@ if __name__ == "__main__":
                             dprintFieldsDict(Ext_Header_Fields, "extheaderfields[{KEY:14}|{INDEX:2}]", 2, None, print_func=print)
                         if Meta_Data:
                             for Key in Meta_Data:
-                                print("metadata[{:#04x}]:".format(Key), end=" ")
+                                print("metadata[{:#04x}]:".format(Key), end="")
                                 if "DESC" in Meta_Data[Key]:
-                                    print("Desc \"", Meta_Data[Key]["DESC"], "\"", sep="", end=" ")
+                                    print(" Desc \"", Meta_Data[Key]["DESC"], "\"", sep="", end="")
                                 if "OFS" in Meta_Data[Key]:
-                                    print("Ofs {:#012x}".format(Meta_Data[Key]["OFS"]), end=" ")
+                                    print(" Ofs {:#012x}".format(Meta_Data[Key]["OFS"]), end="")
                                 if "SIZE" in Meta_Data[Key]:
-                                    print("Size {:12}".format(Meta_Data[Key]["SIZE"]), end=" ")
+                                    print(" Size {:12}".format(Meta_Data[Key]["SIZE"]), end="")
                                 if "SHA256" in Meta_Data[Key]:
-                                    print("SHA256", convertBytesToHexString(Meta_Data[Key]["SHA256"], sep=""), end=" ")
+                                    print(" SHA256", convertBytesToHexString(Meta_Data[Key]["SHA256"], sep=""), end="")
                                 if "VALUE" in Meta_Data[Key]:
                                     if isinstance(Meta_Data[Key]["VALUE"], bytes) \
                                     or isinstance(Meta_Data[Key]["VALUE"], bytearray):
-                                        print("Value", convertBytesToHexString(Meta_Data[Key]["VALUE"], sep=""), end=" ")
+                                        print(" Value", convertBytesToHexString(Meta_Data[Key]["VALUE"], sep=""), end="")
                                     else:
-                                        print("Value", Meta_Data[Key]["VALUE"], end=" ")
+                                        print(" Value", Meta_Data[Key]["VALUE"], end="")
                                 if "UNKNOWN" in Meta_Data[Key]:
-                                    print("Unknown", convertBytesToHexString(Meta_Data[Key]["UNKNOWN"], sep=""), end=" ")
+                                    print(" Unknown", convertBytesToHexString(Meta_Data[Key]["UNKNOWN"], sep=""), end="")
                                 print()
                         if Sfo_Values:
                             dprintFieldsDict(Sfo_Values, "sfovalues[{KEY:20}]", 2, None, print_func=print)
@@ -2856,11 +2913,8 @@ if __name__ == "__main__":
                         Extract["BYTES_WRITTEN"] += Extract["STREAM"].write(Header_Bytes)
                         #
                         if Arguments.quiet <= 0:
-                            eprint("{} {} PKG3 item entries from offset {:#x} and size {}".format(Extract["FUNCTION"], Extract["DATATYPE"].lower(), Item_Entries_Bytes["ALIGN"]["OFS"]+Header_Fields["DATAOFS"], len(Item_Entries_Bytes[Extract["DATATYPE"]])), prefix="[{}] ".format(Extract["KEY"]))
-                        Extract["BYTES_WRITTEN"] += Extract["STREAM"].write(Item_Entries_Bytes[Extract["DATATYPE"]])
-                        if Arguments.quiet <= 0:
-                            eprint("{} {} PKG3 item names from offset {:#x} and size {}".format(Extract["FUNCTION"], Extract["DATATYPE"].lower(), Item_Names_Bytes["ALIGN"]["OFS"]+Header_Fields["DATAOFS"], len(Item_Names_Bytes[Extract["DATATYPE"]])), prefix="[{}] ".format(Extract["KEY"]))
-                        Extract["BYTES_WRITTEN"] += Extract["STREAM"].write(Item_Names_Bytes[Extract["DATATYPE"]])
+                            eprint("{} {} PKG3 Items Info from offset {:#x} and size {}".format(Extract["FUNCTION"], Extract["DATATYPE"].lower(), Items_Info_Bytes["ALIGN"]["OFS"]+Header_Fields["DATAOFS"], Items_Info_Bytes["ALIGN"]["SIZE"]), prefix="[{}] ".format(Extract["KEY"]))
+                        Extract["BYTES_WRITTEN"] += Extract["STREAM"].write(Items_Info_Bytes[Extract["DATATYPE"]])
                     #
                     del Extract
 
@@ -2954,7 +3008,7 @@ if __name__ == "__main__":
                 ## Extract PKG3 items
                 if not Item_Entries is None \
                 and Process_Extractions:
-                    Item_Entries_Sorted = sorted(Item_Entries, key=lambda x: x["DATAOFS"])
+                    Item_Entries_Sorted = sorted(Item_Entries, key=lambda x: (x["IS_FILE_OFS"], x["INDEX"]))
                     for Item_Entry in Item_Entries_Sorted:
                         ## Initialize per-item variables
                         Use_Input_Stream = Input_Stream
@@ -2964,8 +3018,9 @@ if __name__ == "__main__":
                         Item_Flags = Item_Entry["FLAGS"] & 0xff
                         Item_Name_Parts = Item_Entry["NAME"].split("/")
                         #
-                        if Item_Flags == 0x04 \
-                        or Item_Flags == 0x12:  ## Directory
+                        if Item_Entry["IS_FILE_OFS"] == -1:
+                            ## 0x04: Directory
+                            ## 0x12: Directory
                             for Key in Extractions:
                                 Extract = Extractions[Key]
                                 #
@@ -3030,7 +3085,7 @@ if __name__ == "__main__":
                                 ## Create directory
                                 Extract["TARGET"] = os.path.join(Extract["ROOT"], Extract["ITEM_EXTRACT_PATH"])
                                 #
-                                if createDirectory(Extract, "items", Key, True, Arguments.quiet, max(0, Debug_Level)) != 0:
+                                if createDirectory(Extract, "#{} items".format(Item_Entry["INDEX"]), Key, True, Arguments.quiet, max(0, Debug_Level)) != 0:
                                     eprint("[{}] ABORT extraction".format(Extract["KEY"]))
                                     Extract["PROCESS"] = False
                                 del Extract["ITEM_EXTRACT_PATH"]
@@ -3155,9 +3210,9 @@ if __name__ == "__main__":
                                 ## Display item extract path
                                 if Arguments.quiet <= 0:
                                     if Extract["ITEM_NAME"].strip():
-                                        Item_Name = "\"{}\"".format(Extract["ITEM_NAME"])
+                                        Item_Name = "#{} \"{}\"".format(Item_Entry["INDEX"], Extract["ITEM_NAME"])
                                     else:
-                                        Item_Name = "item[{}]".format(Item_Entry["INDEX"])
+                                        Item_Name = "#{} unnamed item".format(Item_Entry["INDEX"], Item_Entry["INDEX"])
                                     if Extract["ALIGNED"]:
                                         Values = ["aligned ", Header_Fields["DATAOFS"]+Item_Entry["ALIGN"]["OFS"], Item_Entry["ALIGN"]["SIZE"]]
                                     else:
@@ -3287,7 +3342,7 @@ if __name__ == "__main__":
                                     if Arguments.quiet <= 0:
                                         Values = None
                                         if File_Number == 1:  ## head.bin
-                                            Values = [Extract["FUNCTION"], "unencrypted header + encrypted items info", "\"{}\"".format(Extract["ITEM_NAME"]), "", "offset {:#x}".format(0), len(Header_Bytes)+len(Item_Entries_Bytes[CONST_DATATYPE_ENCRYPTED])+len(Item_Names_Bytes[CONST_DATATYPE_ENCRYPTED])]
+                                            Values = [Extract["FUNCTION"], "unencrypted header + encrypted items info", "\"{}\"".format(Extract["ITEM_NAME"]), "", "offset {:#x}".format(0), len(Header_Bytes)+len(Items_Info_Bytes[CONST_DATATYPE_ENCRYPTED])]
                                         elif File_Number == 2:  ## tail.bin
                                             Values = [Extract["FUNCTION"], "unencrypted tail", "\"{}\"".format(Extract["ITEM_NAME"]), "", "offset {:#x}".format(Header_Fields["DATAOFS"]+Header_Fields["DATASIZE"]), len(Tail_Bytes)]
                                         elif File_Number == 3:  ## stat.bin
@@ -3318,8 +3373,7 @@ if __name__ == "__main__":
                                     ## Write data
                                     if File_Number == 1:  ## head.bin
                                         Extract["STREAM"].write(Header_Bytes)
-                                        Extract["STREAM"].write(Item_Entries_Bytes[CONST_DATATYPE_ENCRYPTED])
-                                        Extract["STREAM"].write(Item_Names_Bytes[CONST_DATATYPE_ENCRYPTED])
+                                        Extract["STREAM"].write(Items_Info_Bytes[CONST_DATATYPE_ENCRYPTED])
                                         Extract["STREAM"].close()
                                         del Extract["STREAM"]
                                     elif File_Number == 2:  ## tail.bin
@@ -3388,9 +3442,9 @@ if __name__ == "__main__":
                                         if Arguments.quiet <= 0:
                                             Values = None
                                             if File_Number == 1:  ## content_id
-                                                Values = [Extract["FUNCTION"], "unencrypted header + encrypted items info", "\"{}\"".format(Extract["ITEM_NAME"]), "", "offset {:#x}".format(0), len(Header_Bytes)+len(Item_Entries_Bytes[CONST_DATATYPE_ENCRYPTED])+len(Item_Names_Bytes[CONST_DATATYPE_ENCRYPTED])]
+                                                Values = [Extract["FUNCTION"], "content id", "\"{}\"".format(Extract["ITEM_NAME"]), "", "offset {:#x}".format(CONST_PKG3_MAIN_HEADER_FIELDS["CONTENT_ID"]["OFFSET"]), CONST_PKG3_MAIN_HEADER_FIELDS["CONTENT_ID"]["SIZE"]]
                                             elif File_Number == 2:  ## pm.dat
-                                                Values = [Extract["FUNCTION"], "unencrypted tail", "\"{}\"".format(Extract["ITEM_NAME"]), "", "offset {:#x}".format(Header_Fields["DATAOFS"]+Header_Fields["DATASIZE"]), len(Tail_Bytes)]
+                                                Values = ["Write", "fake data", "\"{}\"".format(Extract["ITEM_NAME"]), "", "zeroes", 0x10000]
                                             elif File_Number == 3:  ## FAKE.rif
                                                 if not Results["PKG_CONTENT_ID"] in Rifs:
                                                     eprint("MISSING zrif license for package content id", Results["PKG_CONTENT_ID"], prefix="[{}] ".format(Extract["KEY"]))
@@ -3442,11 +3496,11 @@ if __name__ == "__main__":
                             or ("FILE_SIZE" in Results \
                                 and Extract["BYTES_WRITTEN"] != Results["FILE_SIZE"]):
                                 eprint("Written size {} of unencrypted/decrypted data from".format(Extract["BYTES_WRITTEN"]), Input_Stream.getSource())
-                                if ("PKG_TOTAL_SIZE" in Results \
-                                    and Extract["BYTES_WRITTEN"] != Results["PKG_TOTAL_SIZE"]):
+                                if "PKG_TOTAL_SIZE" in Results \
+                                and Extract["BYTES_WRITTEN"] != Results["PKG_TOTAL_SIZE"]:
                                     eprint("mismatches package total size of", Results["PKG_TOTAL_SIZE"])
-                                if ("FILE_SIZE" in Results \
-                                    and Extract["BYTES_WRITTEN"] != Results["FILE_SIZE"]):
+                                if "FILE_SIZE" in Results \
+                                and Extract["BYTES_WRITTEN"] != Results["FILE_SIZE"]:
                                     eprint("mismatches file size of", Results["FILE_SIZE"])
                                 eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info")
                     ## Clean-up
@@ -3472,8 +3526,7 @@ if __name__ == "__main__":
             del Header_Bytes
             del Sfo_Item_Data
             del Sfo_Bytes
-            del Item_Entries_Bytes
-            del Item_Names_Bytes
+            del Items_Info_Bytes
             del Tail_Bytes
     except SystemExit:
         raise  ## re-raise/throw up (let Python handle it)
