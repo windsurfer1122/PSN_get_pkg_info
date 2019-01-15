@@ -160,7 +160,7 @@ main()
   #GREP_OUTPUT="-E	-e	Flags[[:space:]]+0x[[:xdigit:]]{6}${VALUE_2}.*\$" ; ## search item flags part
   #
   ## Determine read-ahead size for python script
-  #GREP_OUTPUT='-e	^headerfields\[\"DATAOFS\".*	-e	^metadata\[0x0d\].*SHA256	-e	^results\[\"ITEMS_INFO_SIZE\".* ='
+  #GREP_OUTPUT='-e	^results\[\"ITEMS_INFO\".*\"FILE_OFS_END\".*'
 
   ## Clean-up and check GREP_OUTPUT pattern
   GREP_OUTPUT="$(printf -- '%s' "${GREP_OUTPUT:-}" | sed -r -e 's#(-l|-L)##g ; s#[\t]+#\t#g ; s#(^\t|\t$)##g')"
@@ -220,7 +220,7 @@ main()
       NEWFILELIST="$(tempfile -d "${DIR}/_tmp")"
       IFS="${TABIFS}"
       #set -x
-      { sort -z -- "${FILELIST}" | xargs -0 -r -L 10 ${VERBOSE:-} -- grep -R -Z ${GREP} -- >"${NEWFILELIST}" ; } || :
+      { sort -z -- "${FILELIST}" | xargs -0 -r -L 10 ${VERBOSE:-} -- grep -R -Z ${GREP} -- >"${NEWFILELIST}" ; } || true
       #set +x
       IFS="${OLDIFS}"
       #
@@ -245,12 +245,12 @@ main()
        then
         if [ "${DOCOUNT:-0}" -eq 1 ]  ## count unique values
          then
-          { sort -z -- "${FILELIST}" | xargs -0 -r -L 10 ${VERBOSE:-} -- grep -R ${NOFILENAMES:--H} ${ONLYMATCHING:-} ${GREP_OUTPUT} -- | sort | uniq -c ; } || :
+          { sort -z -- "${FILELIST}" | xargs -0 -r -L 10 ${VERBOSE:-} -- grep -R ${NOFILENAMES:--H} ${ONLYMATCHING:-} ${GREP_OUTPUT} -- | sort | uniq -c ; } || true
         else
-          { sort -z -- "${FILELIST}" | xargs -0 -r -L 10 ${VERBOSE:-} -- grep -R ${NOFILENAMES:--H} ${ONLYMATCHING:-} ${GREP_OUTPUT} -- | sort | uniq ; } || :
+          { sort -z -- "${FILELIST}" | xargs -0 -r -L 10 ${VERBOSE:-} -- grep -R ${NOFILENAMES:--H} ${ONLYMATCHING:-} ${GREP_OUTPUT} -- | sort | uniq ; } || true
         fi
       else
-        { sort -z -- "${FILELIST}" | xargs -0 -r -L 10 ${VERBOSE:-} -- grep -R ${NOFILENAMES:--H} ${ONLYMATCHING:-} ${GREP_OUTPUT} -- | sort ; } || :
+        { sort -z -- "${FILELIST}" | xargs -0 -r -L 10 ${VERBOSE:-} -- grep -R ${NOFILENAMES:--H} ${ONLYMATCHING:-} ${GREP_OUTPUT} -- | sort ; } || true
       fi
       #set +x
       IFS="${OLDIFS}"

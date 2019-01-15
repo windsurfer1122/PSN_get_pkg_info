@@ -119,7 +119,7 @@ main()
         ## additional `printf` to see currently processed url
         [ "${SHOW:-0}" -eq 0 ] || printf -- '%s\n' "${URL}"
         #
-        { PSN_get_pkg_info.py --itementries --unknown -f 99 -- "${URL}" 3>&1 1>"${DIR}/_pkginfo/$(basename "${URL}").info" 2>&3 | tee -a "${ERRORLOG}" ; } || :
+        { PSN_get_pkg_info.py --itementries --unknown -f 99 -- "${URL}" 3>&1 1>"${DIR}/_pkginfo/$(basename "${URL}").info" 2>&3 | tee -a "${ERRORLOG}" ; } || true
       done
       [ ! -s "${ERRORLOG}" ] || sed -i -e "1 i[${RUNDATE}] >>>>> Errors during analysis data creation for URLs in ${URLSFILE}..." "${ERRORLOG}"
     fi  ## URLs
@@ -144,8 +144,8 @@ main()
       #
       #export DIR
       #export ERRORLOG
-      #{ printf '' | xargs -- find "${DIR}" -type f -name '*.pkg' ${EXTRA1:-} -exec sh -c 'PSN_get_pkg_info.py --itementries --unknown -f 99 -- "${1}" 3>&1 1>"${DIR}/_pkginfo/$(basename "${1}").list" 2>&3 | tee -a "${ERRORLOG}"' -- '{}' \; ; } || :
-      { printf '' | xargs -- find "${DIR}" -type f -name '*.pkg' ${EXTRA1:-} -exec sh -c "PSN_get_pkg_info.py --itementries --unknown -f 99 ${EXTRA2A:-} ${EXTRA2B:-} ${EXTRA2C:-} -- \"\${1}\" 3>&1 1>\"${DIR}/_pkginfo/\$(basename \"\${1}\").info\" 2>&3 | tee -a \"${ERRORLOG}\"" -- '{}' \; ; } || :
+      #{ printf '' | xargs -- find "${DIR}" -type f -name '*.pkg' ${EXTRA1:-} -exec sh -c 'PSN_get_pkg_info.py --itementries --unknown -f 99 -- "${1}" 3>&1 1>"${DIR}/_pkginfo/$(basename "${1}").list" 2>&3 | tee -a "${ERRORLOG}"' -- '{}' \; ; } || true
+      { printf '' | xargs -- find "${DIR}" -type f -name '*.pkg' ${EXTRA1:-} -exec sh -c "PSN_get_pkg_info.py --itementries --unknown -f 99 ${EXTRA2A:-} ${EXTRA2B:-} ${EXTRA2C:-} -- \"\${1}\" 3>&1 1>\"${DIR}/_pkginfo/\$(basename \"\${1}\").info\" 2>&3 | tee -a \"${ERRORLOG}\"" -- '{}' \; ; } || true
       [ ! -s "${ERRORLOG}" ] || sed -i -e "1 i[${RUNDATE}] >>>>> Errors during analysis data creation for package files in ${DIR}..." "${ERRORLOG}"
     fi  ## Files
   done  ## DIR
