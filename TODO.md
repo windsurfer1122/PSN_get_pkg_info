@@ -24,6 +24,7 @@
     * UP4128/NPUZ00193_00/NTPIvymtsQUIyYqhGucTmnidjuSdWhcnpFEBZwFDfkkAbpUnBrBOvueSpAAKWFapwYWvuFUvbhiqWeaufJShHxBwrzwfcBhTXXOxT.pkg (Game Mini)
     * JP0805/NPJJ30059_00/hGkJbqgmXJYjRBTOmUmPvqrLwUhFBiHNNSiAeBuaezdPyvmyVlzYvKgYuoBBOdEFEltRyPeWSKluetJvVrbuPSQiAZgSSKKEjeyTF.pkg (PC Engine)
     * JP0576/NPJH70002_00/EpdkZDkoEKlZtxUVKzdIqeCuFXiSzhjrWwNoANeOHvFjLnPsydXwtAtYfLbklqLMBlQEHaoxtEqsRnRLCUTLvklkSEJgtQNWMWtMB.pkg (Neo Geo)
+- [ ] Create ZRIF structure (BE)
 - [ ] `-x` extract functionality from pkg2zip (similar to `--make-dirs=ux` extract functionality from pkg_dec)
   * [x] extraction of PSV/PSM packages
   * [x] zrif support for PSV/PSM packages
@@ -38,6 +39,16 @@
   * Extracted all data via -f 99 to separate text files and grep'ed through them
 
 ## Wishlist
+- [ ]  Extraction special cases for ux0
+  * [ ] PSV "PocketStation for PlayStation Vita" with Content ID JA0003-PCSC80018_00-POCKETSTATION001 and content type 0x6 for PSX game
+        http://zeus.dl.playstation.net/cdn/JA0003/PCSC80018_00/pQPQxDhSsKTYgePChkMtuIpyghZywbSOvfKvPsvdKMfgkUPSKGmOvibEysgRQBOURpMTlweKQnpGtFDaIXhaJPbEPRGdFqYUvZprD.pkg
+        PSV exclusive PS1 Emu package. Just stores texture.enc as ux0:ps1emu/PCSC80018/texture.enc plus license in ux0:pspemu/whereverlicensesare/.
+        No bubble after installation, but certain JP PS1 classics will then have PocketStation button on their LiveArea page, which will run this pocketstation emulator. To run PocketStation it needs valid PS1 Classic license [of the title you want to run this emu on].
+        There's no NoPs1emuDrm.
+        PKG installer can install it (TODO: verify).
+        No support for it in pkg2zip/pkgj.
+        Special pkg, the only "DRMfree" PSP pkg.
+        The PSV OS embeds hardcoded titleid so it knows it doesnt need a account bound license to be installed
 - [ ] Extend PS4 package support
   * Decrypt files (not necessary, nice-to-have)
     http://www.psdevwiki.com/ps4/PKG_files#PFS

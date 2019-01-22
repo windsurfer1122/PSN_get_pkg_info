@@ -6,6 +6,8 @@ Extract package information from header and PARAM.SFO of PS3/PSX/PSP/PSV/PSM and
 * Decryption of PS3 encrypted data to get all data
 * Support of all known package types: PS3/PSX/PSP, PSV/PSM, PS4
 * Extraction of PS3/PSX/PSP/PSV/PSM packages similar to pkg2zip and pkg_dec
+  * PSP: Extraction as EBOOT.PBP for [NPdrm 0.9 plugin](https://github.com/qwikrazor87/npdrm_free) on PSP or on PSV with [Adrenaline](https://github.com/TheOfficialFloW/Adrenaline).<br>
+    Extraction as ISO/CSO is not supported yet, there are other tools for this like [ISO~PBP Converter](https://sites.google.com/site/theleecherman/IsoPbpConverter) and [CISO Multi Compressor](https://sites.google.com/site/theleecherman/cisomulticompressor) plus homebrew [Takka](http://takka.tfact.net/2011/)'s [ISO Tool 1.981](https://wololo.net/downloads/index.php/download/7918) to integrate updates/patches and [Disc Change 2.6](https://www21.atwiki.jp/improper_code/pages/73.html#id_32933629) ([DL](https://www21.atwiki.jp/improper_code?cmd=upload&act=open&pageid=73&file=disc_change_2_6.zip)). And also [UMDGen](http://www.psx-place.com/resources/umd-gen-4-00.208/).<br>
 * Easy enhancement of interpreting data (=done at the very end with all data at hand)
 * Support http download streaming to avoid harddisk usage
 * Support multiple output formats

@@ -1,6 +1,12 @@
 # PSN_get_pkg_info.py - Changelog
 
-## 2019.01.00 alpha 4
+## 2019.01.00 alpha 5
+* NEW: First part of PSP extraction, EBOOT.PBP recognition and analysis for PSP/PSX packages.
+* NEW: Updated README.md with info of about PSP extraction
+* FIX: Return source from arguments in JSON output (e.g. JSON URL)
+* FIX: Dispaly RIF data inside loop for output format 50, so that multiple zrifs for the same content id are all displayed
+
+(alpha 4)
 * FIX: avoid leading spaces on metadata output (-f 99)
 * FIX: Read only first 128 KiB to reduce download time (size fits unecrypted header size of all known packages)
 * FIX: Fine-tuned messages for remaining data and unaligned access
