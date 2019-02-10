@@ -2897,7 +2897,9 @@ if __name__ == "__main__":
                         ## Special Case: PCSC80018 "Pocketstation for PS Vita"
                         if Results["TITLE_ID"] == "PCSC80018":
                             Results["PLATFORM"] = CONST_PLATFORM.PSV
+                            Results["PKG_SUB_TYPE"] = CONST_PLATFORM.PSX
                             Results["PKG_EXTRACT_ROOT_UX0"] = os.path.join("ps1emu", Results["PKG_CID_TITLE_ID1"])
+                            Nps_Type = "PSV GAME"
                         #
                         if Results["PKG_CONTENT_TYPE"] == 0x6 \
                         and "MD_TITLE_ID" in Results:
