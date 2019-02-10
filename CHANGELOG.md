@@ -1,6 +1,17 @@
 # PSN_get_pkg_info.py - Changelog
 
-## 2019.01.00 alpha 5
+## 2019.01.00 alpha 6
+* NEW: Support for multi-part packages (PS3 via XML, PS4 via JSON)
+* NEW: Updated PS4 headers to 6.20
+* NEW: Added some PS4 content type detection
+* NEW: Added PS3 content type detection of PS2 Classics
+* NEW: Added structures for RIFs to enhance output for format 50
+* NEW: Parse PKG3 meta data 0x0A
+* INTERNAL: Use more constants to avoid typos
+* INTERNAL: Rename several variables to better fit their usage
+* INTERNAL: Calculate tail size and do not use and support negative sizes for package read
+
+(alpha 5)
 * NEW: First part of PSP extraction, EBOOT.PBP recognition and analysis for PSP/PSX packages.
 * NEW: Updated README.md with info of about PSP extraction
 * FIX: Return source from arguments in JSON output (e.g. JSON URL)

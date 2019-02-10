@@ -11,7 +11,7 @@ usage()
   printf -- '\n'
   printf -- 'optional arguments:\n'
   printf -- '  -h   Show this help message and exit.\n'
-  printf -- '  -u   Output unique values only including count.\n'
+  printf -- '  -u   Output unique values only.\n'
   printf -- '  -c   Additionally count unique values.\n'
   printf -- '  -o   Use grep --only-matching for GREP_OUTPUT. Useful in combination with unique values.\n'
   printf -- '  -n   No file names in results via grep -h for GREP_OUTPUT. Useful in combination with unique values.\n'
@@ -120,18 +120,18 @@ main()
   ## Use VALUE_<n> as supporting variables.
   ##
   ## Examples:
-  ## GREP_1='-l	-e	^headerfields\[\"TYPE\".*:.* = 0x1$'
-  ## GREP_OUTPUT="${GREP_1:+${GREP_1}	}-e	^headerfields\\[\\\"HDRSIZE\\\".*"
+  ## GREP_1='-l	-e	^Pkg_Header\[\"TYPE\".*:.* = 0x1$'
+  ## GREP_OUTPUT="${GREP_1:+${GREP_1}	}-e	^Pkg_Header\\[\\\"HDRSIZE\\\".*"
   #
   ## PKG3 Header Types: TYPE
-  #GREP_OUTPUT="-e	^headerfields\\[\\\"TYPE\\\".*"
+  #GREP_OUTPUT="-e	^Pkg_Header\\[\\\"TYPE\\\".*"
   #
   ## PKG3 Header Type 1 or 2: HDRSIZE
-  #GREP_1='-l	-e	^headerfields\[\"TYPE\".*:.* = 0x1$'
-  #GREP_1='-l	-e	^headerfields\[\"TYPE\".*:.* = 0x2$'
-  #GREP_2='-l	-e	^headerfields\[\"MAGIC\".*:.* = 0x7f504b47$'
-  #GREP_OUTPUT='-e	^headerfields\[\"HDRSIZE\".*'
-  #GREP_OUTPUT='-e	^headerfields\[\"HDRSIZE\".*	-e	^results\[\"PLATFORM\".*'
+  #GREP_1='-l	-e	^Pkg_Header\[\"TYPE\".*:.* = 0x1$'
+  #GREP_1='-l	-e	^Pkg_Header\[\"TYPE\".*:.* = 0x2$'
+  #GREP_2='-l	-e	^Pkg_Header\[\"MAGIC\".*:.* = 0x7f504b47$'
+  #GREP_OUTPUT='-e	^Pkg_Header\[\"HDRSIZE\".*'
+  #GREP_OUTPUT='-e	^Pkg_Header\[\"HDRSIZE\".*	-e	^results\[\"PLATFORM\".*'
   #
   ## KEYINDEX
   #GREP_OUTPUT='-E	-e	KEYINDEX.*:[[:space:]]+[[:digit:]]+	-e	Key Index[[:space:]]+[[:digit:]]+'
@@ -146,8 +146,8 @@ main()
   #
   ## Wrong platform
   #REEVAL=1
-  #GREP_1='-L	-e	^results\\[\\\"PLATFORM\\\".*: ${DIR%x}$'
-  #GREP_OUTPUT='-e	^results\[\"PLATFORM\".*'
+  #GREP_1='-L	-e	^Results\\[\\\"PLATFORM\\\".*: ${DIR%x}$'
+  #GREP_OUTPUT='-e	^Results\[\"PLATFORM\".*'
   #
   ## search special item/file names
   #VALUE_1='sce_sys/package/digs.bin' ; VALUE_2='18' ; ## as it is extracted encrypted (not decrypted) as body.bin; only in PSV packages with flags 0xa0007018/0xa0007818 (no other items with 0x...18)
@@ -156,11 +156,35 @@ main()
   #VALUE_1='sce_sys/package/tail.bin' ; VALUE_2='03' ; ## only in PSM packages in contents/runtime/ with flags 0xc0000003
   #VALUE_1='sce_sys/package/stat.bin' ; VALUE_2='03' ; ## only in PSM packages in contents/runtime/ with flags 0xc0000003
   #VALUE_1='content_id' ; VALUE_2='' ; ## none found, no item with this name
+  #VALUE_1='EBOOT.PBP' ; VALUE_2='' ; ## ...
   #GREP_OUTPUT="-E	-e	Flags[[:space:]]+.*Name[[:space:]]+\\\".*${VALUE_1}" ; ## search item name part
   #GREP_OUTPUT="-E	-e	Flags[[:space:]]+0x[[:xdigit:]]{6}${VALUE_2}.*\$" ; ## search item flags part
   #
   ## Determine read-ahead size for python script
-  #GREP_OUTPUT='-e	^results\[\"ITEMS_INFO\".*\"FILE_OFS_END\".*'
+  #GREP_OUTPUT='-e	^Results\[\"ITEMS_INFO\".*\"FILE_OFS_END\".*'
+  #
+  ## Themes
+  #GREP_1='-l	-e	Pkg_Meta_Data\[0x02\]: Desc "Content Type" Value 9'
+  #GREP_1='-l	-e	\[0x02\]: Desc "Content Type" Value 9'
+  #GREP_OUTPUT='-e	\[0x03\]'
+  # reverse
+  #GREP_1='-l	-e	\[0x03\]: Desc "Package Type/Flags" Value 0000048c'
+  #GREP_1='-l	-e	\[0x03\]: Desc "Package Type/Flags" Value 0000020c'
+  #GREP_OUTPUT='-e	\[0x02\]'
+  #
+  ## PS2 Classic
+  #GREP_1='-l	-e	sfovalues\["CATEGORY"          \]: 2P'
+  #GREP_OUTPUT='-e	\[0x02\]'
+  #
+  ## PSX
+  #GREP_1='-l	-e	sfovalues\["CATEGORY"          \]: 2P'
+  #GREP_OUTPUT='-e	PSX_TITLE_ID'
+  #GREP_1='-l	-e	Pkg_Meta_Data\[0x02\]: Desc "Content Type" Value 1'
+  #GREP_OUTPUT='-e	Pkg_Meta_Data\[0x02\]	-e	Pkg_Meta_Data\[0x06\]	-e	Pkg_Header\["CONTENT_ID"'
+  #
+  ## _DIFFER
+  #GREP_1='-l	-e	_DIFFER'
+  #GREP_OUTPUT='-e	Pkg_Meta_Data\[0x02\]	-e	_DIFFER'
 
   ## Clean-up and check GREP_OUTPUT pattern
   GREP_OUTPUT="$(printf -- '%s' "${GREP_OUTPUT:-}" | sed -r -e 's#(-l|-L)##g ; s#[\t]+#\t#g ; s#(^\t|\t$)##g')"
