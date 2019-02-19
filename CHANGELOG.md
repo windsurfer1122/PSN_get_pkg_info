@@ -1,6 +1,16 @@
 # PSN_get_pkg_info.py - Changelog
 
-## 2019.01.00 alpha 6
+## 2019.01.00 alpha 7
+* NEW: Added PS3 content types 0x13, 0x14
+* NEW: Parse PBP inside package
+* NEW: Parse PARAM.SFO item inside package, even if a PARAM.SFO is available in the unencrypted part
+* NEW: Display hex values in their correct length
+* FIX: Avoid dump on JSON output format 98
+* INTERNAL: Use bytes for magic
+* INTERNAL: Pass-through SEP to sub-structure output
+* INTERNAL: Functionality to get only the beginning of an item, which can be later re-used for extractions (data only read once)
+
+(alpha 6)
 * NEW: Support for multi-part packages (PS3 via XML, PS4 via JSON)
 * NEW: Updated PS4 headers to 6.20
 * NEW: Added some PS4 content type detection

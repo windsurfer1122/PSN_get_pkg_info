@@ -156,9 +156,11 @@ main()
   #VALUE_1='sce_sys/package/tail.bin' ; VALUE_2='03' ; ## only in PSM packages in contents/runtime/ with flags 0xc0000003
   #VALUE_1='sce_sys/package/stat.bin' ; VALUE_2='03' ; ## only in PSM packages in contents/runtime/ with flags 0xc0000003
   #VALUE_1='content_id' ; VALUE_2='' ; ## none found, no item with this name
-  #VALUE_1='EBOOT.PBP' ; VALUE_2='' ; ## ...
+  #VALUE_1='EBOOT\.PBP' ; VALUE_2='' ; ## ...
+  #VALUE_1='\.PBP' ; VALUE_2='' ; ## ...
   #GREP_OUTPUT="-E	-e	Flags[[:space:]]+.*Name[[:space:]]+\\\".*${VALUE_1}" ; ## search item name part
   #GREP_OUTPUT="-E	-e	Flags[[:space:]]+0x[[:xdigit:]]{6}${VALUE_2}.*\$" ; ## search item flags part
+  #GREP_OUTPUT="-E	-e	Name[[:space:]]+\\\".*${VALUE_1}" ; ## search item name part
   #
   ## Determine read-ahead size for python script
   #GREP_OUTPUT='-e	^Results\[\"ITEMS_INFO\".*\"FILE_OFS_END\".*'
@@ -173,11 +175,11 @@ main()
   #GREP_OUTPUT='-e	\[0x02\]'
   #
   ## PS2 Classic
-  #GREP_1='-l	-e	sfovalues\["CATEGORY"          \]: 2P'
+  #GREP_1='-l	-e	Sfo_Values\["CATEGORY"          \]: 2P'
   #GREP_OUTPUT='-e	\[0x02\]'
   #
   ## PSX
-  #GREP_1='-l	-e	sfovalues\["CATEGORY"          \]: 2P'
+  #GREP_1='-l	-e	Sfo_Values\["CATEGORY"          \]: 2P'
   #GREP_OUTPUT='-e	PSX_TITLE_ID'
   #GREP_1='-l	-e	Pkg_Meta_Data\[0x02\]: Desc "Content Type" Value 1'
   #GREP_OUTPUT='-e	Pkg_Meta_Data\[0x02\]	-e	Pkg_Meta_Data\[0x06\]	-e	Pkg_Header\["CONTENT_ID"'

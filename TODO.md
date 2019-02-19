@@ -1,38 +1,17 @@
 # PSN_get_pkg_info.py - To Do List
 
 ## To Do
-- [ ] Recognize more package types
+- [ ] Recognize PS4 package types
   * [ ] PS4:
     * [x] main content types for games and DLCs
-    * [ ] remaing or future content types
-  * [ ] PS3:
-    * [ ] 0x13 (4)
-      * http://zeus.dl.playstation.net/cdn/EP0700/NPEB01202_00/USQeayptvnilvJYHZhbDGsLJkhnVxGUYyqAMVEMCTyjZMKYcgBMAViDHppMgKArB.pkg
-      * http://zeus.dl.playstation.net/cdn/JP9000/NPJA00102_00/XYEnBIbgQzQZBByvAoJqqYPrDImdimIeSNDKRtaqayKkyqNkiTYUqhWKRbjrtChwpRzoOqhwjAxjCezuDfhRiKxSOftekvvGQxmYO.pkg
-      * http://zeus.dl.playstation.net/cdn/JP9000/NPJA00104_00/wzhwRwKebinCHvOxRmvATaHYuMeTDokliWioWHUylTNNFazDJikZShgBZvwKUoawZIIixneZFVeSCUBzpIXuRIwCwEQIpKBlCpaQC.pkg
-      * http://zeus.dl.playstation.net/cdn/UP0005/NPUB30910_00/MfxrUDwAWCgSWmixQoFdiKbaBdrkFAvAfoiXLUXaDBYJzYOkIvGqlbOyfrquqXgv.pkg
-    * [ ] 0x14 (1)
-      * http://zeus.dl.playstation.net/cdn/JP0102/NPJB00370_00/dhuyqrqbzuyFjxqfAiFbvDvkBAWJAUAufQrECuurDgNzZtVIRVPwgSScAVVGwZuizwEWRBnugnsqyAqRdpZBAqyzPzxNWyJYSedsr.pkg
-    * [x] 0x12  (~120) = PS2 Classics on PS3
-      * http://zeus.dl.playstation.net/cdn/EP0082/NPED00074_00/VoMyrXCrWATePvUyryZuDHHxDALraMWTDGFGwFnaHKyopFrDccwRrCTXAvAPxcje.pkg
-  * [x] PSP: PKG content type 15/0xf not supported. PSP/Minis/PC Engine/Neo Geo
-    * UP4128/NPUZ00242_00/GSknEkVAKwcEGLQVjxbSnOJFFvmtRYSsfCfCkCURuVKgBrKDJuNgrbmUyadjTzIYTQglsNZTWaMfIjacotTAArwGtyPWSIZTOVMVy.pkg (Game Mini)
-    * UP4128/NPUZ00193_00/NTPIvymtsQUIyYqhGucTmnidjuSdWhcnpFEBZwFDfkkAbpUnBrBOvueSpAAKWFapwYWvuFUvbhiqWeaufJShHxBwrzwfcBhTXXOxT.pkg (Game Mini)
-    * JP0805/NPJJ30059_00/hGkJbqgmXJYjRBTOmUmPvqrLwUhFBiHNNSiAeBuaezdPyvmyVlzYvKgYuoBBOdEFEltRyPeWSKluetJvVrbuPSQiAZgSSKKEjeyTF.pkg (PC Engine)
-    * JP0576/NPJH70002_00/EpdkZDkoEKlZtxUVKzdIqeCuFXiSzhjrWwNoANeOHvFjLnPsydXwtAtYfLbklqLMBlQEHaoxtEqsRnRLCUTLvklkSEJgtQNWMWtMB.pkg (Neo Geo)
-- [x] Create ZRIF structure (BE)
+    * [ ] remaining or future content types
 - [ ] `-x` extract functionality from pkg2zip (similar to `--make-dirs=ux` extract functionality from pkg_dec)
   * [x] extraction of PSV/PSM packages
   * [x] zrif support for PSV/PSM packages
   * [x] extraction of PSX packages
   * [ ] extraction of PSP packages
   * [ ] zip support (see pkg2zip_out.c, variable out_zipped)
-- [ ] Read PSM's "contents/Application/app.info" for details (wiki entries present)
-- [x] Switch from unmaintained module pycrypto to pycryptodomex
-  * pycrypto has not been maintained since 2014
-- [x] Find package that uses PKG3 Key #03
-  * None found in known PS3/PSX/PSP/PSV/PSM packages
-  * Extracted all data via -f 99 to separate text files and grep'ed through them
+- [ ] Read PSM's "contents/Application/app.info" for details (wiki entries present?)
 
 ## Wishlist
 - [ ]  Extraction special cases for ux0
@@ -64,3 +43,30 @@
   * [x] extraction of PS3 packages
 - [x] --raw functionality from pkg2dec
   * Needs to read complete file.
+
+## Done
+- [x] Parse PBP PARAM.SFO inside a PS3/PSX/PSP package
+- [x] Support PS3 multi-part packages
+  * http://hfs.dl.playstation.net/cdn/EP0002/NPEB02026_00/EP0002-NPEB02026_00-D3ULTIMATEEVIL00_ojEJre1DH3gRcOcyNckmwls1Ik7tFafmqqEx3OGsMSs6faElDbwd4IS4bwpjq2QR.pkg.xml
+- [x] Recognize PS3/PSX/PSP/PSV package types
+  * [x] PS3:
+    * [x] 0x12 (~120) = PS2 Classics on PS3
+      * http://zeus.dl.playstation.net/cdn/EP0082/NPED00074_00/VoMyrXCrWATePvUyryZuDHHxDALraMWTDGFGwFnaHKyopFrDccwRrCTXAvAPxcje.pkg
+    * [x] 0x13 (4) = PS3
+      * http://zeus.dl.playstation.net/cdn/EP0700/NPEB01202_00/USQeayptvnilvJYHZhbDGsLJkhnVxGUYyqAMVEMCTyjZMKYcgBMAViDHppMgKArB.pkg
+      * http://zeus.dl.playstation.net/cdn/JP9000/NPJA00102_00/XYEnBIbgQzQZBByvAoJqqYPrDImdimIeSNDKRtaqayKkyqNkiTYUqhWKRbjrtChwpRzoOqhwjAxjCezuDfhRiKxSOftekvvGQxmYO.pkg
+      * http://zeus.dl.playstation.net/cdn/JP9000/NPJA00104_00/wzhwRwKebinCHvOxRmvATaHYuMeTDokliWioWHUylTNNFazDJikZShgBZvwKUoawZIIixneZFVeSCUBzpIXuRIwCwEQIpKBlCpaQC.pkg
+      * http://zeus.dl.playstation.net/cdn/UP0005/NPUB30910_00/MfxrUDwAWCgSWmixQoFdiKbaBdrkFAvAfoiXLUXaDBYJzYOkIvGqlbOyfrquqXgv.pkg
+    * [x] 0x14 (1) = PS3
+      * http://zeus.dl.playstation.net/cdn/JP0102/NPJB00370_00/dhuyqrqbzuyFjxqfAiFbvDvkBAWJAUAufQrECuurDgNzZtVIRVPwgSScAVVGwZuizwEWRBnugnsqyAqRdpZBAqyzPzxNWyJYSedsr.pkg
+  * [x] PSP: PKG content type 15/0xf not supported. PSP/Minis/PC Engine/Neo Geo
+    * UP4128/NPUZ00242_00/GSknEkVAKwcEGLQVjxbSnOJFFvmtRYSsfCfCkCURuVKgBrKDJuNgrbmUyadjTzIYTQglsNZTWaMfIjacotTAArwGtyPWSIZTOVMVy.pkg (Game Mini)
+    * UP4128/NPUZ00193_00/NTPIvymtsQUIyYqhGucTmnidjuSdWhcnpFEBZwFDfkkAbpUnBrBOvueSpAAKWFapwYWvuFUvbhiqWeaufJShHxBwrzwfcBhTXXOxT.pkg (Game Mini)
+    * JP0805/NPJJ30059_00/hGkJbqgmXJYjRBTOmUmPvqrLwUhFBiHNNSiAeBuaezdPyvmyVlzYvKgYuoBBOdEFEltRyPeWSKluetJvVrbuPSQiAZgSSKKEjeyTF.pkg (PC Engine)
+    * JP0576/NPJH70002_00/EpdkZDkoEKlZtxUVKzdIqeCuFXiSzhjrWwNoANeOHvFjLnPsydXwtAtYfLbklqLMBlQEHaoxtEqsRnRLCUTLvklkSEJgtQNWMWtMB.pkg (Neo Geo)
+- [x] Create ZRIF structure (BE)
+- [x] Switch from unmaintained module pycrypto to pycryptodomex
+  * pycrypto has not been maintained since 2014
+- [x] Find package that uses PKG3 Key #03
+  * None found in known PS3/PSX/PSP/PSV/PSM packages
+  * Extracted all data via -f 99 to separate text files and grep'ed through them
