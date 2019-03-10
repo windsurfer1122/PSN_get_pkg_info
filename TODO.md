@@ -1,6 +1,13 @@
 # PSN_get_pkg_info.py - To Do List
 
 ## To Do
+- [ ] Special cases:
+  * [ ] NPJG90002 "LocoRoco おためし版 (Sushi version)", JP
+        http://zeus.dl.playstation.net/cdn/JP9000/NPJG90002_00/JHbBbXtj97Qy8Rff3sKuroBm0M3dfMqTlRdIEP9g8xgq76K4L33OgcfNJ5N3MvxmCVyX4gMCKLawlM4jGtBS9iJBB9GauTGJsl3UX.pkg
+        Has content type 0x1 for PSX although it was released for the PSP.
+        https://store.playstation.com/ja-jp/product/JP9000-NPJG90002_00-LRPSPDEMO0000001
+        There is also NPJG00057 for PSP (non Sushi version). Was NPJG90002 developed for the PSX but only released for the PSP's emulator?
+        UCUS98662 US, NPJG00057 JP, UCES00304 EU, UCAS40063 ASIA have content type 7 for PSP game.
 - [ ] Recognize PS4 package types
   * [ ] PS4:
     * [x] main content types for games and DLCs
@@ -57,7 +64,7 @@
       * http://zeus.dl.playstation.net/cdn/JP9000/NPJA00102_00/XYEnBIbgQzQZBByvAoJqqYPrDImdimIeSNDKRtaqayKkyqNkiTYUqhWKRbjrtChwpRzoOqhwjAxjCezuDfhRiKxSOftekvvGQxmYO.pkg
       * http://zeus.dl.playstation.net/cdn/JP9000/NPJA00104_00/wzhwRwKebinCHvOxRmvATaHYuMeTDokliWioWHUylTNNFazDJikZShgBZvwKUoawZIIixneZFVeSCUBzpIXuRIwCwEQIpKBlCpaQC.pkg
       * http://zeus.dl.playstation.net/cdn/UP0005/NPUB30910_00/MfxrUDwAWCgSWmixQoFdiKbaBdrkFAvAfoiXLUXaDBYJzYOkIvGqlbOyfrquqXgv.pkg
-    * [x] 0x14 (1) = PS3
+    * [x] 0x14 (1) = PSP Remaster on PS3
       * http://zeus.dl.playstation.net/cdn/JP0102/NPJB00370_00/dhuyqrqbzuyFjxqfAiFbvDvkBAWJAUAufQrECuurDgNzZtVIRVPwgSScAVVGwZuizwEWRBnugnsqyAqRdpZBAqyzPzxNWyJYSedsr.pkg
   * [x] PSP: PKG content type 15/0xf not supported. PSP/Minis/PC Engine/Neo Geo
     * UP4128/NPUZ00242_00/GSknEkVAKwcEGLQVjxbSnOJFFvmtRYSsfCfCkCURuVKgBrKDJuNgrbmUyadjTzIYTQglsNZTWaMfIjacotTAArwGtyPWSIZTOVMVy.pkg (Game Mini)

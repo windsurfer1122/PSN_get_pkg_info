@@ -1,60 +1,42 @@
 # PSN_get_pkg_info.py - Changelog
 
-## 2019.01.00 alpha 7
-* NEW: Added PS3 content types 0x13, 0x14
-* NEW: Parse PBP inside package
+## 2019.03.10
+* NEW: Support for multi-part packages (PS3 via XML, PS4 via JSON)
 * NEW: Parse PARAM.SFO item inside package, even if a PARAM.SFO is available in the unencrypted part
+* NEW: Parse PBP inside package
+* NEW: Determine required firmware versions for all platforms referenced inside the package and/or PBP
+* NEW: Added PS3 content type detection of 0x12 (PS2 Classics), 0x13, 0x14
+* NEW: Added some PS4 content type detection
 * NEW: Display hex values in their correct length
-* FIX: Avoid dump on JSON output format 98
+* NEW: Updated PS4 HTTP headers to 6.50
+* NEW: Parse PKG3 meta data 0x0A
+* NEW: Read first 128 KiB of each package to reduce HTTP/S request while keeping download time short (size fits 99% of known PKG3 package headers)
+* NEW: Added item flags to output format 99 for detailed analysis
+* NEW: Extraction: create all directories before extracting any file, added item index to extraction messages
+* FIX: Content ID in header fields is 48 bytes long and not 36 (derived from PSM extraction)
+* FIX: Correctly distinguish between PSP DLCs and updates
+* FIX: Determine PSP game versions and required firmware version from PBP PARAM.SFO
+* FIX: Return source from arguments in JSON output (e.g. XML/JSON URL)
+* FIX: Corrected extraction messages for PSM additional special files
+* FIX: Updated and corrected some content id recognition
+* FIX: Fine-tuned messages for remaining data and unaligned access
+* FIX: avoid leading spaces on metadata output (-f 99)
+* INTERNAL: Calculate tail size and do not use and support negative sizes for package read
+* INTERNAL: Functionality to get only the beginning of an item, which can be later re-used for extractions (data only read once)
 * INTERNAL: Use bytes for magic
 * INTERNAL: Pass-through SEP to sub-structure output
-* INTERNAL: Functionality to get only the beginning of an item, which can be later re-used for extractions (data only read once)
-
-(alpha 6)
-* NEW: Support for multi-part packages (PS3 via XML, PS4 via JSON)
-* NEW: Updated PS4 headers to 6.20
-* NEW: Added some PS4 content type detection
-* NEW: Added PS3 content type detection of PS2 Classics
-* NEW: Added structures for RIFs to enhance output for format 50
-* NEW: Parse PKG3 meta data 0x0A
 * INTERNAL: Use more constants to avoid typos
 * INTERNAL: Rename several variables to better fit their usage
-* INTERNAL: Calculate tail size and do not use and support negative sizes for package read
-
-(alpha 5)
-* NEW: First part of PSP extraction, EBOOT.PBP recognition and analysis for PSP/PSX packages.
-* NEW: Updated README.md with info of about PSP extraction
-* FIX: Return source from arguments in JSON output (e.g. JSON URL)
-* FIX: Dispaly RIF data inside loop for output format 50, so that multiple zrifs for the same content id are all displayed
-
-(alpha 4)
-* FIX: avoid leading spaces on metadata output (-f 99)
-* FIX: Read only first 128 KiB to reduce download time (size fits unecrypted header size of all known packages)
-* FIX: Fine-tuned messages for remaining data and unaligned access
-* FIX: Corrected extraction messages for PSM additional special files
 * INTERNAL: Items Info changes: rename function and variables, handle encrypted offset > 0 correctly, single bytearray for Items Info (entries plus names), use Items Info size from meta data if available, moved existing checks into function, added new checks, placed data about Items Info in own results dictionary, removed unneccesary internal data from JSON output
-* INTERNAL: Extraction: create all directories before extracting any file, added item index to extraction messages
-
-(alpha 3)
-* NEW: Added zrif support to extraction functionality for PSV/PSM packages
-* NEW: Added pkg2zip's `--ux0` extraction functionality for PSX/PSV/PSM packages (PSP still missing)
-* NEW: Added pkg_dec's "makedir=id" `--content` extraction functionality for PS3/PSX/PSP/PSV/PSM packages
-* NEW: Read first 1 MiB of each package to reduce HTTP/S request while keeping download time short (size fits 99% of known packages)
-* FIX: Updated and corrected content id recognition
-
-(alpha 2)
-* NEW: (preliminary) Added pkg2zip's `--ux0` extraction functionality for PSV/PSM packages
-* NEW: (preliminary) Added pkg_dec's "makedir=id" `--content` extraction functionality for PSV/PSM packages
-* NEW: Added option `--quiet` to suppress extraction messages
-* FIX: Content ID in header fields is 48 bytes long and not 36 (derived from PSM extraction)
-* INTERNAL: Used dictionary for all extractions and adopted code to generic extraction routines
-* INTERNAL: output format code 50 for debugging extractions
-
-(alpha 1)
-* NEW: Added item flags to output format 99 for detailed analysis
-* NEW: Added checks for extraction targets to avoid issues before reading packages
-* INTERNAL: Moved all extraction code in one block after data determination and output, so that analysis output is present even if any extraction fails
 * INTERNAL: Adopted code further to coding style
+* PRELIMINARY: Added pkg_dec's "makedir=id" `--content` extraction functionality for PS3/PSX/PSP/PSV/PSM packages
+* PRELIMINARY: Added pkg2zip's `--ux0` extraction functionality for PSX/PSV/PSM packages (PSP still missing)
+* PRELIMINARY: First part of PSP extraction, EBOOT.PBP recognition and analysis for PSP/PSX packages.
+* PRELIMINARY: Added zrif support to extraction functionality for PSV/PSM packages
+* PRELIMINARY: Output format 50 for displaying all RIF data, so that multiple zrifs for the same content id are all displayed
+* PRELIMINARY: Option `--quiet` to suppress extraction messages
+* PRELIMINARY: Moved all extraction code in one block after data determination and output, so that analysis output is present even if any extraction fails
+* PRELIMINARY: Added checks for extraction targets to avoid issues before reading packages
 
 ## 2018.12.31
 * NEW: dependency on aenum module
