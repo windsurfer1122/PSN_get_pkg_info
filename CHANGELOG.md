@@ -1,5 +1,9 @@
 # PSN_get_pkg_info.py - Changelog
 
+## 2019.03.10.post1
+* FIX: Allow redirections when accessing HTTP headers, otherwise causes error of mismatching sizes
+* FIX: Formatting issue on error message of mismatching sizes
+
 ## 2019.03.10
 * NEW: Support for multi-part packages (PS3 via XML, PS4 via JSON)
 * NEW: Parse PARAM.SFO item inside package, even if a PARAM.SFO is available in the unencrypted part

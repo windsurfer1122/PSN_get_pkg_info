@@ -57,7 +57,7 @@ from builtins import bytes
 
 
 ## Version definition
-__version__ = "2019.03.10"
+__version__ = "2019.03.10.post1"
 __author__ = "https://github.com/windsurfer1122/PSN_get_pkg_info"
 __license__ = "GPL"
 __copyright__ = "Copyright 2018-2019, windsurfer1122"
@@ -949,6 +949,7 @@ class PkgInputReader():
             return
 
         part_size = None
+        response = None
         if file_part["url"].startswith("http:") \
         or file_part["url"].startswith("https:"):
             if function_debug_level >= 3:
@@ -964,7 +965,7 @@ class PkgInputReader():
                 sys.exit(2)
             #
             file_part["STREAM"].headers = self._headers
-            response = file_part["STREAM"].head(file_part["url"])
+            response = file_part["STREAM"].head(file_part["url"], allow_redirects=True)
             if function_debug_level >= 3:
                 dprint("[INPUT]", response)
                 dprint("[INPUT] Response headers:", response.headers)
@@ -992,7 +993,10 @@ class PkgInputReader():
                 file_part["END_OFS"] = file_part["START_OFS"] + file_part["SIZE"]
             else:
                 if part_size != file_part["SIZE"]:
-                    eprint("[INPUT] File size differs from meta data {} <> {}", part_size, file_part["SIZE"])
+                    if not response is None:
+                        eprint("[INPUT]", response)
+                        eprint("[INPUT] Response headers:", response.headers)
+                    eprint("[INPUT] File size differs from meta data ({} <> {})".format(part_size, file_part["SIZE"]))
                     eprint("", prefix=None)
                     sys.exit(2)
 
