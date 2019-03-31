@@ -57,7 +57,8 @@ from builtins import bytes
 
 
 ## Version definition
-__version__ = "2019.03.10.post1"
+## see https://www.python.org/dev/peps/pep-0440/
+__version__ = "2019.03.10.post2"
 __author__ = "https://github.com/windsurfer1122/PSN_get_pkg_info"
 __license__ = "GPL"
 __copyright__ = "Copyright 2018-2019, windsurfer1122"
@@ -757,8 +758,23 @@ class PkgInputReader():
                     input_stream = requests.get(self._source, headers=self._headers)
                 except:
                     eprint("[INPUT] Could not open URL", self._source)
+                    if input_stream:
+                        if input_stream.url != self._source:
+                            eprint("[INPUT] Redirected URL", input_stream.url)
+                        eprint("[INPUT]", input_stream.status_code, input_stream.reason)
                     eprint("", prefix=None)
-                    sys.exit(2)
+                    raise  ## re-raise
+                if input_stream.status_code != requests.codes.ok:
+                    eprint("[INPUT] Could not open URL", self._source)
+                    if input_stream.url != self._source:
+                        eprint("[INPUT] Redirected URL", input_stream.url)
+                    eprint("[INPUT]", input_stream.status_code, input_stream.reason)
+                    raise input_stream.raise_for_status()
+                if function_debug_level >= 3:
+                    if input_stream.url != self._source:
+                        dprint("[INPUT] Redirected URL", input_stream.url)
+                    dprint("[INPUT]", input_stream.status_code, input_stream.reason)
+                    dprint("[INPUT] Response headers:", input_stream.headers)
                 xml_root = xml.etree.ElementTree.fromstring(input_stream.text)
                 input_stream.close()
             else:
@@ -769,10 +785,11 @@ class PkgInputReader():
                 except:
                     eprint("[INPUT] Could not open FILE", self._source)
                     eprint("", prefix=None)
-                    sys.exit(2)
+                    raise  ## re-raise
                 xml_root = xml.etree.ElementTree.fromstring(input_stream.read())
                 input_stream.close()
             del input_stream
+            #
             ## Check for known XML
             if xml_root.tag != CONST_PKG3_XML_ROOT:
                 eprint("[INPUT] Not a known PKG XML file ({} <> {})".format(xml_root.tag, CONST_PKG3_XML_ROOT), self._source)
@@ -831,8 +848,23 @@ class PkgInputReader():
                     input_stream = requests.get(self._source, headers=self._headers)
                 except:
                     eprint("[INPUT] Could not open URL", self._source)
+                    if input_stream:
+                        if input_stream.url != self._source:
+                            eprint("[INPUT] Redirected URL", input_stream.url)
+                        eprint("[INPUT]", input_stream.status_code, input_stream.reason)
                     eprint("", prefix=None)
-                    sys.exit(2)
+                    raise  ## re-raise
+                if input_stream.status_code != requests.codes.ok:
+                    eprint("[INPUT] Could not open URL", self._source)
+                    if input_stream.url != self._source:
+                        eprint("[INPUT] Redirected URL", input_stream.url)
+                    eprint("[INPUT]", input_stream.status_code, input_stream.reason)
+                    raise input_stream.raise_for_status()
+                if function_debug_level >= 3:
+                    if input_stream.url != self._source:
+                        dprint("[INPUT] Redirected URL", input_stream.url)
+                    dprint("[INPUT]", input_stream.status_code, input_stream.reason)
+                    dprint("[INPUT] Response headers:", input_stream.headers)
                 json_data = input_stream.json()
                 input_stream.close()
             else:
@@ -843,7 +875,7 @@ class PkgInputReader():
                 except:
                     eprint("[INPUT] Could not open FILE", self._source)
                     eprint("", prefix=None)
-                    sys.exit(2)
+                    raise  ## re-raise
                 json_data = json.load(input_stream)
                 input_stream.close()
             del input_stream
@@ -952,7 +984,7 @@ class PkgInputReader():
         response = None
         if file_part["url"].startswith("http:") \
         or file_part["url"].startswith("https:"):
-            if function_debug_level >= 3:
+            if function_debug_level >= 2:
                 dprint("[INPUT] Opening Pkg Part #{} as URL PKG data stream".format(file_part["INDEX"]))
             ## Persistent session
             ## http://docs.python-requests.org/en/master/api/#request-sessions
@@ -962,12 +994,29 @@ class PkgInputReader():
             except:
                 eprint("[INPUT] Could not create HTTP/S session for PKG URL", file_part["url"])
                 eprint("", prefix=None)
-                sys.exit(2)
+                raise  ## re-raise
             #
             file_part["STREAM"].headers = self._headers
-            response = file_part["STREAM"].head(file_part["url"], allow_redirects=True)
+            try:
+                response = file_part["STREAM"].head(file_part["url"], allow_redirects=True)
+            except:
+                eprint("[INPUT] Could not open URL", file_part["url"])
+                if response:
+                    if response.url != file_part["url"]:
+                        eprint("[INPUT] Redirected URL", response.url)
+                    eprint("[INPUT]", response.status_code, response.reason)
+                eprint("", prefix=None)
+                raise  ## re-raise
+            if response.status_code != requests.codes.ok:
+                eprint("[INPUT] Could not open URL", file_part["url"])
+                if response.url != file_part["url"]:
+                    eprint("[INPUT] Redirected URL", response.url)
+                eprint("[INPUT]", response.status_code, response.reason)
+                raise response.raise_for_status()
             if function_debug_level >= 3:
-                dprint("[INPUT]", response)
+                if response.url != file_part["url"]:
+                    dprint("[INPUT] Redirected URL", response.url)
+                dprint("[INPUT]", response.status_code, response.reason)
                 dprint("[INPUT] Response headers:", response.headers)
             if "content-length" in response.headers:
                 part_size = int(response.headers["content-length"])
@@ -981,7 +1030,7 @@ class PkgInputReader():
             except:
                 eprint("[INPUT] Could not open PKG FILE", file_part["url"])
                 eprint("", prefix=None)
-                sys.exit(2)
+                raise  ## re-raise
             #
             file_part["STREAM"].seek(0, os.SEEK_END)
             part_size = file_part["STREAM"].tell()
@@ -994,9 +1043,9 @@ class PkgInputReader():
             else:
                 if part_size != file_part["SIZE"]:
                     if not response is None:
-                        eprint("[INPUT]", response)
+                        eprint("[INPUT]", response.status_code, response.reason)
                         eprint("[INPUT] Response headers:", response.headers)
-                    eprint("[INPUT] File size differs from meta data ({} <> {})".format(part_size, file_part["SIZE"]))
+                    eprint("[INPUT] File size differs from XML/JSON meta data ({} <> {})".format(part_size, file_part["SIZE"]))
                     eprint("", prefix=None)
                     sys.exit(2)
 
@@ -1419,7 +1468,7 @@ def parsePkg4Header(head_bytes, input_stream, function_debug_level, print_unknow
         input_stream.close(function_debug_level)
         eprint("Could not get PKG4 file entry table at offset {:#x} with size {} from".format(header_fields["FILETBLOFS"], pkg_file_table_size), input_stream.getSource())
         eprint("", prefix=None)
-        sys.exit(2)
+        raise  ## re-raise
 
     ## Parse PKG4 File Entry Table Data
     file_table = []
@@ -1460,7 +1509,7 @@ def parsePkg4Header(head_bytes, input_stream, function_debug_level, print_unknow
             input_stream.close(function_debug_level)
             eprint("Could not get PKG4 name table at offset {:#x} with size {} from".format(file_entry["DATAOFS"], file_entry["DATASIZE"]), input_stream.getSource())
             eprint("", prefix=None)
-            sys.exit(2)
+            raise  ## re-raise
 
     ## Parse PKG4 Name Table Data for File Entries
     if function_debug_level >= 2:
@@ -1541,7 +1590,7 @@ def parsePkg3Header(head_bytes, input_stream, function_debug_level):
         input_stream.close(function_debug_level)
         eprint("Could not get PKG3 unencrypted data at offset {:#x} with size {} from".format(CONST_PKG3_MAIN_HEADER_FIELDS["STRUCTURE_SIZE"], read_size), input_stream.getSource())
         eprint("", prefix=None)
-        sys.exit(2)
+        raise  ## re-raise
 
     ## Extract fields from PKG3 Extended Header
     ext_header_fields = None
@@ -1733,7 +1782,7 @@ def parsePbpHeader(head_bytes, input_stream, file_size, function_debug_level=0):
             input_stream.close(function_debug_level)
             eprint("Could not get PBP unencrypted data at offset {:#x} with size {} from".format(CONST_PBP_HEADER_FIELDS["STRUCTURE_SIZE"], read_size), input_stream.getSource())
             eprint("", prefix=None)
-            sys.exit(2)
+            raise  ## re-raise
 
     ## Determine key index for data
     pass  ## TODO
@@ -1827,7 +1876,7 @@ def parsePkg3ItemsInfo(header_fields, meta_data, input_stream, function_debug_le
         input_stream.close(function_debug_level)
         eprint("Could not get PKG3 encrypted data at offset {:#x} with size {} from".format(header_fields["DATAOFS"]+items_info_bytes["ALIGN"]["OFS"], items_info_bytes["ALIGN"]["SIZE"]), input_stream.getSource())
         eprint("", prefix=None)
-        sys.exit(2)
+        raise  ## re-raise
 
     ## Decrypt PKG3 Item Entries
     items_info_bytes[CONST_DATATYPE_DECRYPTED] = header_fields["AES_CTR"][header_fields["KEYINDEX"]].decrypt(items_info_bytes["ALIGN"]["OFS"], items_info_bytes[CONST_DATATYPE_AS_IS])
@@ -1910,7 +1959,7 @@ def parsePkg3ItemsInfo(header_fields, meta_data, input_stream, function_debug_le
             input_stream.close(function_debug_level)
             eprint("Could not get PKG3 encrypted data at offset {:#x} with size {} from".format(header_fields["DATAOFS"]+read_offset, read_size), input_stream.getSource())
             eprint("", prefix=None)
-            sys.exit(2)
+            raise  ## re-raise
         #
         items_info_bytes[CONST_DATATYPE_DECRYPTED].extend(items_info_bytes[CONST_DATATYPE_AS_IS][len(items_info_bytes[CONST_DATATYPE_DECRYPTED]):])
     else:
@@ -2036,7 +2085,7 @@ def processPkg3Item(extractions_fields, item_entry, input_stream, item_data, siz
                 input_stream.close(function_debug_level)
                 eprint("Could not get PKG3 encrypted data at offset {:#x} with size {} from".format(extractions_fields["DATAOFS"]+align["OFS"], align["SIZE"]), input_stream.getSource())
                 eprint("", prefix=None)
-                sys.exit(2)
+                raise  ## re-raise
             #
             if add_item_data:
                 item_data[CONST_DATATYPE_AS_IS].extend(encrypted_bytes)
@@ -2125,7 +2174,7 @@ def retrieveParamSfo(package, results, input_stream, function_debug_level=0):
             input_stream.close(function_debug_level)
             eprint("Could not get PARAM.SFO at offset {:#x} with size {} from".format(results["PKG_SFO_OFFSET"], results["PKG_SFO_SIZE"]), input_stream.getSource())
             eprint("", prefix=None)
-            sys.exit(2)
+            raise  ## re-raise
 
     return sfo_bytes
 
@@ -2523,7 +2572,10 @@ if __name__ == "__main__":
             else:
                 eprint("# >>>>>>>>>> PKG Source:", Source, prefix=None)
             #
-            Input_Stream = PkgInputReader(Source, function_debug_level=max(0, Debug_Level))
+            try:
+                Input_Stream = PkgInputReader(Source, function_debug_level=max(0, Debug_Level))
+            except requests.exceptions.HTTPError:
+                continue
             Results["FILE_SIZE"] = Input_Stream.getSize(function_debug_level=max(0, Debug_Level))
             if Results["FILE_SIZE"] is None:
                 del Results["FILE_SIZE"]
@@ -2542,7 +2594,7 @@ if __name__ == "__main__":
                 Input_Stream.close(function_debug_level=max(0, Debug_Level))
                 eprint("Could not get PKG magic at offset {:#x} with size {} from".format(0, 4), Input_Stream.getSource(function_debug_level=max(0, Debug_Level)))
                 eprint("", prefix=None)
-                sys.exit(2)
+                raise  ## re-raise
             Pkg_Magic = Package["HEAD_BYTES"][0:4]
             #
             ## --> PKG3
@@ -2575,7 +2627,7 @@ if __name__ == "__main__":
                 Input_Stream.close(function_debug_level=max(0, Debug_Level))
                 eprint("Could not get rest of main header at offset {:#x} with size {} from".format(4, Header_Size-4), Input_Stream.getSource(function_debug_level=max(0, Debug_Level)))
                 eprint("", prefix=None)
-                sys.exit(2)
+                raise  ## re-raise
 
             ## Process PKG main header data
             ## --> PKG3
