@@ -58,7 +58,7 @@ from builtins import bytes
 
 ## Version definition
 ## see https://www.python.org/dev/peps/pep-0440/
-__version__ = "2019.03.10.post2"
+__version__ = "2019.04.30"
 __author__ = "https://github.com/windsurfer1122/PSN_get_pkg_info"
 __license__ = "GPL"
 __copyright__ = "Copyright 2018-2019, windsurfer1122"
@@ -246,7 +246,7 @@ CONST_READ_AHEAD_SIZE = 128 * 0x400 ## Read first 128 KiB to reduce read request
 CONST_USER_AGENT_PS3 = "Mozilla/5.0 (PLAYSTATION 3; 4.84)"
 #CONST_USER_AGENT_PSP = ""
 CONST_USER_AGENT_PSV = " libhttp/3.70 (PS Vita)"
-CONST_USER_AGENT_PS4 = "Download/1.00 libhttp/6.50 (PlayStation 4)"
+CONST_USER_AGENT_PS4 = "Download/1.00 libhttp/6.51 (PlayStation 4)"
 #
 CONST_EXTRACT_RAW = "RAW"
 CONST_EXTRACT_UX0 = "UX0"
@@ -2538,6 +2538,10 @@ if __name__ == "__main__":
 
         ## Process paths and URLs
         for Source in Arguments.source:
+            ## Special cases
+            if Source == "dummy":
+                continue
+
             ## Initialize per-package variables
             Input_Stream = None
             Extractions = {}
@@ -2967,6 +2971,18 @@ if __name__ == "__main__":
                         else:
                             Results["PKG_TYPE"] = CONST_PKG_TYPE.DLC
                             Nps_Type = "PS3 DLC"
+                            if not "SFO_TITLE" in Results \
+                            and 0x03 in Pkg_Meta_Data \
+                            and Pkg_Meta_Data[0x03]["VALUE"] == bytes.fromhex("0000048c"):
+                                for Item_Entry in Pkg_Item_Entries:
+                                    if not "NAME" in Item_Entry \
+                                    or Item_Entry["DATASIZE"] <= 0:
+                                        continue
+                                    #
+                                    if Item_Entry["NAME"].endswith(".edat") \
+                                    and not Item_Entry["NAME"].endswith(".p3t.edat"):
+                                        Results["SFO_TITLE"] = " ".join((Results["TITLE_ID"], "- Unlock Key"))
+                                        break
                         #
                         Results["PKG_EXTRACT_ROOT_CONT"] = Pkg_Header["CONTENT_ID"][7:]
                         #

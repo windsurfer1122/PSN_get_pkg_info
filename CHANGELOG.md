@@ -1,5 +1,10 @@
 # PSN_get_pkg_info.py - Changelog
 
+## 2019.04.30
+* NEW: Detect PS3 Unlock DLC without titles and give technical title
+* NEW: Allow fake package source "dummy". Can be used if only handling zrifs.
+* FIX: Update firmware versions for http headers
+
 ## 2019.03.10.post2
 * NEW: Handle HTTP errors much better
 
