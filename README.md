@@ -5,9 +5,12 @@ Extract package information from header and PARAM.SFO of PS3/PSX/PSP/PSV/PSM and
 * One-for-all solution to retrieve all header data and PARAM.SFO data from PSN packages
 * Decryption of PS3 encrypted data to get all data
 * Support of all known package types: PS3/PSX/PSP, PSV/PSM, PS4
-* [Preliminary] Extraction of PS3/PSX/PSP/PSV/PSM packages similar to pkg2zip and pkg_dec
-  * PSP: Extraction as EBOOT.PBP for [NPdrm 0.9 plugin](https://github.com/qwikrazor87/npdrm_free) on PSP or on PSV with [Adrenaline](https://github.com/TheOfficialFloW/Adrenaline).<br>
-    Extraction as ISO/CSO is not supported yet, there are other tools for this like [ISO~PBP Converter](https://sites.google.com/site/theleecherman/IsoPbpConverter) and [CISO Multi Compressor](https://sites.google.com/site/theleecherman/cisomulticompressor) plus homebrew [Takka](http://takka.tfact.net/2011/)'s [ISO Tool 1.981](https://wololo.net/downloads/index.php/download/7918) to integrate updates/patches and [Disc Change 2.6](https://www21.atwiki.jp/improper_code/pages/73.html#id_32933629) ([DL](https://www21.atwiki.jp/improper_code?cmd=upload&act=open&pageid=73&file=disc_change_2_6.zip)). And also [UMDGen](http://www.psx-place.com/resources/umd-gen-4-00.208/).<br>
+* Extraction of PS3/PSX/PSP/PSV/PSM packages similar to pkg2zip and pkg_dec
+  * pkg_dec's raw extraction, where the complete package is decrypted and again stored as a single file which keeps the package structure 1:1 (decrypted package)
+  * Content extraction, where the package items are decrypted and stored under their original item names
+  * [Preliminary] ux0 extraction, where the package items are decrypted and stored as they would have been installed on the PS Vita file system.
+    * PSP: Extraction as EBOOT.PBP for [npdrm_free plugin](https://github.com/qwikrazor87/npdrm_free) on PSP or on PSV with [Adrenaline](https://github.com/TheOfficialFloW/Adrenaline).<br>
+      Extraction as ISO/CSO is not supported yet, there are other tools to help out like [ISO~PBP Converter](https://sites.google.com/site/theleecherman/IsoPbpConverter) and [CISO Multi Compressor](https://sites.google.com/site/theleecherman/cisomulticompressor) plus homebrew [Takka](http://takka.tfact.net/2011/)'s [ISO Tool 1.981](https://wololo.net/downloads/index.php/download/7918) to integrate updates/patches and [Disc Change 2.6](https://www21.atwiki.jp/improper_code/pages/73.html#id_32933629) ([DL](https://www21.atwiki.jp/improper_code?cmd=upload&act=open&pageid=73&file=disc_change_2_6.zip)). And also [UMDGen](http://www.psx-place.com/resources/umd-gen-4-00.208/).<br>
 * Easy enhancement of interpreting data (=done at the very end with all data at hand)
 * Support http download streaming to avoid harddisk usage
 * Support multi-part packages (PS3: XML, PS4: JSON)
@@ -25,7 +28,7 @@ Extract package information from header and PARAM.SFO of PS3/PSX/PSP/PSV/PSM and
 For available options execute: `PSN_get_pkg_info.py -h`<br>
 It is recommended to place `--` before the package sources, to avoid them being used as targets, e.g. `PSN_get_pkg_info.py --raw -- 01.pkg 02.pkg` will never kill the 01.pkg!<br>
 Use at your own risk!<br>
-If you state URLs then only the necessary bytes are downloaded into memory. Note that the options "--raw" downloads the complete package once without storing the original data on the file system.
+If you state URLs then only the necessary bytes are downloaded into memory. Note that the "--raw" option downloads the complete package once without storing the original data on the file system.
 
 ## Contributions welcome
 * Especially information about how to interpret data is needed, e.g. content types

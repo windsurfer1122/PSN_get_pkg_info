@@ -1,5 +1,10 @@
 # PSN_get_pkg_info.py - Changelog
 
+## 2019.05.26
+* NEW: Added `--pathpattern` filter via regex to `--content` extraction and also `--nosubdirs` to extract all files directly to the content dir
+* NEW: Enhanced PARAM.SFO display to display hex values in their correct length
+* FIX: Correctly use quiet setting when extracting files
+
 ## 2019.04.30
 * NEW: Detect PS3 Unlock DLC without titles and give technical title
 * NEW: Allow fake package source "dummy". Can be used if only handling zrifs.
