@@ -58,7 +58,7 @@ from builtins import bytes
 
 ## Version definition
 ## see https://www.python.org/dev/peps/pep-0440/
-__version__ = "2019.05.26"
+__version__ = "2019.05.28"
 __author__ = "https://github.com/windsurfer1122/PSN_get_pkg_info"
 __license__ = "GPL"
 __copyright__ = "Copyright 2018-2019, windsurfer1122"
@@ -446,10 +446,10 @@ CONST_PKG4_MAIN_HEADER_FIELDS = collections.OrderedDict([ \
     ( "TYPE",         { "FORMAT": CONST_FMT_UINT16, "DEBUG": 1, "DESC": "Type", }, ),
     ( "UNKNOWN1",     { "FORMAT": CONST_FMT_CHAR, "SIZE": 4, "DEBUG": 3, "DESC": "Unknown", "SKIP": True, }, ),
     ( "FILECNT",      { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "File Count", }, ),
-    ( "ENTCNT",       { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Entry Count", }, ),
+    ( "ENTCNT",       { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Entry Count (or is this METACNT?)", }, ),
     ( "SCENTCNT",     { "FORMAT": CONST_FMT_UINT16, "DEBUG": 1, "DESC": "SC Entry Count", }, ),
-    ( "ENTCNT2",      { "FORMAT": CONST_FMT_UINT16, "DEBUG": 1, "DESC": "Entry Count 2", }, ),
-    ( "FILETBLOFS",   { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Table Offset", }, ),
+    ( "METACNT",      { "FORMAT": CONST_FMT_UINT16, "DEBUG": 1, "DESC": "Meta Table Count (same as ENTCNT)", }, ),
+    ( "METATBLOFS",   { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Meta Table Offset", }, ),
     ( "ENTSIZE",      { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Ent Data Size", }, ),
     ( "BODYOFS",      { "FORMAT": CONST_FMT_UINT64, "DEBUG": 1, "DESC": "Body Offset", }, ),
     ( "BODYSIZE",     { "FORMAT": CONST_FMT_UINT64, "DEBUG": 1, "DESC": "Body Size", }, ),
@@ -496,13 +496,13 @@ CONST_PKG4_MAIN_HEADER_FIELDS = collections.OrderedDict([ \
 ])
 #
 ## --> File Entry Table
-CONST_PKG4_FILE_ENTRY_FIELDS = collections.OrderedDict([ \
-    ( "FILEID",       { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "File ID", }, ),
+CONST_PKG4_META_ENTRY_FIELDS = collections.OrderedDict([ \
+    ( "METAID",       { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Meta Entry ID", }, ),
     ( "NAMERELOFS",   { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Name Table Offset", }, ),
     ( "FLAGS1",       { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Flags 1", }, ),
     ( "FLAGS2",       { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Flags 2", }, ),
-    ( "DATAOFS",      { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "PKG Offset", }, ),
-    ( "DATASIZE",     { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "File Size", }, ),
+    ( "DATAOFS",      { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "PKG Data Offset", }, ),
+    ( "DATASIZE",     { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Data Size", }, ),
     ( "PADDING1",     { "FORMAT": CONST_FMT_CHAR, "SIZE": 8, "DEBUG": 3, "DESC": "Padding", "SKIP": True, }, ),
     #
     ( "NAME",         { "VIRTUAL": -1, "DEBUG": 1, "DESC": "File Name", }, ),
@@ -510,21 +510,21 @@ CONST_PKG4_FILE_ENTRY_FIELDS = collections.OrderedDict([ \
 #
 ## --> Name Table
 ##     Name Table is 0-indexed, index 0 is an empty name
-CONST_PKG4_FILE_ENTRY_ID_DIGEST_TABLE = 0x0001
-CONST_PKG4_FILE_ENTRY_ID_ENTRY_KEYS   = 0x0010
-CONST_PKG4_FILE_ENTRY_ID_IMAGE_KEY    = 0x0020
-CONST_PKG4_FILE_ENTRY_ID_GENERAL_DIGESTS = 0x0080
-CONST_PKG4_FILE_ENTRY_ID_META_TABLE   = 0x0100
-CONST_PKG4_FILE_ENTRY_ID_NAME_TABLE   = 0x0200
-CONST_PKG4_FILE_ENTRY_ID_PARAM_SFO    = 0x1000
+CONST_PKG4_META_ENTRY_ID_DIGEST_TABLE = 0x0001
+CONST_PKG4_META_ENTRY_ID_ENTRY_KEYS   = 0x0010
+CONST_PKG4_META_ENTRY_ID_IMAGE_KEY    = 0x0020
+CONST_PKG4_META_ENTRY_ID_GENERAL_DIGESTS = 0x0080
+CONST_PKG4_META_ENTRY_ID_META_TABLE   = 0x0100
+CONST_PKG4_META_ENTRY_ID_NAME_TABLE   = 0x0200
+CONST_PKG4_META_ENTRY_ID_PARAM_SFO    = 0x1000
 #
-CONST_PKG4_FILE_ENTRY_NAME_MAP = {
-    CONST_PKG4_FILE_ENTRY_ID_DIGEST_TABLE: ".digests",
-    CONST_PKG4_FILE_ENTRY_ID_ENTRY_KEYS: ".entry_keys",
-    CONST_PKG4_FILE_ENTRY_ID_IMAGE_KEY: ".image_key",
-    CONST_PKG4_FILE_ENTRY_ID_GENERAL_DIGESTS: ".general_digests",
-    CONST_PKG4_FILE_ENTRY_ID_META_TABLE: ".metatable",
-    CONST_PKG4_FILE_ENTRY_ID_NAME_TABLE: ".nametable",
+CONST_PKG4_META_ENTRY_NAME_MAP = {
+    CONST_PKG4_META_ENTRY_ID_DIGEST_TABLE: ".digests",
+    CONST_PKG4_META_ENTRY_ID_ENTRY_KEYS: ".entry_keys",
+    CONST_PKG4_META_ENTRY_ID_IMAGE_KEY: ".image_key",
+    CONST_PKG4_META_ENTRY_ID_GENERAL_DIGESTS: ".general_digests",
+    CONST_PKG4_META_ENTRY_ID_META_TABLE: ".metatable",
+    CONST_PKG4_META_ENTRY_ID_NAME_TABLE: ".nametable",
 
     0x0400: "license.dat",
     0x0401: "license.info",
@@ -536,7 +536,7 @@ CONST_PKG4_FILE_ENTRY_NAME_MAP = {
     0x0408: "origin-deltainfo.dat",
     0x0409: "psreserved.dat",
 
-    CONST_PKG4_FILE_ENTRY_ID_PARAM_SFO: "param.sfo",
+    CONST_PKG4_META_ENTRY_ID_PARAM_SFO: "param.sfo",
     0x1001: "playgo-chunk.dat",
     0x1002: "playgo-chunk.sha",
     0x1003: "playgo-manifest.xml",
@@ -564,59 +564,60 @@ CONST_PKG4_FILE_ENTRY_NAME_MAP = {
 ## 0x1201-0x121f: icon0_<nn>.png
 for Count in range(0x1f):
     Key = 0x1201 + Count
-    CONST_PKG4_FILE_ENTRY_NAME_MAP[Key] = "icon0_{:02}.png".format(Count)
+    CONST_PKG4_META_ENTRY_NAME_MAP[Key] = "icon0_{:02}.png".format(Count)
     if Debug_Level >= 2:
-        dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_FILE_ENTRY_NAME_MAP[Key]))
+        dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_META_ENTRY_NAME_MAP[Key]))
 #
 ## 0x1241-0x125f: pic1_<nn>.png
 for Count in range(0x1f):
     Key = 0x1241 + Count
-    CONST_PKG4_FILE_ENTRY_NAME_MAP[Key] = "pic1_{:02}.png".format(Count)
+    CONST_PKG4_META_ENTRY_NAME_MAP[Key] = "pic1_{:02}.png".format(Count)
     if Debug_Level >= 2:
-        dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_FILE_ENTRY_NAME_MAP[Key]))
+        dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_META_ENTRY_NAME_MAP[Key]))
 #
 ## 0x1261-0x127f: pic1_<nn>.png
 for Count in range(0x1f):
     Key = 0x1261 + Count
-    CONST_PKG4_FILE_ENTRY_NAME_MAP[Key] = "changeinfo/changeinfo_{:02}.xml".format(Count)
+    CONST_PKG4_META_ENTRY_NAME_MAP[Key] = "changeinfo/changeinfo_{:02}.xml".format(Count)
     if Debug_Level >= 2:
-        dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_FILE_ENTRY_NAME_MAP[Key]))
+        dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_META_ENTRY_NAME_MAP[Key]))
 #
 ## 0x1281-0x129f: icon0_<nn>.dds
 for Count in range(0x1f):
     Key = 0x1281 + Count
-    CONST_PKG4_FILE_ENTRY_NAME_MAP[Key] = "icon0_{:02}.dds".format(Count)
+    CONST_PKG4_META_ENTRY_NAME_MAP[Key] = "icon0_{:02}.dds".format(Count)
     if Debug_Level >= 2:
-        dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_FILE_ENTRY_NAME_MAP[Key]))
+        dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_META_ENTRY_NAME_MAP[Key]))
 #
 ## 0x12c1-0x12df: pic1_<nn>.dds
 for Count in range(0x1f):
     Key = 0x12c1 + Count
-    CONST_PKG4_FILE_ENTRY_NAME_MAP[Key] = "pic1_{:02}.dds".format(Count)
+    CONST_PKG4_META_ENTRY_NAME_MAP[Key] = "pic1_{:02}.dds".format(Count)
     if Debug_Level >= 2:
-        dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_FILE_ENTRY_NAME_MAP[Key]))
+        dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_META_ENTRY_NAME_MAP[Key]))
 #
 ## 0x1400-0x1463: trophy/trophy<nn>.dds
 for Count in range(0x64):
     Key = 0x1400 + Count
-    CONST_PKG4_FILE_ENTRY_NAME_MAP[Key] = "trophy/trophy{:02}.trp".format(Count)
+    CONST_PKG4_META_ENTRY_NAME_MAP[Key] = "trophy/trophy{:02}.trp".format(Count)
     if Debug_Level >= 2:
-        dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_FILE_ENTRY_NAME_MAP[Key]))
+        dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_META_ENTRY_NAME_MAP[Key]))
 #
 ## 0x1600-0x1609: keymap_rp/<nn>.png
 for Count in range(0x0a):
     Key = 0x1600 + Count
-    CONST_PKG4_FILE_ENTRY_NAME_MAP[Key] = "keymap_rp/{:03}.png".format(Count)
+    CONST_PKG4_META_ENTRY_NAME_MAP[Key] = "keymap_rp/{:03}.png".format(Count)
     if Debug_Level >= 2:
-        dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_FILE_ENTRY_NAME_MAP[Key]))
+        dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_META_ENTRY_NAME_MAP[Key]))
 #
 ## 0x1610-0x17f9: keymap_rp/<nn>/<nnn>.png
 for Count in range(0x01ea):
     Key = 0x1610 + Count
-    CONST_PKG4_FILE_ENTRY_NAME_MAP[Key] = "keymap_rp/{:02}/{:03}.png".format(Count >> 4, Count & 0xf )
+    CONST_PKG4_META_ENTRY_NAME_MAP[Key] = "keymap_rp/{:02}/{:03}.png".format(Count >> 4, Count & 0xf )
     if Debug_Level >= 2:
-        dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_FILE_ENTRY_NAME_MAP[Key]))
+        dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_META_ENTRY_NAME_MAP[Key]))
 #
+CONST_PKG4_META_ENTRY_NAME_MAP = collections.OrderedDict(sorted(CONST_PKG4_META_ENTRY_NAME_MAP.items()))
 ## Clean-up
 del Key
 del Count
@@ -1454,94 +1455,113 @@ def parsePkg4Header(head_bytes, input_stream, function_debug_level, print_unknow
                 del temp_fields
 
     ## Prepare format strings
-    file_cnt_len = unicode(len(unicode(header_fields["FILECNT"])))
-    file_cnt_format_string = "".join(("{:", file_cnt_len, "}"))
+    meta_cnt_len = unicode(len(unicode(header_fields["METACNT"]-1)))
+    meta_cnt_format_string = "".join(("{:", meta_cnt_len, "}"))
 
-    ## Retrieve PKG4 File Entry Table from input stream
+    ## Retrieve PKG4 Meta Entry Table from input stream
     if function_debug_level >= 2:
-        dprint(">>>>> PKG4 File Entry Table:")
-    pkg_file_table_size = header_fields["FILECNT"] * CONST_PKG4_FILE_ENTRY_FIELDS["STRUCTURE_SIZE"]
+        dprint(">>>>> PKG4 Meta Entry Table:")
+    pkg_meta_table_size = header_fields["METACNT"] * CONST_PKG4_META_ENTRY_FIELDS["STRUCTURE_SIZE"]
     if function_debug_level >= 2:
-        dprint("Get PKG4 file entry table from offset {:#x} with count {} and size {}".format(header_fields["FILETBLOFS"], header_fields["FILECNT"], pkg_file_table_size))
+        dprint("Get PKG4 meta entry table from offset {:#x} with count {} and size {}".format(header_fields["METATBLOFS"], header_fields["METACNT"], pkg_meta_table_size))
     temp_bytes = bytearray()
     try:
-        temp_bytes.extend(input_stream.read(header_fields["FILETBLOFS"], pkg_file_table_size, function_debug_level=max(0, function_debug_level)))
+        temp_bytes.extend(input_stream.read(header_fields["METATBLOFS"], pkg_meta_table_size, function_debug_level=max(0, function_debug_level)))
     except:
         input_stream.close(function_debug_level)
-        eprint("Could not get PKG4 file entry table at offset {:#x} with size {} from".format(header_fields["FILETBLOFS"], pkg_file_table_size), input_stream.getSource())
+        eprint("Could not get PKG4 meta table at offset {:#x} with size {} from".format(header_fields["METATBLOFS"], pkg_meta_table_size), input_stream.getSource())
         eprint("", prefix=None)
         raise  ## re-raise
 
-    ## Parse PKG4 File Entry Table Data
-    file_table = []
-    file_table_map = collections.OrderedDict()
+    ## Parse PKG4 Meta Entry Table Data
+    meta_table = []
+    meta_table_map = collections.OrderedDict()
     offset = 0
     #
-    for _i in range(header_fields["FILECNT"]):  ## 0 to <file count - 1>
-        temp_fields = struct.unpack(CONST_PKG4_FILE_ENTRY_FIELDS["STRUCTURE_UNPACK"], temp_bytes[offset:offset+CONST_PKG4_FILE_ENTRY_FIELDS["STRUCTURE_SIZE"]])
+    for _i in range(header_fields["METACNT"]):  ## 0 to <meta entry count - 1>
+        temp_fields = struct.unpack(CONST_PKG4_META_ENTRY_FIELDS["STRUCTURE_UNPACK"], temp_bytes[offset:offset+CONST_PKG4_META_ENTRY_FIELDS["STRUCTURE_SIZE"]])
         if function_debug_level >= 2:
-            dprintBytesStructure(CONST_PKG4_FILE_ENTRY_FIELDS, CONST_PKG4_HEADER_ENDIAN, temp_fields, "".join(("PKG4 File Entry[", file_cnt_format_string.format(_i), "][{:2}]: [{:#04x}|{:2}] {} = {}")), function_debug_level)
-        temp_fields = convertFieldsToOrdDict(CONST_PKG4_FILE_ENTRY_FIELDS, temp_fields)
+            dprintBytesStructure(CONST_PKG4_META_ENTRY_FIELDS, CONST_PKG4_HEADER_ENDIAN, temp_fields, "".join(("PKG4 Meta Entry[", meta_cnt_format_string.format(_i), "][{:2}]: [{:#04x}|{:2}] {} = {}")), function_debug_level)
+        temp_fields = convertFieldsToOrdDict(CONST_PKG4_META_ENTRY_FIELDS, temp_fields)
         temp_fields["INDEX"] = _i
         temp_fields["KEYINDEX"] = (temp_fields["FLAGS2"] & 0xf000) >> 12  # TODO: correct?
-        file_table.append(temp_fields)
+        meta_table.append(temp_fields)
         #
-        file_table_map[temp_fields["FILEID"]] = _i
+        meta_table_map[temp_fields["METAID"]] = _i
         #
         del temp_fields
         #
-        offset += CONST_PKG4_FILE_ENTRY_FIELDS["STRUCTURE_SIZE"]
+        offset += CONST_PKG4_META_ENTRY_FIELDS["STRUCTURE_SIZE"]
     #
     del temp_bytes
+
+    ## Check if Meta Table size fits exactly the meta entry count
+    meta_entry = meta_table[meta_table_map[CONST_PKG4_META_ENTRY_ID_META_TABLE]]
+    if pkg_meta_table_size != meta_entry["DATASIZE"]:
+        eprint("Determined Meta Table size {:#} <> {:#} from meta table #{} ID {:#06x}.".format(pkg_meta_table_size, meta_entry["DATASIZE"], meta_table_map[CONST_PKG4_META_ENTRY_ID_META_TABLE], CONST_PKG4_META_ENTRY_ID_META_TABLE), input_stream.getSource())
+        eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info")
 
     ## Retrieve PKG4 Name Table from input stream
     if function_debug_level >= 2:
         dprint(">>>>> PKG4 Name Table:")
     name_table = None
-    if not CONST_PKG4_FILE_ENTRY_ID_NAME_TABLE in file_table_map:
+    if not CONST_PKG4_META_ENTRY_ID_NAME_TABLE in meta_table_map:
         dprint("Not present!")
     else:
-        file_entry = file_table[file_table_map[CONST_PKG4_FILE_ENTRY_ID_NAME_TABLE]]
+        meta_entry = meta_table[meta_table_map[CONST_PKG4_META_ENTRY_ID_NAME_TABLE]]
         if function_debug_level >= 2:
-                dprint("Get PKG4 name table from offset {:#x} with size {}".format(file_entry["DATAOFS"], file_entry["DATASIZE"]))
+                dprint("Get PKG4 name table from offset {:#x} with size {}".format(meta_entry["DATAOFS"], meta_entry["DATASIZE"]))
         name_table = bytearray()
         try:
-            name_table.extend(input_stream.read(file_entry["DATAOFS"], file_entry["DATASIZE"], function_debug_level))
+            name_table.extend(input_stream.read(meta_entry["DATAOFS"], meta_entry["DATASIZE"], function_debug_level))
         except:
             input_stream.close(function_debug_level)
-            eprint("Could not get PKG4 name table at offset {:#x} with size {} from".format(file_entry["DATAOFS"], file_entry["DATASIZE"]), input_stream.getSource())
+            eprint("Could not get PKG4 name table at offset {:#x} with size {} from".format(meta_entry["DATAOFS"], meta_entry["DATASIZE"]), input_stream.getSource())
             eprint("", prefix=None)
             raise  ## re-raise
 
-    ## Parse PKG4 Name Table Data for File Entries
+    ## Parse PKG4 Name Table Data for Meta Entries
     if function_debug_level >= 2:
-        dprint("Parse PKG4 Name Table for File Names")
-    for _i in range(header_fields["FILECNT"]):  ## 0 to <file count - 1>
-        file_entry = file_table[_i]
+        dprint("Parse PKG4 Name Table for Meta Entry Names")
+    #
+    name_offset_end = None
+    for _i in range(header_fields["METACNT"]):  ## 0 to <meta entry count - 1>
+        meta_entry = meta_table[_i]
         #
         if name_table \
-        and file_entry["NAMERELOFS"] > 0:
-            file_entry["NAME"] = convertUtf8BytesToString(name_table[file_entry["NAMERELOFS"]:], 0x0204)
-        elif file_entry["FILEID"] in CONST_PKG4_FILE_ENTRY_NAME_MAP:
-            file_entry["NAME"] = CONST_PKG4_FILE_ENTRY_NAME_MAP[file_entry["FILEID"]]
+        and meta_entry["NAMERELOFS"] > 0:
+            meta_entry["NAME"] = convertUtf8BytesToString(name_table[meta_entry["NAMERELOFS"]:], 0x0204)
+            #
+            if name_offset_end is None \
+            or meta_entry["NAMERELOFS"] >= name_offset_end:
+                name_offset_end = meta_entry["NAMERELOFS"] + len(meta_entry["NAME"]) + 1
+        elif meta_entry["METAID"] in CONST_PKG4_META_ENTRY_NAME_MAP:
+            meta_entry["NAME"] = CONST_PKG4_META_ENTRY_NAME_MAP[meta_entry["METAID"]]
         #
-        if "NAME" in file_entry \
+        if "NAME" in meta_entry \
         and function_debug_level >= 2:
-            dprint("".join(("PKG4 File Entry[", file_cnt_format_string, "]: ID {:#06x} Name Offset {:#03x} =")).format(_i, file_entry["FILEID"], file_entry["NAMERELOFS"]), file_entry["NAME"])
+            dprint("".join(("PKG4 Meta Entry[", meta_cnt_format_string, "]: ID {:#06x} Name Offset {:#03x} =")).format(_i, meta_entry["METAID"], meta_entry["NAMERELOFS"]), meta_entry["NAME"])
         #
         if print_unknown \
-        and not file_entry["FILEID"] in CONST_PKG4_FILE_ENTRY_NAME_MAP:
-            eprint("PKG4 File ID {:#x} {}".format(file_entry["FILEID"], file_entry["NAME"] if "NAME" in file_entry else ""), prefix="[UNKNOWN] ")
+        and not meta_entry["METAID"] in CONST_PKG4_META_ENTRY_NAME_MAP:
+            eprint("".join(("PKG4 Meta Entry[", meta_cnt_format_string, "]: ID {:#06x} Name Offset {:#03x} =")).format(_i, meta_entry["METAID"], meta_entry["NAMERELOFS"]), meta_entry["NAME"], prefix="[UNKNOWN] ")
+
+    ## Check if Name Table size fits exactly the name offsets + length
+    if CONST_PKG4_META_ENTRY_ID_NAME_TABLE in meta_table_map:
+        meta_entry = meta_table[meta_table_map[CONST_PKG4_META_ENTRY_ID_NAME_TABLE]]
+        if name_offset_end != meta_entry["DATASIZE"]:
+            eprint("Determined Name Table size {:#} <> {:#} from meta table #{} ID {:#06x}.".format(name_offset_end, meta_entry["DATASIZE"], meta_table_map[CONST_PKG4_META_ENTRY_ID_NAME_TABLE], CONST_PKG4_META_ENTRY_ID_NAME_TABLE), input_stream.getSource())
+            eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info")
 
     ## Debug print results
     dprint(">>>>> parsePkg4Header results:")
     dprintFieldsDict(header_fields, "pkgheaderfields[{KEY:14}|{INDEX:2}]", function_debug_level, None)
-    dprintFieldsList(file_table, "".join(("pkgfiletable[{KEY:", file_cnt_len, "}]")), function_debug_level, None)
+    dprintFieldsList(meta_table, "".join(("pkgmetatable[{KEY:", meta_cnt_len, "}]")), function_debug_level, None)
     if function_debug_level >= 2:
-        dprintFieldsDict(file_table_map, "pkgfiletablemap[{KEY:#06x}]", function_debug_level, None)
+        dprintFieldsDict(meta_table_map, "pkgmetatablemap[{KEY:#06x}]", function_debug_level, None)
         dprint("pkgnametable:", name_table)
 
-    return header_fields, file_table, file_table_map
+    return header_fields, meta_table, meta_table_map
 
 
 def parsePkg3Header(head_bytes, input_stream, function_debug_level):
@@ -2492,8 +2512,8 @@ if __name__ == "__main__":
         finalizeBytesStructure(CONST_PKG3_ITEM_ENTRY_FIELDS, CONST_PKG3_HEADER_ENDIAN, "PKG3 Item Entry", "{}[{:1}]: ofs {:#04x} size {:1} key {:12} = {}", Debug_Level)
         ## --> PKG4 Main Header
         finalizeBytesStructure(CONST_PKG4_MAIN_HEADER_FIELDS, CONST_PKG4_HEADER_ENDIAN, "PKG4 Main Header", "{}[{:2}]: ofs {:#05x} size {:3} key {:12} = {}", Debug_Level)
-        ## --> PKG4 File Entry
-        finalizeBytesStructure(CONST_PKG4_FILE_ENTRY_FIELDS, CONST_PKG4_HEADER_ENDIAN, "PKG4 File Entry", "{}[{:1}]: ofs {:#04x} size {:1} key {:10} = {}", Debug_Level)
+        ## --> PKG4 Meta Entry
+        finalizeBytesStructure(CONST_PKG4_META_ENTRY_FIELDS, CONST_PKG4_HEADER_ENDIAN, "PKG4 Meta Entry", "{}[{:1}]: ofs {:#04x} size {:1} key {:10} = {}", Debug_Level)
         ## --> PARAM.SFO Header
         finalizeBytesStructure(CONST_PARAM_SFO_HEADER_FIELDS, CONST_PARAM_SFO_ENDIAN, "SFO Header", "{}[{:1}]: ofs {:#04x} size {:1} key {:10} = {}", Debug_Level)
         ## --> PARAM.SFO Index Entry
@@ -2575,8 +2595,8 @@ if __name__ == "__main__":
             Pkg_Meta_Data = None
             Pkg_Sfo_Values = None
             Pkg_Item_Entries = None
-            Pkg_File_Table = None
-            Pkg_File_Table_Map = None
+            Pkg_Meta_Table = None
+            Pkg_Meta_Table_Map = None
             Item_Sfo_Values = None
             Pbp_Header = None
             Pbp_Item_Entries = None
@@ -2788,7 +2808,7 @@ if __name__ == "__main__":
                     Results["PKG_TAIL_SHA1"] = Package["TAIL_BYTES"][-0x20:-0x0c]
             ## --> PKG4
             elif Pkg_Magic == CONST_PKG4_MAGIC:
-                Pkg_Header, Pkg_File_Table, Pkg_File_Table_Map = parsePkg4Header(Package["HEAD_BYTES"], Input_Stream, max(0, Debug_Level), print_unknown=Arguments.unknown)
+                Pkg_Header, Pkg_Meta_Table, Pkg_Meta_Table_Map = parsePkg4Header(Package["HEAD_BYTES"], Input_Stream, max(0, Debug_Level), print_unknown=Arguments.unknown)
                 ## --> Size of package (=file size)
                 if "PKGSIZE" in Pkg_Header:
                     Results["PKG_TOTAL_SIZE"] = Pkg_Header["PKGSIZE"]
@@ -2804,10 +2824,10 @@ if __name__ == "__main__":
                 if "CONTTYPE" in Pkg_Header:
                     Results["PKG_CONTENT_TYPE"] = Pkg_Header["CONTTYPE"]
                 ## --> PARAM.SFO offset + size
-                if CONST_PKG4_FILE_ENTRY_ID_PARAM_SFO in Pkg_File_Table_Map:
-                    File_Entry = Pkg_File_Table[Pkg_File_Table_Map[CONST_PKG4_FILE_ENTRY_ID_PARAM_SFO]]
-                    Results["PKG_SFO_OFFSET"] = File_Entry["DATAOFS"]
-                    Results["PKG_SFO_SIZE"] = File_Entry["DATASIZE"]
+                if CONST_PKG4_META_ENTRY_ID_PARAM_SFO in Pkg_Meta_Table_Map:
+                    Meta_Entry = Pkg_Meta_Table[Pkg_Meta_Table_Map[CONST_PKG4_META_ENTRY_ID_PARAM_SFO]]
+                    Results["PKG_SFO_OFFSET"] = Meta_Entry["DATAOFS"]
+                    Results["PKG_SFO_SIZE"] = Meta_Entry["DATASIZE"]
                     ## Retrieve PKG4 PARAM.SFO from unencrypted data
                     Sfo_Bytes = retrieveParamSfo(Package, Results, Input_Stream, function_debug_level=max(0, Debug_Level))
                     ## Process PARAM.SFO if present
@@ -3526,11 +3546,11 @@ if __name__ == "__main__":
                                     del Item_Entry["ALIGN"]
                                 if "IS_FILE_OFS" in Item_Entry:
                                     del Item_Entry["IS_FILE_OFS"]
-                        if Pkg_File_Table:
-                            JSON_Output["pkgFileTable"] = copy.deepcopy(Pkg_File_Table)
-                            for File_Entry in JSON_Output["pkgFileTable"]:
-                                if "STRUCTURE_DEF" in File_Entry:
-                                    del File_Entry["STRUCTURE_DEF"]
+                        if Pkg_Meta_Table:
+                            JSON_Output["pkgMetaTable"] = copy.deepcopy(Pkg_Meta_Table)
+                            for Meta_Entry in JSON_Output["pkgMetaTable"]:
+                                if "STRUCTURE_DEF" in Meta_Entry:
+                                    del Meta_Entry["STRUCTURE_DEF"]
                         if Item_Sfo_Values:
                             JSON_Output["pkgItemSfo"] = copy.copy(Item_Sfo_Values)
                             if "STRUCTURE_DEF" in JSON_Output["pkgItemSfo"]:
@@ -3623,11 +3643,11 @@ if __name__ == "__main__":
                                 if "NAME" in Item_Entry:
                                     print(" Name \"", Item_Entry["NAME"], "\"", sep="", end="")
                                 print()
-                        if Pkg_File_Table:
-                            Format_String = "".join(("{:", unicode(len(unicode(Pkg_Header["FILECNT"]))), "}"))
-                            for File_Entry in Pkg_File_Table:
-                                print("".join(("Pkg_File_Table[", Format_String, "]: ID {:#06x} Ofs {:#012x} Size {:12} {}")).format(File_Entry["INDEX"], File_Entry["FILEID"], File_Entry["DATAOFS"], File_Entry["DATASIZE"], "".join(("Name \"", File_Entry["NAME"], "\"")) if "NAME" in File_Entry else ""))
-                            dprintFieldsDict(Pkg_File_Table_Map, "Pkg_File_Table_Map[{KEY:#06x}]", 2, None, print_func=print)
+                        if Pkg_Meta_Table:
+                            Format_String = "".join(("{:", unicode(len(unicode(Pkg_Header["METACNT"]-1))), "}"))
+                            for Meta_Entry in Pkg_Meta_Table:
+                                print("".join(("Pkg_Meta_Table[", Format_String, "]: ID {:#06x} Ofs {:#012x} Size {:12} {}")).format(Meta_Entry["INDEX"], Meta_Entry["METAID"], Meta_Entry["DATAOFS"], Meta_Entry["DATASIZE"], "".join(("Name \"", Meta_Entry["NAME"], "\"", " (Name Offset {:#03x})".format(Meta_Entry["NAMERELOFS"]) if Meta_Entry["NAMERELOFS"] else "")) if "NAME" in Meta_Entry else ""))
+                            dprintFieldsDict(Pkg_Meta_Table_Map, "Pkg_Meta_Table_Map[{KEY:#06x}]", 2, None, print_func=print)
                         if Item_Sfo_Values:
                             dprintFieldsDict(Item_Sfo_Values, "Item_Sfo_Values[{KEY:20}]", 2, None, print_func=print)
                         if Pbp_Header:

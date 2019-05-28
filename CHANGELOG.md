@@ -1,5 +1,8 @@
 # PSN_get_pkg_info.py - Changelog
 
+## 2019.05.28
+* FIX: Correctly list PS4 meta table entries
+
 ## 2019.05.26
 * NEW: Added `--pathpattern` filter via regex to `--content` extraction and also `--nosubdirs` to extract all files directly to the content dir
 * NEW: Enhanced PARAM.SFO display to display hex values in their correct length
