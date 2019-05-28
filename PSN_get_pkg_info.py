@@ -58,7 +58,7 @@ from builtins import bytes
 
 ## Version definition
 ## see https://www.python.org/dev/peps/pep-0440/
-__version__ = "2019.05.28"
+__version__ = "2019.05.28.post1"
 __author__ = "https://github.com/windsurfer1122/PSN_get_pkg_info"
 __license__ = "GPL"
 __copyright__ = "Copyright 2018-2019, windsurfer1122"
@@ -3599,12 +3599,13 @@ if __name__ == "__main__":
                                     if isinstance(Pkg_Meta_Data[Key]["VALUE"], bytes) \
                                     or isinstance(Pkg_Meta_Data[Key]["VALUE"], bytearray):
                                         print(" Value", convertBytesToHexString(Pkg_Meta_Data[Key]["VALUE"], sep=""), end="")
+                                    elif Pkg_Meta_Data["STRUCTURE_DEF"][Key] \
+                                    and "HEXSIZE" in Pkg_Meta_Data["STRUCTURE_DEF"][Key]:
+                                        print(" Value", "".join(("{0:#0", unicode(Pkg_Meta_Data["STRUCTURE_DEF"][Key]["HEXSIZE"]), "x} = {0}")).format(Pkg_Meta_Data[Key]["VALUE"]), end="")
+                                    elif isinstance(Pkg_Meta_Data[Key]["VALUE"], int):
+                                        print(" Value", "{0:#x} = {0}".format(Pkg_Meta_Data[Key]["VALUE"]), end="")
                                     else:
-                                        if Pkg_Meta_Data["STRUCTURE_DEF"][Key] \
-                                        and "HEXSIZE" in Pkg_Meta_Data["STRUCTURE_DEF"][Key]:
-                                            print(" Value", "".join(("{0:#0", unicode(Pkg_Meta_Data["STRUCTURE_DEF"][Key]["HEXSIZE"]), "x} = {0}")).format(Pkg_Meta_Data[Key]["VALUE"]), end="")
-                                        else:
-                                            print(" Value", "{0:#x} = {0}".format(Pkg_Meta_Data[Key]["VALUE"]), end="")
+                                        print(" Value", Pkg_Meta_Data[Key]["VALUE"], end="")
                                 if "FIRMWARE" in Pkg_Meta_Data[Key]:
                                     if isinstance(Pkg_Meta_Data[Key]["FIRMWARE"], bytes) \
                                     or isinstance(Pkg_Meta_Data[Key]["FIRMWARE"], bytearray):
