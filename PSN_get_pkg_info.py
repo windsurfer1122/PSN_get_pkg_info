@@ -3598,7 +3598,7 @@ if __name__ == "__main__":
                                 if "VALUE" in Pkg_Meta_Data[Key]:
                                     if isinstance(Pkg_Meta_Data[Key]["VALUE"], bytes) \
                                     or isinstance(Pkg_Meta_Data[Key]["VALUE"], bytearray):
-                                        print(" Value", convertBytesToHexString(Pkg_Meta_Data[Key]["VALUE"], sep=""), end="")
+                                        print(" Bytes", convertBytesToHexString(Pkg_Meta_Data[Key]["VALUE"], sep=""), end="")
                                     elif Pkg_Meta_Data["STRUCTURE_DEF"][Key] \
                                     and "HEXSIZE" in Pkg_Meta_Data["STRUCTURE_DEF"][Key]:
                                         print(" Value", "".join(("{0:#0", unicode(Pkg_Meta_Data["STRUCTURE_DEF"][Key]["HEXSIZE"]), "x} = {0}")).format(Pkg_Meta_Data[Key]["VALUE"]), end="")
