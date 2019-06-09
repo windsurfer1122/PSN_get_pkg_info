@@ -106,11 +106,11 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ## Additional Credits for Ideas and Several Details
-* AnalogMan
+* [AnalogMan1511](https://github.com/AnalogMan151) - initial idea
 * https://playstationdev.wiki/ (previously https://vitadevwiki.com/ & https://www.pspdevwiki.com/)
 * http://www.psdevwiki.com/
-* mmozeiko
-* st4rk
-* qwikrazor87
-* jk3y
-* lusid1
+* [lusid1](https://github.com/lusid1/) - enhanced pkg2zip
+* [mmozeiko](https://github.com/mmozeiko/) - original pkg2zip
+* [st4rk](https://github.com/st4rk/) -PkgDecrypt (pkg_dec)
+* [qwikrazor87](https://github.com/qwikrazor87/) - pkgrip
+* [JK3Y](https://github.com/JK3Y/pkg-getinfo) - TypeScript/JavaScript/Node.js version of PSN_get_pkg_info

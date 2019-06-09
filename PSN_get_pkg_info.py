@@ -58,7 +58,7 @@ from builtins import bytes
 
 ## Version definition
 ## see https://www.python.org/dev/peps/pep-0440/
-__version__ = "2019.05.28.post1"
+__version__ = "2019.06.09"
 __author__ = "https://github.com/windsurfer1122/PSN_get_pkg_info"
 __license__ = "GPL"
 __copyright__ = "Copyright 2018-2019, windsurfer1122"
@@ -225,13 +225,13 @@ except TypeError:
 PYTHON_VERSION = ".".join((unicode(sys.version_info[0]), unicode(sys.version_info[1]), unicode(sys.version_info[2])))
 #
 OUTPUT_FORMATS = collections.OrderedDict([ \
-   ( 0, "Human-readable reduced Output [default]" ),
-   ( 1, "Linux Shell Variable Output" ),
-   ( 2, "Results Output" ),
-   ( 3, "Results Output in JSON format" ),
-   ( 50, "Additional debugging Output (Extractions, etc.)" ),
-   ( 98, "Analysis Output in JSON format" ),
-   ( 99, "Analysis Output" ),
+    ( 0, "Human-readable reduced Output [default]" ),
+    ( 1, "Linux Shell Variable Output" ),
+    ( 2, "Results Output" ),
+    ( 3, "Results Output in JSON format" ),
+    ( 50, "Additional debugging Output (Extractions, etc.)" ),
+    ( 98, "Analysis Output in JSON format" ),
+    ( 99, "Analysis Output" ),
 ])
 #
 CONST_FMT_BIG_ENDIAN = ">"
@@ -358,27 +358,33 @@ CONST_PKG3_ITEM_ENTRY_FIELDS = collections.OrderedDict([ \
     #
     ( "NAME",         { "VIRTUAL": -1, "DEBUG": 1, "DESC": "Item Name", }, ),
 ])
-## --> Content PKG Keys
+## --> Content PKG3 Keys
 ## http://www.psdevwiki.com/ps3/Keys#gpkg-key
 ## https://playstationdev.wiki/psvitadevwiki/index.php?title=Keys#Content_PKG_Keys
 CONST_PKG3_CONTENT_KEYS = {
-   0: { "KEY": "Lntx18nJoU6jIh8YiCi4+A==", "DESC": "PS3",     },
-   1: { "KEY": "B/LGgpC1DSwzgY1wm2DmKw==", "DESC": "PSX/PSP", },
-   2: { "KEY": "4xpwyc4d1yvzwGIpY/Lsyw==", "DESC": "PSV",     "DERIVE": True, },
-   3: { "KEY": "QjrKOivVZJ+Whqutb9iAHw==", "DESC": "Unknown", "DERIVE": True, },
-   4: { "KEY": "rwf9WWUlJ7rxM4lmixfZ6g==", "DESC": "PSM",     "DERIVE": True, },
+    0: { "KEY": "Lntx18nJoU6jIh8YiCi4+A==", "DESC": "PS3",     },
+    1: { "KEY": "B/LGgpC1DSwzgY1wm2DmKw==", "DESC": "PSX/PSP", },
+    2: { "KEY": "4xpwyc4d1yvzwGIpY/Lsyw==", "DESC": "PSV",     "DERIVE": True, },
+    3: { "KEY": "QjrKOivVZJ+Whqutb9iAHw==", "DESC": "Unknown", "DERIVE": True, },
+    4: { "KEY": "rwf9WWUlJ7rxM4lmixfZ6g==", "DESC": "PSM",     "DERIVE": True, },
 }
 for Key in CONST_PKG3_CONTENT_KEYS:
     if isinstance(CONST_PKG3_CONTENT_KEYS[Key]["KEY"], unicode):
         CONST_PKG3_CONTENT_KEYS[Key]["KEY"] = base64.standard_b64decode(CONST_PKG3_CONTENT_KEYS[Key]["KEY"])
+    elif isinstance(CONST_PKG3_UPDATE_KEYS[Key]["KEY"], bytes) \
+    or isinstance(CONST_PKG3_UPDATE_KEYS[Key]["KEY"], bytearray):
+        eprint("PKG3 Content Key #{}:".format(Key), base64.standard_b64encode(CONST_PKG3_CONTENT_KEYS[Key]["KEY"]), prefix="[CONVERT]")
 del Key
-## --> PKG Update Keys
+## --> PKG3 Update Keys
 CONST_PKG3_UPDATE_KEYS = {
-   2: { "KEY": "5eJ4qh7jQIKgiCecg/m7yAaCHFLyq10rSr2ZVFA1URQ=", "DESC": "PSV", },
+    2: { "KEY": "5eJ4qh7jQIKgiCecg/m7yAaCHFLyq10rSr2ZVFA1URQ=", "DESC": "PSV", },
 }
 for Key in CONST_PKG3_UPDATE_KEYS:
     if isinstance(CONST_PKG3_UPDATE_KEYS[Key]["KEY"], unicode):
         CONST_PKG3_UPDATE_KEYS[Key]["KEY"] = base64.standard_b64decode(CONST_PKG3_UPDATE_KEYS[Key]["KEY"])
+    elif isinstance(CONST_PKG3_UPDATE_KEYS[Key]["KEY"], bytes) \
+    or isinstance(CONST_PKG3_UPDATE_KEYS[Key]["KEY"], bytearray):
+        eprint("PKG3 Update Key #{}:".format(Key), base64.standard_b64encode(CONST_PKG3_UPDATE_KEYS[Key]["KEY"]), prefix="[CONVERT]")
 del Key
 ## --> RIF
 ## https://github.com/weaknespase/PkgDecrypt/blob/master/rif.h
@@ -495,17 +501,19 @@ CONST_PKG4_MAIN_HEADER_FIELDS = collections.OrderedDict([ \
 ## real size looks like it is 0x2000
 ])
 #
-## --> File Entry Table
+## --> Meta Entry Table
 CONST_PKG4_META_ENTRY_FIELDS = collections.OrderedDict([ \
-    ( "METAID",       { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Meta Entry ID", }, ),
-    ( "NAMERELOFS",   { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Name Table Offset", }, ),
-    ( "FLAGS1",       { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Flags 1", }, ),
-    ( "FLAGS2",       { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Flags 2", }, ),
-    ( "DATAOFS",      { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "PKG Data Offset", }, ),
-    ( "DATASIZE",     { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Data Size", }, ),
-    ( "PADDING1",     { "FORMAT": CONST_FMT_CHAR, "SIZE": 8, "DEBUG": 3, "DESC": "Padding", "SKIP": True, }, ),
+    ( "METAID",     { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Meta Entry ID", }, ),
+    ( "NAMERELOFS", { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Name Table Offset", }, ),
+    ( "FLAGS1",     { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Flags 1", }, ),
+    ( "FLAGS2",     { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Flags 2", }, ),
+    ( "DATAOFS",    { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "PKG Data Offset", }, ),
+    ( "DATASIZE",   { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Data Size", }, ),
+    ( "PADDING1",   { "FORMAT": CONST_FMT_CHAR, "SIZE": 8, "DEBUG": 3, "DESC": "Padding", "SKIP": True, }, ),
     #
-    ( "NAME",         { "VIRTUAL": -1, "DEBUG": 1, "DESC": "File Name", }, ),
+    ( "NAME",       { "VIRTUAL": -1, "DEBUG": 1, "DESC": "File Name", }, ),
+    ( "ENCRYPTED",  { "VIRTUAL": -1, "DEBUG": 1, "DESC": "Entry is encrypted", }, ),
+    ( "KEYINDEX",   { "VIRTUAL": -1, "DEBUG": 1, "DESC": "Entry Decryption Key", }, ),
 ])
 #
 ## --> Name Table
@@ -621,6 +629,17 @@ CONST_PKG4_META_ENTRY_NAME_MAP = collections.OrderedDict(sorted(CONST_PKG4_META_
 ## Clean-up
 del Key
 del Count
+## --> PKG4 Update Keys
+CONST_PKG4_UPDATE_KEYS = {
+    0: { "KEY": "rWLjf5BeBrwZWTFCKBwRLOwOfsPpfv3K7826r6Y3jYQ=", "DESC": "PS4", },
+}
+for Key in CONST_PKG4_UPDATE_KEYS:
+    if isinstance(CONST_PKG4_UPDATE_KEYS[Key]["KEY"], unicode):
+        CONST_PKG4_UPDATE_KEYS[Key]["KEY"] = base64.standard_b64decode(CONST_PKG4_UPDATE_KEYS[Key]["KEY"])
+    elif isinstance(CONST_PKG4_UPDATE_KEYS[Key]["KEY"], bytes) \
+    or isinstance(CONST_PKG4_UPDATE_KEYS[Key]["KEY"], bytearray):
+        eprint("PKG4 Update Key #{}:".format(Key), base64.standard_b64encode(CONST_PKG4_UPDATE_KEYS[Key]["KEY"]), prefix="[CONVERT]")
+del Key
 
 ##
 ## PARAM.SFO Definitions
@@ -1143,11 +1162,11 @@ class PkgAesCtrCounter():
         ## Python 2 workaround: must use bytes() for AES's .new()/.encrypt()/.decrypt() and hash's .update()
         self._key = bytes(key)
         self._key_size = Cryptodome.Cipher.AES.key_size[0] * 8  ## Key length 16 bytes = 128 bits
-        if isinstance(iv, int):
-            self._iv = iv
-        elif isinstance(iv, bytes) \
+        if isinstance(iv, bytes) \
         or isinstance(iv, bytearray):
             self._iv = int.from_bytes(iv, byteorder="big")
+        elif isinstance(iv, int):
+            self._iv = iv
         self._block_offset = -1
 
     def _setOffset(self, offset):
@@ -1286,15 +1305,17 @@ def dprintField(key, field, field_def, format_string, parent_debug_level, parent
     elif isinstance(field, dict):  ## dictionary
         dprintFieldsDict(field, format_string, parent_debug_level, prefix, print_func=print_func, sep=sep)
     else:
-        if isinstance(field, int):
+        if isinstance(field, bytes) \
+        or isinstance(field, bytearray):
+            value = convertBytesToHexString(field, sep=sep)
+        elif isinstance(field, bool):  ## special case of int
+            value = field
+        elif isinstance(field, int):
             if field_def \
             and "HEXSIZE" in field_def:
                 value = "".join(("{0:#0", unicode(field_def["HEXSIZE"]), "x} = {0}")).format(field)
             else:
                 value = "{0:#x} = {0}".format(field)
-        elif isinstance(field, bytes) \
-        or isinstance(field, bytearray):
-            value = convertBytesToHexString(field, sep=sep)
         else:
             value = field
         #
@@ -1484,7 +1505,8 @@ def parsePkg4Header(head_bytes, input_stream, function_debug_level, print_unknow
             dprintBytesStructure(CONST_PKG4_META_ENTRY_FIELDS, CONST_PKG4_HEADER_ENDIAN, temp_fields, "".join(("PKG4 Meta Entry[", meta_cnt_format_string.format(_i), "][{:2}]: [{:#04x}|{:2}] {} = {}")), function_debug_level)
         temp_fields = convertFieldsToOrdDict(CONST_PKG4_META_ENTRY_FIELDS, temp_fields)
         temp_fields["INDEX"] = _i
-        temp_fields["KEYINDEX"] = (temp_fields["FLAGS2"] & 0xf000) >> 12  # TODO: correct?
+        temp_fields["ENCRYPTED"] = (temp_fields["FLAGS1"] & 0x80000000) != 0
+        temp_fields["KEYINDEX"] = (temp_fields["FLAGS2"] & 0xf000) >> 12
         meta_table.append(temp_fields)
         #
         meta_table_map[temp_fields["METAID"]] = _i
@@ -3217,11 +3239,25 @@ if __name__ == "__main__":
                     and Results["SFO_CATEGORY"] == "gp":
                         Results["PKG_TYPE"] = CONST_PKG_TYPE.PATCH
                         Nps_Type = "PS4 UPDATE"
+                    #
+                    if "TITLE_ID" in Results \
+                    and Results["TITLE_ID"].strip():
+                        Update_Hash = Cryptodome.Hash.HMAC.new(CONST_PKG4_UPDATE_KEYS[0]["KEY"], digestmod=Cryptodome.Hash.SHA256)
+                        Update_Hash.update("".join(("np_", Results["TITLE_ID"].strip())).encode("UTF-8"))
+                        Results["TITLE_UPDATE_URL"] = "http://gs-sec.ww.np.dl.playstation.net/plo/np/{0}/{1}/{0}-ver.xml".format(Results["TITLE_ID"].strip(), Update_Hash.hexdigest())
+                        del Update_Hash
                 elif Results["PKG_CONTENT_TYPE"] == 0x1B:
                     if "SFO_CATEGORY" in Results \
                     and Results["SFO_CATEGORY"] == "ac":
                         Results["PKG_TYPE"] = CONST_PKG_TYPE.DLC
                         Nps_Type = "PS4 DLC"
+                    #
+                    if "TITLE_ID" in Results \
+                    and Results["TITLE_ID"].strip():
+                        Update_Hash = Cryptodome.Hash.HMAC.new(CONST_PKG4_UPDATE_KEYS[0]["KEY"], digestmod=Cryptodome.Hash.SHA256)
+                        Update_Hash.update("".join(("np_", Results["TITLE_ID"].strip())).encode("UTF-8"))
+                        Results["TITLE_UPDATE_URL"] = "http://gs-sec.ww.np.dl.playstation.net/plo/np/{0}/{1}/{0}-ver.xml".format(Results["TITLE_ID"].strip(), Update_Hash.hexdigest())
+                        del Update_Hash
             ## --> PBP
             elif Pkg_Magic == CONST_PBP_MAGIC:
                 pass  ## TODO
@@ -3647,7 +3683,13 @@ if __name__ == "__main__":
                         if Pkg_Meta_Table:
                             Format_String = "".join(("{:", unicode(len(unicode(Pkg_Header["METACNT"]-1))), "}"))
                             for Meta_Entry in Pkg_Meta_Table:
-                                print("".join(("Pkg_Meta_Table[", Format_String, "]: ID {:#06x} Ofs {:#012x} Size {:12} {}")).format(Meta_Entry["INDEX"], Meta_Entry["METAID"], Meta_Entry["DATAOFS"], Meta_Entry["DATASIZE"], "".join(("Name \"", Meta_Entry["NAME"], "\"", " (Name Offset {:#03x})".format(Meta_Entry["NAMERELOFS"]) if Meta_Entry["NAMERELOFS"] else "")) if "NAME" in Meta_Entry else ""))
+                                print("".join(("Pkg_Meta_Table[", Format_String, "]: ID {:#06x} Ofs {:#012x} Size {:12} Key Index {:2}")).format(Meta_Entry["INDEX"], Meta_Entry["METAID"], Meta_Entry["DATAOFS"], Meta_Entry["DATASIZE"], Meta_Entry["KEYINDEX"] if Meta_Entry["ENCRYPTED"] else "--"), end="")
+                                if "NAME" in Meta_Entry:
+                                    print(" Name", "".join(("\"", Meta_Entry["NAME"], "\"")), end="")
+                                    if "NAMERELOFS" in Meta_Entry \
+                                    and Meta_Entry["NAMERELOFS"]:
+                                        print(" (Name Offset {:#03x})".format(Meta_Entry["NAMERELOFS"]), end="")
+                                print()
                             dprintFieldsDict(Pkg_Meta_Table_Map, "Pkg_Meta_Table_Map[{KEY:#06x}]", 2, None, print_func=print)
                         if Item_Sfo_Values:
                             dprintFieldsDict(Item_Sfo_Values, "Item_Sfo_Values[{KEY:20}]", 2, None, print_func=print)

@@ -1,5 +1,9 @@
 # PSN_get_pkg_info.py - Changelog
 
+## 2019.06.09
+* NEW: Enhanced analysis output for PS4 packages (key index, name table offset if name for meta entry came from name table)
+* NEW: PS4 Update URL
+
 ## 2019.05.28
 * FIX: Correctly list PS4 meta table entries
 

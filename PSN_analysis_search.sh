@@ -142,12 +142,14 @@ main()
   #GREP_2="-l	-P	-e	Key Index[[:space:]]+(?!${VALUE_1}[[:space:]]+)" ; ## different KEYINDEX in a single package ("not VALUE_1" via PCRE lookahead)
   #GREP_OUTPUT="-E	-e	KEYINDEX.*:[[:space:]]+[[:digit:]]+	-e	Key Index[[:space:]]+[[:digit:]]+"
   ## SFO Category
-  #GREP_OUTPUT='-e	SFO_CATEGORY'
+  #GREP_OUTPUT='-e	Sfo_Values\[\"CATEGORY\"'
   #
   ## Wrong platform
   #REEVAL=1
   #GREP_1='-L	-e	^Results\\[\\\"PLATFORM\\\".*: ${DIR%x}$'
   #GREP_OUTPUT='-e	^Results\[\"PLATFORM\".*'
+  #
+  #GREP_OUTPUT='-e	^Results\[\"PKG_CONTENT_TYPE\".*0x1 '
   #
   ## search special item/file names
   #VALUE_1='sce_sys/package/digs.bin' ; VALUE_2='18' ; ## as it is extracted encrypted (not decrypted) as body.bin; only in PSV packages with flags 0xa0007018/0xa0007818 (no other items with 0x...18)
@@ -158,9 +160,13 @@ main()
   #VALUE_1='content_id' ; VALUE_2='' ; ## none found, no item with this name
   #VALUE_1='EBOOT\.PBP' ; VALUE_2='' ; ## ...
   #VALUE_1='\.PBP' ; VALUE_2='' ; ## ...
-  #GREP_OUTPUT="-E	-e	Flags[[:space:]]+.*Name[[:space:]]+\\\".*${VALUE_1}" ; ## search item name part
-  #GREP_OUTPUT="-E	-e	Flags[[:space:]]+0x[[:xdigit:]]{6}${VALUE_2}.*\$" ; ## search item flags part
-  #GREP_OUTPUT="-E	-e	Name[[:space:]]+\\\".*${VALUE_1}" ; ## search item name part
+  #GREP_OUTPUT="-E	-e	Flags[[:space:]]+.*Name[[:space:]]+\\\".*${VALUE_1}" ;  ## search item name part
+  #GREP_OUTPUT="-E	-e	Flags[[:space:]]+0x[[:xdigit:]]{6}${VALUE_2}.*\$" ;  ## search item flags part
+  #GREP_OUTPUT="-E	-e	Name[[:space:]]+\\\".*${VALUE_1}" ;  ## search item name part
+  #
+  #GREP_1="-L	-E	-e	Name[[:space:]]+\\\".*${VALUE_1}" ;  ## exclude packages with a .PBP item
+  #GREP_2='-L	-e	^Results\[\"PKG_CONTENT_TYPE\".* 0x9 ' ;  ## exclude packages with a content type 0x9 (PS3/PSP Theme)
+  #GREP_OUTPUT='-m1	-e	""' ;  ## grep first line of file
   #
   ## Determine read-ahead size for python script
   #GREP_OUTPUT='-e	^Results\[\"ITEMS_INFO\".*\"FILE_OFS_END\".*'
@@ -169,6 +175,7 @@ main()
   #GREP_1='-l	-e	Pkg_Meta_Data\[0x02\]: Desc "Content Type" Value 9'
   #GREP_1='-l	-e	\[0x02\]: Desc "Content Type" Value 9'
   #GREP_OUTPUT='-e	\[0x03\]'
+  #GREP_OUTPUT='-e	Pkg_Meta_Data\[0x0e\]: '
   # reverse
   #GREP_1='-l	-e	\[0x03\]: Desc "Package Type/Flags" Value 0000048c'
   #GREP_1='-l	-e	\[0x03\]: Desc "Package Type/Flags" Value 0000020c'
@@ -187,6 +194,21 @@ main()
   ## _DIFFER
   #GREP_1='-l	-e	_DIFFER'
   #GREP_OUTPUT='-e	Pkg_Meta_Data\[0x02\]	-e	_DIFFER'
+  #
+  ## Firmware Versions (PS3_SYSTEM_VER, PSP_SYSTEM_VER, PSP2_DISP_VER, PSP2_SYSTEM_VER)
+  #GREP_OUTPUT='-e	_SYSTEM_VER'
+  #GREP_OUTPUT='-e	_DISP_VER'
+  #
+  ## Versions (APP_VER, DISC_VERSION, HRKGMP_VER, VERSION, TARGET_APP_VER)
+  #GREP_OUTPUT='-e	Sfo_Values\[\".*APP_VER.*\"	-e	Sfo_Values\[\".*VERSION.*\"'
+  #
+  ## Unlock Keys and their titles
+  #GREP_1='-l	-e	Pkg_Meta_Data\[0x03\]:.*Value 0000048c$'
+  #GREP_OUTPUT='-e	Results\["SFO_TITLE"'
+  #
+  ## EBOOT.BIN/EDAT
+  #GREP_OUTPUT='-i	-e	Name[[:space:]]\+".*eboot.bin"'
+  #GREP_OUTPUT='-i	-e	Name[[:space:]]\+".*\.edat"'
 
   ## Clean-up and check GREP_OUTPUT pattern
   GREP_OUTPUT="$(printf -- '%s' "${GREP_OUTPUT:-}" | sed -r -e 's#(-l|-L)##g ; s#[\t]+#\t#g ; s#(^\t|\t$)##g')"
@@ -264,6 +286,7 @@ main()
       printf -- 'No matches\n'
     else
       printf -- '# > Grep OUTPUT: %s\n' "${GREP_OUTPUT}" | sed -e 's#\t# #g'
+      #sort -z -- "${FILELIST}" | xargs -0 -r -L 1
       #
       IFS="${TABIFS}"
       #set -x
