@@ -39,6 +39,7 @@ If you state URLs then only the necessary bytes are downloaded into memory. Note
   * [pycryptodomex](https://www.pycryptodome.org/) (note the X at the end of the module name)
   * [requests](http://python-requests.org/)
   * [aenum](https://bitbucket.org/stoneleaf/aenum)
+  * [fastxor](https://github.com/davidfischer-ch/python-fastxor)
 
 ### Installing on Debian
 1. Python 3, which is the recommended version, and most modules can be installed via apt.<br>
@@ -63,6 +64,9 @@ For __Debian up to 8 "Jessie"__ use the pip version from the original [PyPi](htt
    * Install aenum module:
      * Python 3: `pip3 install --upgrade aenum`
      * Python 2: `pip2 install --upgrade aenum`
+   * Install fastxor module:
+     * Python 3: `pip3 install --upgrade fastxor`
+     * Python 2: `pip2 install --upgrade fastxor`
 
 ### Installing on Windows
 1. Install Python<br>
@@ -81,6 +85,7 @@ For __Debian up to 8 "Jessie"__ use the pip version from the original [PyPi](htt
    * Install requests module: `pip install --upgrade requests`
    * Install pycryptodomex module: `pip install --upgrade pycryptodomex`
    * Install aenum module: `pip install --upgrade aenum`
+   * Install fastxor module: `pip install --upgrade fastxor`
    * Exit Command Prompt: `exit`
 
 Executing python scripts can be done via Windows Explorer or a Command Prompt. Normally no elevation is necessary for script execution, except when the python script wants to change something in the system internals.
@@ -110,7 +115,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 * https://playstationdev.wiki/ (previously https://vitadevwiki.com/ & https://www.pspdevwiki.com/)
 * http://www.psdevwiki.com/
 * [lusid1](https://github.com/lusid1/) - enhanced pkg2zip
-* [mmozeiko](https://github.com/mmozeiko/) - original pkg2zip
+  * [mmozeiko](https://github.com/mmozeiko/) - original pkg2zip
 * [st4rk](https://github.com/st4rk/) -PkgDecrypt (pkg_dec)
 * [qwikrazor87](https://github.com/qwikrazor87/) - pkgrip
 * [JK3Y](https://github.com/JK3Y/pkg-getinfo) - TypeScript/JavaScript/Node.js version of PSN_get_pkg_info

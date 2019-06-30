@@ -142,7 +142,8 @@ main()
   #GREP_2="-l	-P	-e	Key Index[[:space:]]+(?!${VALUE_1}[[:space:]]+)" ; ## different KEYINDEX in a single package ("not VALUE_1" via PCRE lookahead)
   #GREP_OUTPUT="-E	-e	KEYINDEX.*:[[:space:]]+[[:digit:]]+	-e	Key Index[[:space:]]+[[:digit:]]+"
   ## SFO Category
-  #GREP_OUTPUT='-e	Sfo_Values\[\"CATEGORY\"'
+  #GREP_OUTPUT='-e	Pkg_Sfo_Values\[\"CATEGORY\"'
+  #GREP_OUTPUT='-E	-e	Pkg_Sfo_Values\[\"CATEGORY\"[[:space:]]+\]: gd.{1}'
   #
   ## Wrong platform
   #REEVAL=1
@@ -182,11 +183,11 @@ main()
   #GREP_OUTPUT='-e	\[0x02\]'
   #
   ## PS2 Classic
-  #GREP_1='-l	-e	Sfo_Values\["CATEGORY"          \]: 2P'
+  #GREP_1='-l	-e	Pkg_Sfo_Values\["CATEGORY"          \]: 2P'
   #GREP_OUTPUT='-e	\[0x02\]'
   #
   ## PSX
-  #GREP_1='-l	-e	Sfo_Values\["CATEGORY"          \]: 2P'
+  #GREP_1='-l	-e	Pkg_Sfo_Values\["CATEGORY"          \]: 2P'
   #GREP_OUTPUT='-e	PSX_TITLE_ID'
   #GREP_1='-l	-e	Pkg_Meta_Data\[0x02\]: Desc "Content Type" Value 1'
   #GREP_OUTPUT='-e	Pkg_Meta_Data\[0x02\]	-e	Pkg_Meta_Data\[0x06\]	-e	Pkg_Header\["CONTENT_ID"'
@@ -200,7 +201,7 @@ main()
   #GREP_OUTPUT='-e	_DISP_VER'
   #
   ## Versions (APP_VER, DISC_VERSION, HRKGMP_VER, VERSION, TARGET_APP_VER)
-  #GREP_OUTPUT='-e	Sfo_Values\[\".*APP_VER.*\"	-e	Sfo_Values\[\".*VERSION.*\"'
+  #GREP_OUTPUT='-e	Pkg_Sfo_Values\[\".*APP_VER.*\"	-e	Pkg_Sfo_Values\[\".*VERSION.*\"'
   #
   ## Unlock Keys and their titles
   #GREP_1='-l	-e	Pkg_Meta_Data\[0x03\]:.*Value 0000048c$'
@@ -209,13 +210,18 @@ main()
   ## EBOOT.BIN/EDAT
   #GREP_OUTPUT='-i	-e	Name[[:space:]]\+".*eboot.bin"'
   #GREP_OUTPUT='-i	-e	Name[[:space:]]\+".*\.edat"'
+  #
+  ## RETAIL/DEBUG
+  #GREP_OUTPUT='-e	^Pkg_Header\["REV"[[:space:]]\+|.*\]: .*'
+  #GREP_1='-L	-e	^Pkg_Header\["REV"[[:space:]]\+|.*\]: 0x8.*'
+  #GREP_OUTPUT='-e	^.*PKG Source.*'
 
   ## Clean-up and check GREP_OUTPUT pattern
   GREP_OUTPUT="$(printf -- '%s' "${GREP_OUTPUT:-}" | sed -r -e 's#(-l|-L)##g ; s#[\t]+#\t#g ; s#(^\t|\t$)##g')"
   #
   if [ -z "${GREP_OUTPUT:-}" ]
    then
-    printf -- '[ERROR] No OUTPUT grep pattern defined\n'
+    printf -- '[ERROR] No OUTPUT grep pattern defined inside script\n'
     return 0
   fi
 

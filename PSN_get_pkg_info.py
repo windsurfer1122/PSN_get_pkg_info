@@ -58,7 +58,7 @@ from builtins import bytes
 
 ## Version definition
 ## see https://www.python.org/dev/peps/pep-0440/
-__version__ = "2019.06.09"
+__version__ = "2019.06.30"
 __author__ = "https://github.com/windsurfer1122/PSN_get_pkg_info"
 __license__ = "GPL"
 __copyright__ = "Copyright 2018-2019, windsurfer1122"
@@ -82,13 +82,13 @@ import copy
 import zlib
 import base64
 import xml.etree.ElementTree
+import math
+import datetime
+import fastxor
 
 import Cryptodome.Cipher.AES
 import Cryptodome.Util.Counter
 import Cryptodome.Hash
-
-from math import log
-from datetime import datetime
 
 
 ## Debug level for Python initializations (will be reset in "main" code)
@@ -246,7 +246,7 @@ CONST_READ_AHEAD_SIZE = 128 * 0x400 ## Read first 128 KiB to reduce read request
 CONST_USER_AGENT_PS3 = "Mozilla/5.0 (PLAYSTATION 3; 4.84)"
 #CONST_USER_AGENT_PSP = ""
 CONST_USER_AGENT_PSV = " libhttp/3.70 (PS Vita)"
-CONST_USER_AGENT_PS4 = "Download/1.00 libhttp/6.51 (PlayStation 4)"
+CONST_USER_AGENT_PS4 = "Download/1.00 libhttp/6.71 (PlayStation 4)"
 #
 CONST_EXTRACT_RAW = "RAW"
 CONST_EXTRACT_UX0 = "UX0"
@@ -322,9 +322,11 @@ CONST_PKG3_MAIN_HEADER_FIELDS = collections.OrderedDict([ \
     ( "DATARIV",      { "FORMAT": CONST_FMT_CHAR, "SIZE": 16, "DEBUG": 1, "DESC": "Data RIV", "SEP": "", }, ),
     #
     ( "KEYINDEX",     { "VIRTUAL": 1, "DEBUG": 1, "DESC": "Key Index for Decryption of Item Entries Table", }, ),
-    ( "AES_CTR",      { "VIRTUAL": 1, "DEBUG": 1, "DESC": "Keys for Decryption", }, ),
+    ( "AES_CTR",      { "VIRTUAL": 1, "DEBUG": 1, "DESC": "Retail AES CTR", }, ),
+    ( "XOR_CTR",      { "VIRTUAL": 1, "DEBUG": 1, "DESC": "Debug XOR CTR", }, ),
     ( "PARAM.SFO",    { "VIRTUAL": -1, "DEBUG": 1, "DESC": "PARAM.SFO Item Name", }, ),
     ( "MDSIZE",       { "VIRTUAL": -1, "DEBUG": 1, "DESC": "Meta Data Size", }, ),
+    ( "DEBUG_PKG",    { "VIRTUAL": 1, "DEBUG": 1, "DESC": "Debug Package", }, ),
 ])
 ## --> PS3 0x40 Digest
 CONST_PKG3_PS3_DIGEST_FIELDS = collections.OrderedDict([ \
@@ -689,8 +691,12 @@ CONST_PBP_HEADER_FIELDS = collections.OrderedDict([ \
 
 
 
+def currenttime():
+    return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
 def prettySize(n, pow=0, b=1024, u="B", pre=[""]+[p+"i"for p in "KMGTPEZY"]):
-    pow, n = min(int(log(max(n*b**pow, 1), b)), len(pre)-1), n*b**pow
+    pow, n = min(int(math.log(max(n*b**pow, 1), b)), len(pre)-1), n*b**pow
     return "%%.%if %%s%%s" % abs(pow % (-pow-1)) % (n/b**float(pow), pre[pow], u)
 
 
@@ -719,6 +725,8 @@ def specialToJSON(python_object):
         return {"__class__": "bytes",
                 "__value__": convertBytesToHexString(python_object, sep="")}
     if isinstance(python_object, PkgAesCtrCounter):
+        return unicode(python_object)
+    if isinstance(python_object, PkgXorSha1Counter):
         return unicode(python_object)
     if isinstance(python_object, aenum.Enum):
         return unicode(python_object)
@@ -801,7 +809,7 @@ class PkgInputReader():
                 if function_debug_level >= 2:
                     dprint("[INPUT] Opening source as FILE XML data stream")
                 try:
-                    input_stream = io.open(self._source, mode="r", buffering=-1, encoding=None, errors=None, newline=None, closefd=True)
+                    input_stream = io.open(self._source, mode="rt", buffering=-1, encoding=None, errors=None, newline=None, closefd=True)
                 except:
                     eprint("[INPUT] Could not open FILE", self._source)
                     eprint("", prefix=None)
@@ -891,7 +899,7 @@ class PkgInputReader():
                 if function_debug_level >= 2:
                     dprint("[INPUT] Opening source as FILE JSON data stream")
                 try:
-                    input_stream = io.open(self._source, mode="r", buffering=-1, encoding=None, errors=None, newline=None, closefd=True)
+                    input_stream = io.open(self._source, mode="rt", buffering=-1, encoding=None, errors=None, newline=None, closefd=True)
                 except:
                     eprint("[INPUT] Could not open FILE", self._source)
                     eprint("", prefix=None)
@@ -1018,7 +1026,7 @@ class PkgInputReader():
             #
             file_part["STREAM"].headers = self._headers
             try:
-                response = file_part["STREAM"].head(file_part["url"], allow_redirects=True)
+                response = file_part["STREAM"].head(file_part["url"], allow_redirects=True, timeout=60)
             except:
                 eprint("[INPUT] Could not open URL", file_part["url"])
                 if response:
@@ -1052,7 +1060,7 @@ class PkgInputReader():
                 eprint("", prefix=None)
                 raise  ## re-raise
             #
-            file_part["STREAM"].seek(0, os.SEEK_END)
+            file_part["STREAM"].seek(0, io.SEEK_END)
             part_size = file_part["STREAM"].tell()
 
         ## Check file size
@@ -1120,7 +1128,7 @@ class PkgInputReader():
             self.open(file_part, function_debug_level=max(0,function_debug_level))
             #
             if file_part["STREAM_TYPE"] == "file":
-                file_part["STREAM"].seek(file_offset, os.SEEK_SET)
+                file_part["STREAM"].seek(file_offset, io.SEEK_SET)
                 result.extend(file_part["STREAM"].read(read_buffer_size))
                 ## supports the following.
                 ## * offset=9000 + size=-1 => all bytes from offset 9000 to the end
@@ -1135,7 +1143,7 @@ class PkgInputReader():
                 ## * bytes=9000- => all bytes from offset 9000 to the end
                 ## * bytes=-32 => last 32 bytes
                 reqheaders={"Range": "bytes={}-{}".format(file_offset, (file_offset + read_buffer_size - 1) if read_buffer_size > 0 else "")}
-                response = file_part["STREAM"].get(file_part["url"], headers=reqheaders)
+                response = file_part["STREAM"].get(file_part["url"], headers=reqheaders, timeout=60)
                 result.extend(response.content)
             #
             read_offset += read_buffer_size
@@ -1168,6 +1176,7 @@ class PkgAesCtrCounter():
         elif isinstance(iv, int):
             self._iv = iv
         self._block_offset = -1
+        self._block_size = Cryptodome.Cipher.AES.block_size
 
     def _setOffset(self, offset):
         if offset == self._block_offset:
@@ -1175,10 +1184,10 @@ class PkgAesCtrCounter():
         #
         start_counter = self._iv
         self._block_offset = 0
-        count = offset // Cryptodome.Cipher.AES.block_size
+        count = offset // self._block_size
         if count > 0:
             start_counter += count
-            self._block_offset += count * Cryptodome.Cipher.AES.block_size
+            self._block_offset += count * self._block_size
         #
         if hasattr(self, "_aes"):
             del self._aes
@@ -1190,6 +1199,54 @@ class PkgAesCtrCounter():
         self._block_offset += len(data)
         ## Python 2 workaround: must use bytes() for AES's .new()/.encrypt()/.decrypt() and hash's .update()
         decrypted_data = bytearray(self._aes.decrypt(bytes(data)))
+        return decrypted_data
+
+
+class PkgXorSha1Counter():
+    def __str__(self):
+        return convertBytesToHexString(self._iv.to_bytes(0x40, byteorder="big"), sep="")
+
+    def __init__(self, iv):
+        if isinstance(iv, bytes) \
+        or isinstance(iv, bytearray):
+            self._iv = int.from_bytes(iv, byteorder="big")
+        elif isinstance(iv, int):
+            self._iv = iv
+        self._counter = self._iv
+        self._block_offset = 0
+        self._block_size = 0x10
+
+    def _setOffset(self, offset):
+        if offset == self._block_offset:
+            return
+        #
+        self._counter = self._iv
+        self._block_offset = 0
+        count = offset // self._block_size
+        if count > 0:
+            self._counter += count
+            self._block_offset += count * self._block_size
+
+    def decrypt(self, offset, encrypted_data):
+        self._setOffset(offset)
+        self._block_offset += len(encrypted_data)
+        #
+        decrypted_data = bytearray()
+        for _i in range(0, len(encrypted_data), self._block_size):
+            xor_bytes = Cryptodome.Hash.SHA1.new(self._counter.to_bytes(0x40, byteorder="big")).digest()
+            decrypted_bytes = encrypted_data[_i:_i+self._block_size]
+            fastxor.fast_xor_inplace(decrypted_bytes, bytearray(xor_bytes[0:self._block_size]))
+            ## Python standard xor implementation (slightly slower than fastxor)
+            #xor_int = int.from_bytes(xor_bytes[0:self._block_size], byteorder=sys.byteorder)
+            ##
+            #encrypted_int = int.from_bytes(encrypted_data[_i:_i+self._block_size], byteorder=sys.byteorder)
+            ##
+            #decrypted_int = encrypted_int ^ xor_int
+            #decrypted_bytes = decrypted_int.to_bytes(self._block_size, byteorder=sys.byteorder)
+            decrypted_data.extend(decrypted_bytes)
+            #
+            self._counter += 1
+        #
         return decrypted_data
 
 
@@ -1659,6 +1716,9 @@ def parsePkg3Header(head_bytes, input_stream, function_debug_level):
             eprint("", prefix=None)
             sys.exit(2)
 
+    ## Determine debug package
+    header_fields["DEBUG_PKG"] = (header_fields["REV"] & 0x8000) == 0
+
     ## Determine key index for item entries plus path of PARAM.SFO
     if function_debug_level >= 2:
         dprint(">>>>> PKG3 Package Keys:")
@@ -1694,6 +1754,16 @@ def parsePkg3Header(head_bytes, input_stream, function_debug_level):
             del pkg_key
         else:
             header_fields["AES_CTR"][key] = PkgAesCtrCounter(CONST_PKG3_CONTENT_KEYS[key]["KEY"], header_fields["DATARIV"])
+    #
+    pkg_key = bytearray(0x40)
+    pkg_key[0x00:0x08] = header_fields["DIGEST"][0x00:0x08]
+    pkg_key[0x08:0x10] = header_fields["DIGEST"][0x00:0x08]
+    pkg_key[0x10:0x18] = header_fields["DIGEST"][0x08:0x10]
+    pkg_key[0x18:0x20] = header_fields["DIGEST"][0x08:0x10]
+    header_fields["XOR_CTR"] = PkgXorSha1Counter(pkg_key)
+    if function_debug_level >= 2:
+        dprint("Debug XOR IV from DIGEST: {}".format(convertBytesToHexString(pkg_key, sep="")))
+    del pkg_key
 
     ## Extract fields from PKG3 Main Header Meta Data
     if function_debug_level >= 2:
@@ -1929,7 +1999,10 @@ def parsePkg3ItemsInfo(header_fields, meta_data, input_stream, function_debug_le
         raise  ## re-raise
 
     ## Decrypt PKG3 Item Entries
-    items_info_bytes[CONST_DATATYPE_DECRYPTED] = header_fields["AES_CTR"][header_fields["KEYINDEX"]].decrypt(items_info_bytes["ALIGN"]["OFS"], items_info_bytes[CONST_DATATYPE_AS_IS])
+    if header_fields["DEBUG_PKG"]:
+        items_info_bytes[CONST_DATATYPE_DECRYPTED] = header_fields["XOR_CTR"].decrypt(items_info_bytes["ALIGN"]["OFS"], items_info_bytes[CONST_DATATYPE_AS_IS])
+    else:
+        items_info_bytes[CONST_DATATYPE_DECRYPTED] = header_fields["AES_CTR"][header_fields["KEYINDEX"]].decrypt(items_info_bytes["ALIGN"]["OFS"], items_info_bytes[CONST_DATATYPE_AS_IS])
 
     ## Parse PKG3 Item Entries
     item_entries = []
@@ -2035,7 +2108,10 @@ def parsePkg3ItemsInfo(header_fields, meta_data, input_stream, function_debug_le
             eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[ALIGN] ")
         #
         offset = align["OFS"] - items_info_bytes["ALIGN"]["OFS"]
-        items_info_bytes[CONST_DATATYPE_DECRYPTED][offset:offset+align["SIZE"]] = header_fields["AES_CTR"][key_index].decrypt(align["OFS"], items_info_bytes[CONST_DATATYPE_AS_IS][offset:offset+align["SIZE"]])
+        if header_fields["DEBUG_PKG"]:
+            items_info_bytes[CONST_DATATYPE_DECRYPTED][offset:offset+align["SIZE"]] = header_fields["XOR_CTR"].decrypt(align["OFS"], items_info_bytes[CONST_DATATYPE_AS_IS][offset:offset+align["SIZE"]])
+        else:
+            items_info_bytes[CONST_DATATYPE_DECRYPTED][offset:offset+align["SIZE"]] = header_fields["AES_CTR"][key_index].decrypt(align["OFS"], items_info_bytes[CONST_DATATYPE_AS_IS][offset:offset+align["SIZE"]])
         temp_bytes = items_info_bytes[CONST_DATATYPE_DECRYPTED][offset+align["OFSDELTA"]:offset+align["OFSDELTA"]+item_entry["ITEMNAMESIZE"]]
         del align
         #
@@ -2144,18 +2220,20 @@ def processPkg3Item(extractions_fields, item_entry, input_stream, item_data, siz
         #    hash encrypted_bytes
 
         ## Get and process decrypted data block
-        if "KEYINDEX" in item_entry \
-        and "AES_CTR" in extractions_fields:
-            if item_data_usable > 0:
-                decrypted_bytes = item_data[CONST_DATATYPE_DECRYPTED]
-            else:
-                decrypted_bytes = extractions_fields["AES_CTR"][item_entry["KEYINDEX"]].decrypt(data_offset, encrypted_bytes)
-                #
-                if add_item_data:
-                    item_data[CONST_DATATYPE_DECRYPTED].extend(decrypted_bytes)
+        if item_data_usable > 0:
+            decrypted_bytes = item_data[CONST_DATATYPE_DECRYPTED]
+        else:
+            if extractions_fields["DEBUG_PKG"]:
+                decrypted_bytes = extractions_fields["XOR_CTR"].decrypt(data_offset, encrypted_bytes)
+            elif "KEYINDEX" in item_entry \
+            and "AES_CTR" in extractions_fields:
+                    decrypted_bytes = extractions_fields["AES_CTR"][item_entry["KEYINDEX"]].decrypt(data_offset, encrypted_bytes)
             #
-            #if dec_hashes:
-            #    hash decrypted_bytes
+            if add_item_data:
+                item_data[CONST_DATATYPE_DECRYPTED].extend(decrypted_bytes)
+        #
+        #if dec_hashes:
+        #    hash decrypted_bytes
 
         ## Write extractions
         if extractions:
@@ -2753,6 +2831,8 @@ if __name__ == "__main__":
                     if CONST_DATATYPE_DECRYPTED in Results["ITEMS_INFO"]:
                         del Results["ITEMS_INFO"][CONST_DATATYPE_DECRYPTED]
                 #
+                Results["DEBUG_PKG"] = Pkg_Header["DEBUG_PKG"]
+                #
                 if not Pkg_Item_Entries is None:
                     ## Search PARAM.SFO in encrypted data
                     Retrieve_Encrypted_Param_Sfo = False
@@ -2949,8 +3029,11 @@ if __name__ == "__main__":
             if "CONTENT_ID" in Results \
             and Results["CONTENT_ID"].strip():
                 Results["REGION"], Results["LANGUAGES"] = getRegion(Results["CONTENT_ID"][0])
-                if Results["LANGUAGES"] is None:
-                    Results["LANGUAGES"]
+                if Results["REGION"] == "???" \
+                or Results["LANGUAGES"] is None:
+                    if Arguments.unknown:
+                        eprint("Region/Languages couldn't be determined for", Results["CONTENT_ID"], Input_Stream.getSource(function_debug_level=max(0, Debug_Level)), prefix="[UNKNOWN] ")
+                        eprint("If not homebrew, then please report this unknown case at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[UNKNOWN] ")
             ## b) International/English title
             for Language in ["01", "18"]:
                 Key = "".join(("TITLE_", Language))
@@ -3340,6 +3423,20 @@ if __name__ == "__main__":
                     if "REGION" in Results \
                     and Results["REGION"].strip():
                         print("{:13} {}".format("Region:", Results["REGION"]))
+                    if "CONTENT_ID" in Results \
+                    and Results["CONTENT_ID"].strip():
+                        print("{:13} {}".format("Content ID:", Results["CONTENT_ID"]))
+                        if "SFO_CONTENT_ID" in Results \
+                        and Results["SFO_CONTENT_ID"].strip() \
+                        and "PKG_CONTENT_ID" in Results \
+                        and Results["PKG_CONTENT_ID"].strip() != Results["SFO_CONTENT_ID"].strip():
+                            print("{:13} {}".format("PKG Hdr CID:", Results["PKG_CONTENT_ID"]))
+                    if "DEBUG_PKG" in Results:
+                        print("{:13} {}".format("Debug Pkg:", Results["DEBUG_PKG"]))
+                    if "PKG_CONTENT_TYPE" in Results:
+                        print("{:13} {}".format("Content Type:", Results["PKG_CONTENT_TYPE"]))
+                    if "PKG_DRM_TYPE" in Results:
+                        print("{:13} {}".format("DRM Type:", Results["PKG_DRM_TYPE"]))
                     if "SFO_MIN_VER" in Results \
                     and Results["SFO_MIN_VER"] >= 0:
                         print("{:13} {:.2f}".format("Min FW:", Results["SFO_MIN_VER"]))
@@ -3348,7 +3445,7 @@ if __name__ == "__main__":
                         print("{:13} {:.2f}".format("SDK Ver:", Results["SFO_SDK_VER"]))
                     if "SFO_CREATION_DATE" in Results \
                     and Results["SFO_CREATION_DATE"].strip():
-                        print("{:13} {}".format("c_date:", datetime.strptime(Results["SFO_CREATION_DATE"], "%Y%m%d").strftime("%Y.%m.%d")))
+                        print("{:13} {}".format("c_date:", datetime.datetime.strptime(Results["SFO_CREATION_DATE"], "%Y%m%d").strftime("%Y-%m-%d")))
                     if "SFO_VERSION" in Results\
                     and Results["SFO_VERSION"] >= 0:
                         print("{:13} {:.2f}".format("Version:", Results["SFO_VERSION"]))
@@ -3358,14 +3455,6 @@ if __name__ == "__main__":
                     if "PSX_TITLE_ID" in Results \
                     and Results["PSX_TITLE_ID"].strip():
                         print("{:13} {}".format("PSX Title ID:", Results["PSX_TITLE_ID"]))
-                    if "CONTENT_ID" in Results \
-                    and Results["CONTENT_ID"].strip():
-                        print("{:13} {}".format("Content ID:", Results["CONTENT_ID"]))
-                        if "SFO_CONTENT_ID" in Results \
-                        and Results["SFO_CONTENT_ID"].strip() \
-                        and "PKG_CONTENT_ID" in Results \
-                        and Results["PKG_CONTENT_ID"].strip() != Results["SFO_CONTENT_ID"].strip():
-                            print("{:13} {}".format("PKG Hdr CID:", Results["PKG_CONTENT_ID"]))
                     if "PKG_TOTAL_SIZE" in Results \
                     and Results["PKG_TOTAL_SIZE"] > 0:
                         print("{:13} {}".format("Size:", Results["PKG_TOTAL_SIZE"]))
@@ -3462,6 +3551,8 @@ if __name__ == "__main__":
                     if "CONTENT_ID" in Results \
                     and Results["CONTENT_ID"].strip():
                         JSON_Output["results"]["region"] = Results["REGION"]
+                    if "DEBUG_PKG" in Results:
+                        JSON_Output["results"]["debugPkg"] = Results["DEBUG_PKG"]
                     if "SFO_MIN_VER" in Results \
                     and Results["SFO_MIN_VER"] >= 0:
                         JSON_Output["results"]["minFw"] = Results["SFO_MIN_VER"]
@@ -3482,7 +3573,7 @@ if __name__ == "__main__":
                         JSON_Output["results"]["sdkVer"] = Results["SFO_SDK_VER"]
                     if "SFO_CREATION_DATE" in Results \
                     and Results["SFO_CREATION_DATE"].strip():
-                        JSON_Output["results"]["creationDate"] = datetime.strptime(Results["SFO_CREATION_DATE"], "%Y%m%d").strftime("%Y.%m.%d")
+                        JSON_Output["results"]["creationDate"] = datetime.datetime.strptime(Results["SFO_CREATION_DATE"], "%Y%m%d").strftime("%Y-%m-%d")
                     if "SFO_VERSION" in Results \
                     and Results["SFO_VERSION"] >= 0:
                         JSON_Output["results"]["version"] = Results["SFO_VERSION"]
@@ -3718,6 +3809,8 @@ if __name__ == "__main__":
             if Pkg_Magic == CONST_PKG3_MAGIC:
                 Extractions_Fields["DATAOFS"] = Pkg_Header["DATAOFS"]
                 Extractions_Fields["AES_CTR"] = Pkg_Header["AES_CTR"]
+                Extractions_Fields["XOR_CTR"] = Pkg_Header["XOR_CTR"]
+                Extractions_Fields["DEBUG_PKG"] = Pkg_Header["DEBUG_PKG"]
             #
             ## --> PKG3/PBP
             if Pkg_Magic == CONST_PKG3_MAGIC \
@@ -3944,6 +4037,24 @@ if __name__ == "__main__":
                                 ## Build and check item extract path
                                 if Name_Parts:
                                     Extract["ITEM_NAME"] = "/".join(Name_Parts)
+                                    #
+                                    ## Avoid writing outside of extraction root dir
+                                    Dir_Level = 0
+                                    Name_Parts_New = []
+                                    for _i in range(len(Name_Parts)):
+                                        if Name_Parts[_i] == '..':
+                                            if Dir_Level > 0:
+                                                Name_Parts_New.append(Name_Parts[_i])
+                                                Dir_Level -= 1
+                                        elif Name_Parts[_i] == '.':
+                                            Name_Parts_New.append(Name_Parts[_i])
+                                        else:
+                                            Name_Parts_New.append(Name_Parts[_i])
+                                            Dir_Level += 1
+                                    Name_Parts = Name_Parts_New
+                                    del Name_Parts_New
+                                    del Dir_Level
+                                    #
                                     Extract["ITEM_EXTRACT_PATH"] = os.path.join(*Name_Parts)
                                 del Name_Parts
                                 #
@@ -4078,6 +4189,23 @@ if __name__ == "__main__":
                                     if Key == CONST_EXTRACT_CONTENT \
                                     and Arguments.nosubdirs:
                                         Name_Parts = Name_Parts[-1:]
+                                    else:
+                                        ## Avoid writing outside of extraction root dir
+                                        Dir_Level = 0
+                                        Name_Parts_New = []
+                                        for _i in range(len(Name_Parts)):
+                                            if Name_Parts[_i] == '..':
+                                                if Dir_Level > 0:
+                                                    Name_Parts_New.append(Name_Parts[_i])
+                                                    Dir_Level -= 1
+                                            elif Name_Parts[_i] == '.':
+                                                Name_Parts_New.append(Name_Parts[_i])
+                                            else:
+                                                Name_Parts_New.append(Name_Parts[_i])
+                                                Dir_Level += 1
+                                        Name_Parts = Name_Parts_New
+                                        del Name_Parts_New
+                                        del Dir_Level
                                     #
                                     Extract["ITEM_EXTRACT_PATH"] = os.path.join(*Name_Parts)
                                     #

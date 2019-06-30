@@ -73,7 +73,7 @@
     * JP0576/NPJH70002_00/EpdkZDkoEKlZtxUVKzdIqeCuFXiSzhjrWwNoANeOHvFjLnPsydXwtAtYfLbklqLMBlQEHaoxtEqsRnRLCUTLvklkSEJgtQNWMWtMB.pkg (Neo Geo)
 - [x] Create ZRIF structure (BE)
 - [x] Switch from unmaintained module pycrypto to pycryptodomex
-  * pycrypto has not been maintained since 2014
+  * [pycrypto](https://github.com/dlitz/pycrypto) has not been maintained since 2014
 - [x] Find package that uses PKG3 Key #03
   * None found in known PS3/PSX/PSP/PSV/PSM packages
   * Extracted all data via -f 99 to separate text files and grep'ed through them

@@ -1,5 +1,14 @@
 # PSN_get_pkg_info.py - Changelog
 
+## 2019.06.30
+* NEW: Added support for PS3/PSX/PSP/PSV/PSM debug packages
+* NEW: Added dependency to Python module fastxor for debug packages
+* NEW: Added region/language check to `--unknown` option
+* FIX: Avoid execution stall by adding timeout of 60 seconds to all network calls
+* FIX: Avoid writing out of extraction directory, e.g. special homebrew packages
+* FIX: Use ISO date format
+* FIX: Updated PS4 firmware version for http headers
+
 ## 2019.06.09
 * NEW: Enhanced analysis output for PS4 packages (key index, name table offset if name for meta entry came from name table)
 * NEW: PS4 Update URL
