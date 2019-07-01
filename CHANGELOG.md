@@ -1,5 +1,8 @@
 # PSN_get_pkg_info.py - Changelog
 
+## 2019.06.30.post1
+* FIX: Still display determined data if reading/decryption of items fail
+
 ## 2019.06.30
 * NEW: Added support for PS3/PSX/PSP/PSV/PSM debug packages
 * NEW: Added dependency to Python module fastxor for debug packages

@@ -58,7 +58,7 @@ from builtins import bytes
 
 ## Version definition
 ## see https://www.python.org/dev/peps/pep-0440/
-__version__ = "2019.06.30"
+__version__ = "2019.06.30.post1"
 __author__ = "https://github.com/windsurfer1122/PSN_get_pkg_info"
 __license__ = "GPL"
 __copyright__ = "Copyright 2018-2019, windsurfer1122"
@@ -2082,7 +2082,9 @@ def parsePkg3ItemsInfo(header_fields, meta_data, input_stream, function_debug_le
             input_stream.close(function_debug_level)
             eprint("Could not get PKG3 encrypted data at offset {:#x} with size {} from".format(header_fields["DATAOFS"]+read_offset, read_size), input_stream.getSource())
             eprint("", prefix=None)
-            raise  ## re-raise
+            print_exc_plus()
+            return None, None
+            #raise  ## re-raise
         #
         items_info_bytes[CONST_DATATYPE_DECRYPTED].extend(items_info_bytes[CONST_DATATYPE_AS_IS][len(items_info_bytes[CONST_DATATYPE_DECRYPTED]):])
     else:
@@ -2825,11 +2827,12 @@ if __name__ == "__main__":
                 if not Pkg_Header["KEYINDEX"] is None:
                     Pkg_Item_Entries, Package["ITEMS_INFO_BYTES"] = parsePkg3ItemsInfo(Pkg_Header, Pkg_Meta_Data, Input_Stream, max(0, Debug_Level))
                     #
-                    Results["ITEMS_INFO"] = copy.copy(Package["ITEMS_INFO_BYTES"])
-                    if CONST_DATATYPE_AS_IS in Results["ITEMS_INFO"]:
-                        del Results["ITEMS_INFO"][CONST_DATATYPE_AS_IS]
-                    if CONST_DATATYPE_DECRYPTED in Results["ITEMS_INFO"]:
-                        del Results["ITEMS_INFO"][CONST_DATATYPE_DECRYPTED]
+                    if not Pkg_Item_Entries is None:
+                        Results["ITEMS_INFO"] = copy.copy(Package["ITEMS_INFO_BYTES"])
+                        if CONST_DATATYPE_AS_IS in Results["ITEMS_INFO"]:
+                            del Results["ITEMS_INFO"][CONST_DATATYPE_AS_IS]
+                        if CONST_DATATYPE_DECRYPTED in Results["ITEMS_INFO"]:
+                            del Results["ITEMS_INFO"][CONST_DATATYPE_DECRYPTED]
                 #
                 Results["DEBUG_PKG"] = Pkg_Header["DEBUG_PKG"]
                 #
