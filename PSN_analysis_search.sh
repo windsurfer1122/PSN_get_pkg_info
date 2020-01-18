@@ -154,6 +154,7 @@ main()
   #
   ## search special item/file names
   #VALUE_1='sce_sys/package/digs.bin' ; VALUE_2='18' ; ## as it is extracted encrypted (not decrypted) as body.bin; only in PSV packages with flags 0xa0007018/0xa0007818 (no other items with 0x...18)
+  #VALUE_1='sce_sys/package/cert.bin' ; VALUE_2='17' ; ## as it is extracted encrypted (not decrypted) as body.bin; only in PSV packages with flags 0xa0007017 (no other items with 0x...17)
   #VALUE_1='sce_sys/package/body.bin' ; VALUE_2='03' ; ## see also digs.bin; only in PSM packages in contents/runtime/ with flags 0xc0000003
   #VALUE_1='sce_sys/package/head.bin' ; VALUE_2='03' ; ## only in PSM packages in contents/runtime/ with flags 0xc0000003
   #VALUE_1='sce_sys/package/tail.bin' ; VALUE_2='03' ; ## only in PSM packages in contents/runtime/ with flags 0xc0000003
@@ -161,6 +162,8 @@ main()
   #VALUE_1='content_id' ; VALUE_2='' ; ## none found, no item with this name
   #VALUE_1='EBOOT\.PBP' ; VALUE_2='' ; ## ...
   #VALUE_1='\.PBP' ; VALUE_2='' ; ## ...
+  #VALUE_1='runtime' ; VALUE_2='' ; ## ...
+  #VALUE_1='texture\.enc' ; VALUE_2='' ; ## ...
   #GREP_OUTPUT="-E	-e	Flags[[:space:]]+.*Name[[:space:]]+\\\".*${VALUE_1}" ;  ## search item name part
   #GREP_OUTPUT="-E	-e	Flags[[:space:]]+0x[[:xdigit:]]{6}${VALUE_2}.*\$" ;  ## search item flags part
   #GREP_OUTPUT="-E	-e	Name[[:space:]]+\\\".*${VALUE_1}" ;  ## search item name part
@@ -215,6 +218,9 @@ main()
   #GREP_OUTPUT='-e	^Pkg_Header\["REV"[[:space:]]\+|.*\]: .*'
   #GREP_1='-L	-e	^Pkg_Header\["REV"[[:space:]]\+|.*\]: 0x8.*'
   #GREP_OUTPUT='-e	^.*PKG Source.*'
+  #
+  ## USRDIR
+  #GREP_OUTPUT='-i	-e	Name[[:space:]]\+".*USRDIR.*"'
 
   ## Clean-up and check GREP_OUTPUT pattern
   GREP_OUTPUT="$(printf -- '%s' "${GREP_OUTPUT:-}" | sed -r -e 's#(-l|-L)##g ; s#[\t]+#\t#g ; s#(^\t|\t$)##g')"

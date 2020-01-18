@@ -3,7 +3,7 @@
 ### ^^^ see https://www.python.org/dev/peps/pep-0263/
 
 ###
-### PSN_get_pky_info.py (c) 2018-2019 by "windsurfer1122"
+### PSN_get_pky_info.py (c) 2018-2020 by "windsurfer1122"
 ### Extract package information from header and PARAM.SFO of PS3/PSX/PSP/PSV/PSM and PS4 packages.
 ### Use at your own risk!
 ###
@@ -58,7 +58,7 @@ from builtins import bytes
 
 ## Version definition
 ## see https://www.python.org/dev/peps/pep-0440/
-__version__ = "2019.06.30.post1"
+__version__ = "2020.01.00.beta1"
 __author__ = "https://github.com/windsurfer1122/PSN_get_pkg_info"
 __license__ = "GPL"
 __copyright__ = "Copyright 2018-2019, windsurfer1122"
@@ -243,10 +243,10 @@ CONST_FMT_CHAR = "s"
 CONST_READ_SIZE = random.randint(50,100) * 0x100000  ## Read in 50-100 MiB chunks to reduce memory usage and swapping
 CONST_READ_AHEAD_SIZE = 128 * 0x400 ## Read first 128 KiB to reduce read requests (fits header of known PS3/PSX/PSP/PSV/PSM packages; Kib/Mib = 0x400/0x100000; biggest header + Items Info found was 2759936 = 0x2a1d00 = ~2.7 MiB)
 #
-CONST_USER_AGENT_PS3 = "Mozilla/5.0 (PLAYSTATION 3; 4.84)"
+CONST_USER_AGENT_PS3 = "Mozilla/5.0 (PLAYSTATION 3; 4.85)"
 #CONST_USER_AGENT_PSP = ""
-CONST_USER_AGENT_PSV = " libhttp/3.70 (PS Vita)"
-CONST_USER_AGENT_PS4 = "Download/1.00 libhttp/6.71 (PlayStation 4)"
+CONST_USER_AGENT_PSV = " libhttp/3.73 (PS Vita)"
+CONST_USER_AGENT_PS4 = "Download/1.00 libhttp/7.02 (PlayStation 4)"
 #
 CONST_EXTRACT_RAW = "RAW"
 CONST_EXTRACT_UX0 = "UX0"
@@ -279,12 +279,13 @@ class CONST_PKG_TYPE(aenum.OrderedEnum):
     def __str__(self):
         return unicode(self.value)
 
-    __ordered__ = "GAME DLC PATCH THEME AVATAR"
+    __ordered__ = "GAME DLC PATCH THEME AVATAR LIVEAREA"
     GAME = "Game"
     DLC = "DLC"
     PATCH = "Update"
     THEME = "Theme"
     AVATAR = "Avatar"
+    LIVEAREA = "Livearea"
 ## --> Package Sub Types
 class CONST_PKG_SUB_TYPE(aenum.OrderedEnum):
     def __str__(self):
@@ -364,43 +365,46 @@ CONST_PKG3_ITEM_ENTRY_FIELDS = collections.OrderedDict([ \
 ## http://www.psdevwiki.com/ps3/Keys#gpkg-key
 ## https://playstationdev.wiki/psvitadevwiki/index.php?title=Keys#Content_PKG_Keys
 CONST_PKG3_CONTENT_KEYS = {
-    0: { "KEY": "Lntx18nJoU6jIh8YiCi4+A==", "DESC": "PS3",     },
+    0: { "KEY": "Lntx18nJoU6jIh8YiCi4+A==", "DESC": "PS3", },
     1: { "KEY": "B/LGgpC1DSwzgY1wm2DmKw==", "DESC": "PSX/PSP", },
-    2: { "KEY": "4xpwyc4d1yvzwGIpY/Lsyw==", "DESC": "PSV",     "DERIVE": True, },
-    3: { "KEY": "QjrKOivVZJ+Whqutb9iAHw==", "DESC": "Unknown", "DERIVE": True, },
-    4: { "KEY": "rwf9WWUlJ7rxM4lmixfZ6g==", "DESC": "PSM",     "DERIVE": True, },
+    2: { "KEY": "4xpwyc4d1yvzwGIpY/Lsyw==", "DESC": "PSV",          "DERIVE": True, },
+    3: { "KEY": "QjrKOivVZJ+Whqutb9iAHw==", "DESC": "PSV Livearea", "DERIVE": True, },
+    4: { "KEY": "rwf9WWUlJ7rxM4lmixfZ6g==", "DESC": "PSM",          "DERIVE": True, },
 }
 for Key in CONST_PKG3_CONTENT_KEYS:
     if isinstance(CONST_PKG3_CONTENT_KEYS[Key]["KEY"], unicode):
         CONST_PKG3_CONTENT_KEYS[Key]["KEY"] = base64.standard_b64decode(CONST_PKG3_CONTENT_KEYS[Key]["KEY"])
-    elif isinstance(CONST_PKG3_UPDATE_KEYS[Key]["KEY"], bytes) \
-    or isinstance(CONST_PKG3_UPDATE_KEYS[Key]["KEY"], bytearray):
-        eprint("PKG3 Content Key #{}:".format(Key), base64.standard_b64encode(CONST_PKG3_CONTENT_KEYS[Key]["KEY"]), prefix="[CONVERT]")
+    elif isinstance(CONST_PKG3_CONTENT_KEYS[Key]["KEY"], bytes) \
+    or isinstance(CONST_PKG3_CONTENT_KEYS[Key]["KEY"], bytearray):
+        eprint("PKG3 Content Key #{}:".format(Key), base64.standard_b64encode(CONST_PKG3_CONTENT_KEYS[Key]["KEY"]), prefix="[CONVERT] ")
 del Key
 ## --> PKG3 Update Keys
 CONST_PKG3_UPDATE_KEYS = {
     2: { "KEY": "5eJ4qh7jQIKgiCecg/m7yAaCHFLyq10rSr2ZVFA1URQ=", "DESC": "PSV", },
+    3: { "KEY": "2Nvtdm6rzWjUfdvtnTyoJYN96Kp4m3/5LZoVlPzY6sQ=", "DESC": "PSV Livearea", },
 }
 for Key in CONST_PKG3_UPDATE_KEYS:
     if isinstance(CONST_PKG3_UPDATE_KEYS[Key]["KEY"], unicode):
         CONST_PKG3_UPDATE_KEYS[Key]["KEY"] = base64.standard_b64decode(CONST_PKG3_UPDATE_KEYS[Key]["KEY"])
     elif isinstance(CONST_PKG3_UPDATE_KEYS[Key]["KEY"], bytes) \
     or isinstance(CONST_PKG3_UPDATE_KEYS[Key]["KEY"], bytearray):
-        eprint("PKG3 Update Key #{}:".format(Key), base64.standard_b64encode(CONST_PKG3_UPDATE_KEYS[Key]["KEY"]), prefix="[CONVERT]")
+        eprint("PKG3 Update Key #{}:".format(Key), base64.standard_b64encode(CONST_PKG3_UPDATE_KEYS[Key]["KEY"]), prefix="[CONVERT] ")
 del Key
 ## --> RIF
 ## https://github.com/weaknespase/PkgDecrypt/blob/master/rif.h
 ## https://github.com/TheOfficialFloW/NoNpDrm/blob/master/main.c
 ## https://github.com/frangarcj/NoPsmDrm/blob/master/src/main.c
-CONST_RIF_FAKE_AID = 0x0123456789abcdef
+CONST_RIF_FAKE_AID = 0xefcdab8967452301  ## LE = 0x0123456789abcdef
 CONST_RIF_TYPE_OFFSET = 0x04
 #
-CONST_PSV_RIF_ENDIAN = CONST_FMT_LITTLE_ENDIAN
-CONST_PSV_RIF_FIELDS = collections.OrderedDict([ \
+CONST_PS3_RIF_ENDIAN = CONST_FMT_BIG_ENDIAN
+CONST_PS3_RIF_FIELDS = collections.OrderedDict([ \
+    ## Size has to be taken into account to determine RIF version
     ( "VERSION",      { "FORMAT": CONST_FMT_UINT16, "DEBUG": 1, "DESC": "Version", }, ),
     ( "VERSION_FLAG", { "FORMAT": CONST_FMT_UINT16, "DEBUG": 1, "DESC": "Version Flag", }, ),
     ( "TYPE",         { "FORMAT": CONST_FMT_UINT16, "DEBUG": 1, "DESC": "Type", }, ),
     ( "FLAGS",        { "FORMAT": CONST_FMT_UINT16, "DEBUG": 1, "DESC": "Flags", }, ),
+    #
     ( "AID",          { "FORMAT": CONST_FMT_UINT64, "DEBUG": 1, "DESC": "Account ID", }, ),
     ( "CONTENT_ID",   { "FORMAT": CONST_FMT_CHAR, "SIZE": CONST_CONTENT_ID_SIZE, "DEBUG": 1, "CONV": 0x0204, "DESC": "Content ID", "SEP": "", }, ),
     ( "KEY_TABLE",    { "FORMAT": CONST_FMT_CHAR, "SIZE": 0x10, "DEBUG": 1, "DESC": "Key Table", "SEP": "", }, ),
@@ -408,6 +412,26 @@ CONST_PSV_RIF_FIELDS = collections.OrderedDict([ \
     ( "START_TIME",   { "FORMAT": CONST_FMT_UINT64, "DEBUG": 1, "DESC": "Start Time", }, ),
     ( "EXPIRE_TIME",  { "FORMAT": CONST_FMT_UINT64, "DEBUG": 1, "DESC": "Expiration Time", }, ),
     ( "ECDSA_SIG",    { "FORMAT": CONST_FMT_CHAR, "SIZE": 0x28, "DEBUG": 1, "DESC": "ECDSA Signature", "SEP": "", }, ),
+    #
+    ( "LIC_TYPE",   { "VIRTUAL": -1, "DEBUG": 1, "DESC": "License Type", }, ),
+])
+#
+CONST_PSV_RIF_ENDIAN = CONST_FMT_BIG_ENDIAN
+CONST_PSV_RIF_FIELDS = collections.OrderedDict([ \
+    ## Size has to be taken into account to determine RIF version
+    ( "VERSION",      { "FORMAT": CONST_FMT_UINT16, "DEBUG": 1, "DESC": "Version", }, ),
+    ( "VERSION_FLAG", { "FORMAT": CONST_FMT_UINT16, "DEBUG": 1, "DESC": "Version Flag", }, ),
+    ( "TYPE",         { "FORMAT": CONST_FMT_UINT16, "DEBUG": 1, "DESC": "Type", }, ),
+    ( "FLAGS",        { "FORMAT": CONST_FMT_UINT16, "DEBUG": 1, "DESC": "Flags", }, ),
+    #
+    ( "AID",          { "FORMAT": CONST_FMT_UINT64, "DEBUG": 1, "DESC": "Account ID", }, ),
+    ( "CONTENT_ID",   { "FORMAT": CONST_FMT_CHAR, "SIZE": CONST_CONTENT_ID_SIZE, "DEBUG": 1, "CONV": 0x0204, "DESC": "Content ID", "SEP": "", }, ),
+    ( "KEY_TABLE",    { "FORMAT": CONST_FMT_CHAR, "SIZE": 0x10, "DEBUG": 1, "DESC": "Key Table", "SEP": "", }, ),
+    ( "KEY",          { "FORMAT": CONST_FMT_CHAR, "SIZE": 0x10, "DEBUG": 1, "DESC": "Key", "SEP": "", }, ),
+    ( "START_TIME",   { "FORMAT": CONST_FMT_UINT64, "DEBUG": 1, "DESC": "Start Time", }, ),
+    ( "EXPIRE_TIME",  { "FORMAT": CONST_FMT_UINT64, "DEBUG": 1, "DESC": "Expiration Time", }, ),
+    ( "ECDSA_SIG",    { "FORMAT": CONST_FMT_CHAR, "SIZE": 0x28, "DEBUG": 1, "DESC": "ECDSA Signature", "SEP": "", }, ),
+    ## Extension to PS3 RIF
     ( "FLAGS2",       { "FORMAT": CONST_FMT_UINT64, "DEBUG": 1, "DESC": "Flags 2", }, ),
     ( "KEY2",         { "FORMAT": CONST_FMT_CHAR, "SIZE": 0x10, "DEBUG": 1, "DESC": "Key 2", "SEP": "", }, ),
     ( "UNKNOWN_B0",   { "FORMAT": CONST_FMT_CHAR, "SIZE": 0x10, "DEBUG": 3, "DESC": "Unknown", "SEP": "", }, ),
@@ -422,7 +446,7 @@ CONST_PSV_RIF_FIELDS = collections.OrderedDict([ \
     ( "LIC_TYPE",   { "VIRTUAL": -1, "DEBUG": 1, "DESC": "License Type", }, ),
 ])
 #
-CONST_PSM_RIF_ENDIAN = CONST_FMT_LITTLE_ENDIAN
+CONST_PSM_RIF_ENDIAN = CONST_FMT_BIG_ENDIAN
 CONST_PSM_RIF_FIELDS = collections.OrderedDict([ \
     ( "MAGIC",       { "FORMAT": CONST_FMT_CHAR, "SIZE": 8, "DEBUG": 1, "DESC": "Magic", "SEP": "", }, ),
     ( "UNKNOWN1",    { "FORMAT": CONST_FMT_UINT32, "DEBUG": 3, "DESC": "Unknown", }, ),
@@ -473,7 +497,7 @@ CONST_PKG4_MAIN_HEADER_FIELDS = collections.OrderedDict([ \
     ( "IROTAG",       { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "IRO Tag", }, ),
     ( "EKCVERSION",   { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "EKC Version", }, ),
     ( "UNKNOWN3",     { "FORMAT": CONST_FMT_CHAR, "SIZE": -0x100, "DEBUG": 3, "DESC": "Unknown", "SKIP": True, }, ),
-
+    #
     ( "DIGESTTABL",   { "FORMAT": CONST_FMT_CHAR, "SUBCOUNT": 24, "SUBSIZE": CONST_SHA256_HASH_SIZE, "DEBUG": 2, "DESC": "Digest Table", "SEP": "", }, ),
       ## [0] = main_  entries1_digest
       ## [1] = main_  entries2_digest
@@ -640,7 +664,7 @@ for Key in CONST_PKG4_UPDATE_KEYS:
         CONST_PKG4_UPDATE_KEYS[Key]["KEY"] = base64.standard_b64decode(CONST_PKG4_UPDATE_KEYS[Key]["KEY"])
     elif isinstance(CONST_PKG4_UPDATE_KEYS[Key]["KEY"], bytes) \
     or isinstance(CONST_PKG4_UPDATE_KEYS[Key]["KEY"], bytearray):
-        eprint("PKG4 Update Key #{}:".format(Key), base64.standard_b64encode(CONST_PKG4_UPDATE_KEYS[Key]["KEY"]), prefix="[CONVERT]")
+        eprint("PKG4 Update Key #{}:".format(Key), base64.standard_b64encode(CONST_PKG4_UPDATE_KEYS[Key]["KEY"]), prefix="[CONVERT] ")
 del Key
 
 ##
@@ -689,10 +713,16 @@ CONST_PBP_HEADER_FIELDS = collections.OrderedDict([ \
     ( "DATA_PSAR_OFS", { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "DATA.PSAR Offset", }, ),
 ])
 
+##
+## Special Case Definitions
+##
+CONST_TITLE_ID_PSV_POCKETSTATION = "PCSC80018"
+
 
 
 def currenttime():
-    return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ## UTC time
+    return datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat()
 
 
 def prettySize(n, pow=0, b=1024, u="B", pre=[""]+[p+"i"for p in "KMGTPEZY"]):
@@ -720,6 +750,8 @@ def getInteger64BitBE(data, offset):
 
 
 def specialToJSON(python_object):
+    if isinstance(python_object, (datetime.datetime, datetime.date)):
+        return python_object.isoformat()
     if isinstance(python_object, bytes) \
     or isinstance(python_object, bytearray):
         return {"__class__": "bytes",
@@ -1719,52 +1751,6 @@ def parsePkg3Header(head_bytes, input_stream, function_debug_level):
     ## Determine debug package
     header_fields["DEBUG_PKG"] = (header_fields["REV"] & 0x8000) == 0
 
-    ## Determine key index for item entries plus path of PARAM.SFO
-    if function_debug_level >= 2:
-        dprint(">>>>> PKG3 Package Keys:")
-    if header_fields["TYPE"] == 0x1:  ## PS3
-        header_fields["KEYINDEX"] = 0
-        header_fields["PARAM.SFO"] = "PARAM.SFO"
-    elif header_fields["TYPE"] == 0x2:  ## PSX/PSP/PSV/PSM
-        header_fields["PARAM.SFO"] = "PARAM.SFO"
-        if ext_header_fields:
-            header_fields["KEYINDEX"] = ext_header_fields["KEYID"] & 0xf
-            if header_fields["KEYINDEX"] == 2:  ## PSV
-                header_fields["PARAM.SFO"] = "sce_sys/param.sfo"
-            elif header_fields["KEYINDEX"] == 3:  ## Unknown
-                eprint("PKG3 Key Index", header_fields["KEYINDEX"], prefix="[UNKNOWN] ")
-        else:
-            header_fields["KEYINDEX"] = 1
-    else:
-        eprint("PKG3 Package Type", header_fields["TYPE"], prefix="[UNKNOWN] ")
-    #
-    header_fields["AES_CTR"] = {}
-    for key in CONST_PKG3_CONTENT_KEYS:
-        if function_debug_level >= 2:
-            dprint("Content Key #{}: {}".format(key, convertBytesToHexString(CONST_PKG3_CONTENT_KEYS[key]["KEY"], sep="")))
-        if "DERIVE" in CONST_PKG3_CONTENT_KEYS[key] \
-        and CONST_PKG3_CONTENT_KEYS[key]["DERIVE"]:
-            aes = Cryptodome.Cipher.AES.new(CONST_PKG3_CONTENT_KEYS[key]["KEY"], Cryptodome.Cipher.AES.MODE_ECB)
-            ## Python 2 workaround: must use bytes() for AES's .new()/.encrypt()/.decrypt() and hash's .update()
-            pkg_key = bytearray(aes.encrypt(bytes(header_fields["DATARIV"])))
-            header_fields["AES_CTR"][key] = PkgAesCtrCounter(pkg_key, header_fields["DATARIV"])
-            del aes
-            if function_debug_level >= 2:
-                dprint("Derived Key #{} from IV encrypted with Content Key: {}".format(key, convertBytesToHexString(pkg_key, sep="")))
-            del pkg_key
-        else:
-            header_fields["AES_CTR"][key] = PkgAesCtrCounter(CONST_PKG3_CONTENT_KEYS[key]["KEY"], header_fields["DATARIV"])
-    #
-    pkg_key = bytearray(0x40)
-    pkg_key[0x00:0x08] = header_fields["DIGEST"][0x00:0x08]
-    pkg_key[0x08:0x10] = header_fields["DIGEST"][0x00:0x08]
-    pkg_key[0x10:0x18] = header_fields["DIGEST"][0x08:0x10]
-    pkg_key[0x18:0x20] = header_fields["DIGEST"][0x08:0x10]
-    header_fields["XOR_CTR"] = PkgXorSha1Counter(pkg_key)
-    if function_debug_level >= 2:
-        dprint("Debug XOR IV from DIGEST: {}".format(convertBytesToHexString(pkg_key, sep="")))
-    del pkg_key
-
     ## Extract fields from PKG3 Main Header Meta Data
     if function_debug_level >= 2:
         dprint(">>>>> PKG3 Meta Data:")
@@ -1863,6 +1849,54 @@ def parsePkg3Header(head_bytes, input_stream, function_debug_level):
     #
     del temp_bytes
     header_fields["MDSIZE"] = md_offset - header_fields["MDOFS"]
+
+    ## Determine key index for item entries plus path of PARAM.SFO
+    if function_debug_level >= 2:
+        dprint(">>>>> PKG3 Package Keys:")
+    if header_fields["TYPE"] == 0x1:  ## PS3
+        header_fields["KEYINDEX"] = 0
+        header_fields["PARAM.SFO"] = "PARAM.SFO"
+    elif header_fields["TYPE"] == 0x2:  ## PSX/PSP/PSV/PSM
+        header_fields["PARAM.SFO"] = "PARAM.SFO"
+        if ext_header_fields:
+            header_fields["KEYINDEX"] = ext_header_fields["KEYID"] & 0xf
+            if header_fields["KEYINDEX"] == 2:  ## PSV
+                header_fields["PARAM.SFO"] = "sce_sys/param.sfo"
+            elif header_fields["KEYINDEX"] == 3:
+                if not 0x02 in meta_data \
+                or meta_data[0x02]["VALUE"] != 0x17:  ## PSV Livarea
+                    eprint("PKG3 Key Index", header_fields["KEYINDEX"], prefix="[UNKNOWN] ")
+        else:
+            header_fields["KEYINDEX"] = 1
+    else:
+        eprint("PKG3 Package Type", header_fields["TYPE"], prefix="[UNKNOWN] ")
+    #
+    header_fields["AES_CTR"] = {}
+    for key in CONST_PKG3_CONTENT_KEYS:
+        if function_debug_level >= 2:
+            dprint("Content Key #{}: {}".format(key, convertBytesToHexString(CONST_PKG3_CONTENT_KEYS[key]["KEY"], sep="")))
+        if "DERIVE" in CONST_PKG3_CONTENT_KEYS[key] \
+        and CONST_PKG3_CONTENT_KEYS[key]["DERIVE"]:
+            aes = Cryptodome.Cipher.AES.new(CONST_PKG3_CONTENT_KEYS[key]["KEY"], Cryptodome.Cipher.AES.MODE_ECB)
+            ## Python 2 workaround: must use bytes() for AES's .new()/.encrypt()/.decrypt() and hash's .update()
+            pkg_key = bytearray(aes.encrypt(bytes(header_fields["DATARIV"])))
+            header_fields["AES_CTR"][key] = PkgAesCtrCounter(pkg_key, header_fields["DATARIV"])
+            del aes
+            if function_debug_level >= 2:
+                dprint("Derived Key #{} from IV encrypted with Content Key: {}".format(key, convertBytesToHexString(pkg_key, sep="")))
+            del pkg_key
+        else:
+            header_fields["AES_CTR"][key] = PkgAesCtrCounter(CONST_PKG3_CONTENT_KEYS[key]["KEY"], header_fields["DATARIV"])
+    #
+    pkg_key = bytearray(0x40)
+    pkg_key[0x00:0x08] = header_fields["DIGEST"][0x00:0x08]
+    pkg_key[0x08:0x10] = header_fields["DIGEST"][0x00:0x08]
+    pkg_key[0x10:0x18] = header_fields["DIGEST"][0x08:0x10]
+    pkg_key[0x18:0x20] = header_fields["DIGEST"][0x08:0x10]
+    header_fields["XOR_CTR"] = PkgXorSha1Counter(pkg_key)
+    if function_debug_level >= 2:
+        dprint("Debug XOR IV from DIGEST: {}".format(convertBytesToHexString(pkg_key, sep="")))
+    del pkg_key
 
     ## Debug print results
     dprint(">>>>> parsePkg3Header results:")
@@ -1984,7 +2018,7 @@ def parsePkg3ItemsInfo(header_fields, meta_data, input_stream, function_debug_le
     items_info_bytes["ALIGN"] = calculateAesAlignedOffsetAndSize(items_info_bytes["OFS"], items_info_bytes["SIZE"])
     #
     if function_debug_level >= 2:
-        dprint("Get PKG3 Items Info/Item Entries from encrypted data with offset {:#x}-{:#x}+{:#x}={:#x} with count {} and size {}+{}={}".format(items_info_bytes["OFS"], items_info_bytes["ALIGN"]["OFSDELTA"], header_fields["DATAOFS"], header_fields["DATAOFS"]+items_info_bytes["ALIGN"]["OFS"], header_fields["ITEMCNT"], items_info_bytes["SIZE"], items_info_bytes["ALIGN"]["SIZEDELTA"], items_info_bytes["ALIGN"]["SIZE"]))
+        dprint("Get PKG3 Items Info/Item Entries from encrypted data with offset {:#x}-{:#x}+{:#x}={:#x} and count {} and size {}+{}={}".format(items_info_bytes["OFS"], items_info_bytes["ALIGN"]["OFSDELTA"], header_fields["DATAOFS"], header_fields["DATAOFS"]+items_info_bytes["ALIGN"]["OFS"], header_fields["ITEMCNT"], items_info_bytes["SIZE"], items_info_bytes["ALIGN"]["SIZEDELTA"], items_info_bytes["ALIGN"]["SIZE"]))
     if items_info_bytes["ALIGN"]["OFSDELTA"] > 0:
         eprint("Unaligned encrypted offset {:#x}-{:#x}={:#x}(+{:#x}) for Items Info/Item Entries.".format(items_info_bytes["OFS"], items_info_bytes["ALIGN"]["OFSDELTA"], items_info_bytes["ALIGN"]["OFS"], header_fields["DATAOFS"]), input_stream.getSource(), prefix="[ALIGN] ")
         eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[ALIGN] ")
@@ -2622,6 +2656,8 @@ if __name__ == "__main__":
         finalizeBytesStructure(CONST_PARAM_SFO_INDEX_ENTRY_FIELDS, CONST_PARAM_SFO_ENDIAN, "SFO Index Entry", "{}[{:1}]: ofs {:#03x} size {:1} key {:12} = {}", Debug_Level)
         ## --> PBP Header
         finalizeBytesStructure(CONST_PBP_HEADER_FIELDS, CONST_PBP_ENDIAN, "PBP Header", "{}[{:1}]: ofs {:#04x} size {:1} key {:13} = {}", Debug_Level)
+        ## --> RIF PS3
+        finalizeBytesStructure(CONST_PS3_RIF_FIELDS, CONST_PS3_RIF_ENDIAN, "PS3 RIF", "{}[{:2}]: ofs {:#05x} size {:3} key {:12} = {}", Debug_Level)
         ## --> RIF PSP/PSV
         finalizeBytesStructure(CONST_PSV_RIF_FIELDS, CONST_PSV_RIF_ENDIAN, "PSP/PSV RIF", "{}[{:2}]: ofs {:#05x} size {:3} key {:12} = {}", Debug_Level)
         ## --> RIF PSM
@@ -2629,36 +2665,76 @@ if __name__ == "__main__":
 
         ## Prepare ZRIF licenses
         Rifs = collections.OrderedDict()
-        Rif_Number = 0
         if Zrif_Support and Arguments.zrif:
+            Rif_Number = 0
+            #
+            Zrif = None
+            Rif_Bytes = None
+            Rif_Size = None
+            Temp_Fields = None
+            Rif_Fields = None
+            Key = None
             for Zrif in Arguments.zrif:
                 Rif_Number += 1
-                Zrif_Bytes = bytes(base64.b64decode(Zrif.encode("ascii")))
+                if Debug_Level >= 3:
+                    dprint(">>>>> zRIF #{}:".format(Rif_Number), Zrif)
                 #
-                Decompress_Object = zlib.decompressobj(wbits=10, zdict=bytes(CONST_ZRIF_COMPRESSION_DICTIONARY))
                 Rif_Bytes = bytearray()
-                Rif_Bytes.extend(Decompress_Object.decompress(Zrif_Bytes))
-                Rif_Bytes.extend(Decompress_Object.flush())
                 #
+                if Zrif.startswith("KO"):
+                    Zrif_Bytes = bytes(base64.b64decode(Zrif.encode("ascii")))
+                    if Debug_Level >= 3:
+                        dprint(len(Zrif_Bytes), convertBytesToHexString(Zrif_Bytes, sep=""))
+                    #
+                    Decompress_Object = zlib.decompressobj(wbits=10, zdict=bytes(CONST_ZRIF_COMPRESSION_DICTIONARY))
+                    Rif_Bytes.extend(Decompress_Object.decompress(Zrif_Bytes))
+                    Rif_Bytes.extend(Decompress_Object.flush())
+                    #
+                    del Decompress_Object
+                    del Zrif_Bytes
+                else:
+                    Rif_Bytes.extend(bytes.fromhex(Zrif))
+                #
+                Rif_Size = len(Rif_Bytes)
+                if Debug_Level >= 3:
+                    dprint(Rif_Size, convertBytesToHexString(Rif_Bytes, sep=""))
+                #
+                Temp_Fields = None
                 Rif_Fields = None
-                if getInteger16BitLE(Rif_Bytes, CONST_RIF_TYPE_OFFSET) == 0:  ## PSM license
+                Rif_Type = getInteger16BitBE(Rif_Bytes, CONST_RIF_TYPE_OFFSET)
+                if Rif_Type == 0:  ## PSM license
                     Temp_Fields = struct.unpack(CONST_PSM_RIF_FIELDS["STRUCTURE_UNPACK"], Rif_Bytes)
                     Rif_Fields = convertFieldsToOrdDict(CONST_PSM_RIF_FIELDS, Temp_Fields)
-                    del Temp_Fields
+                    Rif_Fields["LIC_TYPE"] = "PSM license type"
                     #
                     if Rif_Fields["AID"] == CONST_RIF_FAKE_AID:
-                        Rif_Fields["LIC_TYPE"] = "PSM NoPsmDrm fake license"
+                        Rif_Fields["LIC_TYPE"] = " / ".join((Rif_Fields["LIC_TYPE"], "NoPsmDrm fake"))
                     else:
-                        Rif_Fields["LIC_TYPE"] = "PSM *NOT* a fake license"
+                        Rif_Fields["LIC_TYPE"] = " / ".join((Rif_Fields["LIC_TYPE"], "*NOT* a fake"))
+                elif Rif_Type == 1:  ## PS3/PSP/PSV license
+                    if Rif_Size == CONST_PS3_RIF_FIELDS["STRUCTURE_SIZE"]:
+                        Temp_Fields = struct.unpack(CONST_PS3_RIF_FIELDS["STRUCTURE_UNPACK"], Rif_Bytes)
+                        Rif_Fields = convertFieldsToOrdDict(CONST_PS3_RIF_FIELDS, Temp_Fields)
+                        Rif_Fields["LIC_TYPE"] = "PS3 license type"
+                    elif Rif_Size == CONST_PSV_RIF_FIELDS["STRUCTURE_SIZE"]:
+                        Temp_Fields = struct.unpack(CONST_PSV_RIF_FIELDS["STRUCTURE_UNPACK"], Rif_Bytes)
+                        Rif_Fields = convertFieldsToOrdDict(CONST_PSV_RIF_FIELDS, Temp_Fields)
+                        Rif_Fields["LIC_TYPE"] = "PSP/PSV license type"
+                    else:
+                        eprint("zRIF #{}:".format(Rif_Number), "Unknown RIF size {} for type {:#06x}".format(Rif_Size, Rif_Type))
+                        eprint("Input:", Zrif)
+                        eprint("Bytes:", convertBytesToHexString(Rif_Bytes, sep=""))
+                        continue
+                    #
+                    if Rif_Fields["AID"] == CONST_RIF_FAKE_AID:
+                        Rif_Fields["LIC_TYPE"] = " / ".join((Rif_Fields["LIC_TYPE"], "NoNpDrm fake"))
+                    else:
+                        Rif_Fields["LIC_TYPE"] = " / ".join((Rif_Fields["LIC_TYPE"], "*NOT* a fake"))
                 else:
-                    Temp_Fields = struct.unpack(CONST_PSV_RIF_FIELDS["STRUCTURE_UNPACK"], Rif_Bytes)
-                    Rif_Fields = convertFieldsToOrdDict(CONST_PSV_RIF_FIELDS, Temp_Fields)
-                    del Temp_Fields
-                    #
-                    if Rif_Fields["AID"] == CONST_RIF_FAKE_AID:
-                        Rif_Fields["LIC_TYPE"] = "PSV NoNpDrm fake license"
-                    else:
-                        Rif_Fields["LIC_TYPE"] = "PSV *NOT* a fake license"
+                    eprint("zRIF #{}:".format(Rif_Number), "Unknown RIF type {:#06x} with size {}".format(Rif_Type, Rif_Size))
+                    eprint("Input:", Zrif)
+                    eprint("Bytes:", convertBytesToHexString(Rif_Bytes, sep=""))
+                    continue
                 #
                 Key = Rif_Fields["CONTENT_ID"]
                 Rifs[Key] = Rif_Fields
@@ -2666,16 +2742,16 @@ if __name__ == "__main__":
 
                 ## Output additional results
                 if 50 in Arguments.format:  ## Additional debugging Output
-                    print(">>>>> Rif #{} \"{}\" ({})".format(Rif_Number, Key, Rif_Fields["LIC_TYPE"]))
+                    print(">>>>> RIF #{} \"{}\" ({})".format(Rif_Number, Key, Rif_Fields["LIC_TYPE"]))
                     dprintFieldsDict(Rif_Fields, "rif[{KEY:14}]", 3, None, print_func=print)
             #
             del Key
+            del Temp_Fields
             del Rif_Fields
+            del Rif_Size
             del Rif_Bytes
-            del Decompress_Object
-            del Zrif_Bytes
             del Zrif
-        del Rif_Number
+            del Rif_Number
 
         ## Process paths and URLs
         for Source in Arguments.source:
@@ -3043,10 +3119,10 @@ if __name__ == "__main__":
                 if Main_Sfo_Values \
                 and Key in Main_Sfo_Values \
                 and Main_Sfo_Values[Key].strip():
-                   if Debug_Level >= 2:
-                       dprint("Set international name to", Key)
-                   Results["SFO_TITLE"] = Main_Sfo_Values[Key].strip()
-                   break
+                    if Debug_Level >= 2:
+                        dprint("Set international name to", Key)
+                    Results["SFO_TITLE"] = Main_Sfo_Values[Key].strip()
+                    break
             if not "SFO_TITLE" in Results \
             and Main_Sfo_Values \
             and "TITLE" in Main_Sfo_Values \
@@ -3079,10 +3155,10 @@ if __name__ == "__main__":
                     if Main_Sfo_Values \
                     and Key in Main_Sfo_Values \
                     and Main_Sfo_Values[Key].strip():
-                       if Debug_Level >= 2:
-                           dprint("Set regional title to", Key)
-                       Results["SFO_TITLE_REGIONAL"] = Main_Sfo_Values[Key].strip()
-                       break
+                        if Debug_Level >= 2:
+                            dprint("Set regional title to", Key)
+                        Results["SFO_TITLE_REGIONAL"] = Main_Sfo_Values[Key].strip()
+                        break
             if not "SFO_TITLE_REGIONAL" in Results \
             and Main_Sfo_Values \
             and "TITLE" in Main_Sfo_Values \
@@ -3194,7 +3270,7 @@ if __name__ == "__main__":
                         Nps_Type = "PSX GAME"
                         #
                         ## Special Case: PCSC80018 "Pocketstation for PS Vita"
-                        if Results["TITLE_ID"] == "PCSC80018":
+                        if Results["TITLE_ID"] == CONST_TITLE_ID_PSV_POCKETSTATION:
                             Results["PLATFORM"] = CONST_PLATFORM.PSV
                             Results["PKG_SUB_TYPE"] = CONST_PLATFORM.PSX
                             Results["PKG_EXTRACT_ROOT_UX0"] = os.path.join("ps1emu", Results["PKG_CID_TITLE_ID1"])
@@ -3264,6 +3340,11 @@ if __name__ == "__main__":
                             Update_Hash.update("".join(("np_", Results["TITLE_ID"].strip())).encode("UTF-8"))
                             Results["TITLE_UPDATE_URL"] = "http://gs-sec.ww.np.dl.playstation.net/pl/np/{0}/{1}/{0}-ver.xml".format(Results["TITLE_ID"].strip(), Update_Hash.hexdigest())
                             del Update_Hash
+                            #
+                            Livearea_Hash = Cryptodome.Hash.HMAC.new(CONST_PKG3_UPDATE_KEYS[3]["KEY"], digestmod=Cryptodome.Hash.SHA256)
+                            Livearea_Hash.update("".join(("np_", Results["TITLE_ID"].strip())).encode("UTF-8"))
+                            Results["LIVEAREA_UPDATE_URL"] = "http://livearea.np.dl.playstation.net/livearea/e/info/np/{0}/{1}/{0}-0.pkg".format(Results["TITLE_ID"].strip(), Livearea_Hash.hexdigest())
+                            del Livearea_Hash
                     elif Results["PKG_CONTENT_TYPE"] == 0x16:
                         Results["PLATFORM"] = CONST_PLATFORM.PSV
                         Results["PKG_TYPE"] = CONST_PKG_TYPE.DLC
@@ -3280,6 +3361,28 @@ if __name__ == "__main__":
                             Update_Hash.update("".join(("np_", Results["TITLE_ID"].strip())).encode("UTF-8"))
                             Results["TITLE_UPDATE_URL"] = "http://gs-sec.ww.np.dl.playstation.net/pl/np/{0}/{1}/{0}-ver.xml".format(Results["TITLE_ID"].strip(), Update_Hash.hexdigest())
                             del Update_Hash
+                            #
+                            Livearea_Hash = Cryptodome.Hash.HMAC.new(CONST_PKG3_UPDATE_KEYS[2]["KEY"], digestmod=Cryptodome.Hash.SHA256)
+                            Livearea_Hash.update("".join(("np_", Results["TITLE_ID"].strip())).encode("UTF-8"))
+                            Results["LIVEAREA_UPDATE_URL"] = "http://livearea.np.dl.playstation.net/livearea/e/info/np/{0}/{1}/{0}-0.pkg".format(Results["TITLE_ID"].strip(), Livearea_Hash.hexdigest())
+                    elif Results["PKG_CONTENT_TYPE"] == 0x17:
+                        Results["PLATFORM"] = CONST_PLATFORM.PSV
+                        Results["PKG_TYPE"] = CONST_PKG_TYPE.LIVEAREA
+                        #
+                        Results["PKG_EXTRACT_ROOT_UX0"] = os.path.join("appmeta-ur0", Results["CID_TITLE_ID1"])
+                        #
+                        Results["PKG_EXTRACT_ROOT_CONT"] = Pkg_Header["CONTENT_ID"][7:]
+                        #
+                        if "TITLE_ID" in Results \
+                        and Results["TITLE_ID"].strip():
+                            Update_Hash = Cryptodome.Hash.HMAC.new(CONST_PKG3_UPDATE_KEYS[2]["KEY"], digestmod=Cryptodome.Hash.SHA256)
+                            Update_Hash.update("".join(("np_", Results["TITLE_ID"].strip())).encode("UTF-8"))
+                            Results["TITLE_UPDATE_URL"] = "http://gs-sec.ww.np.dl.playstation.net/pl/np/{0}/{1}/{0}-ver.xml".format(Results["TITLE_ID"].strip(), Update_Hash.hexdigest())
+                            del Update_Hash
+                            #
+                            Livearea_Hash = Cryptodome.Hash.HMAC.new(CONST_PKG3_UPDATE_KEYS[2]["KEY"], digestmod=Cryptodome.Hash.SHA256)
+                            Livearea_Hash.update("".join(("np_", Results["TITLE_ID"].strip())).encode("UTF-8"))
+                            Results["LIVEAREA_UPDATE_URL"] = "http://livearea.np.dl.playstation.net/livearea/e/info/np/{0}/{1}/{0}-0.pkg".format(Results["TITLE_ID"].strip(), Livearea_Hash.hexdigest())
                     elif Results["PKG_CONTENT_TYPE"] == 0x1F:
                         Results["PLATFORM"] = CONST_PLATFORM.PSV
                         Results["PKG_TYPE"] = CONST_PKG_TYPE.THEME
@@ -3467,6 +3570,9 @@ if __name__ == "__main__":
                     if "TITLE_UPDATE_URL" in Results \
                     and Results["TITLE_UPDATE_URL"].strip():
                         print("{:13} {}".format("Update URL:", Results["TITLE_UPDATE_URL"]))
+                    if "LIVEAREA_UPDATE_URL" in Results \
+                    and Results["LIVEAREA_UPDATE_URL"].strip():
+                        print("{:13} {}".format("Livearea URL:", Results["LIVEAREA_UPDATE_URL"]))
                     print()
                 elif Output_Format == 1:  ## Linux Shell Variable Output
                     if "PKG_TOTAL_SIZE" in Results \
@@ -3598,6 +3704,9 @@ if __name__ == "__main__":
                     if "TITLE_UPDATE_URL" in Results \
                     and Results["TITLE_UPDATE_URL"].strip():
                         JSON_Output["results"]["titleUpdateUrl"] = Results["TITLE_UPDATE_URL"]
+                    if "LIVEAREA_UPDATE_URL" in Results \
+                    and Results["LIVEAREA_UPDATE_URL"].strip():
+                        JSON_Output["results"]["liveareaUpdateUrl"] = Results["LIVEAREA_UPDATE_URL"]
                     JSON_Output["results"]["npsType"] = Results["NPS_TYPE"]
                     if "PLATFORM" in Results:
                         JSON_Output["results"]["pkgPlatform"] = Results["PLATFORM"]
@@ -3618,7 +3727,7 @@ if __name__ == "__main__":
                     if "MD_TITLE_ID" in Results:
                         JSON_Output["results"]["mdTitleId"] = Results["MD_TITLE_ID"]
                         if "MD_TID_DIFFER" in Results:
-                           JSON_Output["results"]["mdTidDiffer"] = Results["MD_TID_DIFFER"]
+                            JSON_Output["results"]["mdTidDiffer"] = Results["MD_TID_DIFFER"]
                     if "PKG_SFO_OFFSET" in Results:
                         JSON_Output["results"]["pkgSfoOffset"] = Results["PKG_SFO_OFFSET"]
                     if "PKG_SFO_OFFSET" in Results:
@@ -3646,9 +3755,9 @@ if __name__ == "__main__":
                         JSON_Output["results"]["sfoCidTitleId1"] = Results["SFO_CID_TITLE_ID1"]
                         JSON_Output["results"]["sfoCidTitleId2"] = Results["SFO_CID_TITLE_ID2"]
                         if "SFO_CID_DIFFER" in Results:
-                           JSON_Output["results"]["sfoCidDiffer"] = Results["SFO_CID_DIFFER"]
+                            JSON_Output["results"]["sfoCidDiffer"] = Results["SFO_CID_DIFFER"]
                         if "SFO_TID_DIFFER" in Results:
-                           JSON_Output["results"]["sfoTidDiffer"] = Results["SFO_TID_DIFFER"]
+                            JSON_Output["results"]["sfoTidDiffer"] = Results["SFO_TID_DIFFER"]
                     #
                     if Output_Format == 98:  ## Analysis JSON Output
                         if Pkg_Header:
@@ -3850,11 +3959,11 @@ if __name__ == "__main__":
                         #
                         if Pkg_Magic == CONST_PKG3_MAGIC:
                             if Arguments.quiet <= 0:
-                                eprint("{} unencrypted PKG3 header data from offset {:#x} and size {}".format(Extract["FUNCTION"], 0, len(Package["HEAD_BYTES"])), prefix="[{}] ".format(Extract["KEY"]))
+                                eprint("{} unencrypted PKG3 header data from offset {:#x} with size {}".format(Extract["FUNCTION"], 0, len(Package["HEAD_BYTES"])), prefix="[{}] ".format(Extract["KEY"]))
                             Extract["BYTES_WRITTEN"] += Extract["STREAM"].write(Package["HEAD_BYTES"])
                             #
                             if Arguments.quiet <= 0:
-                                eprint("{} {} PKG3 Items Info from offset {:#x} and size {}".format(Extract["FUNCTION"], Extract["DATATYPE"].lower(), Package["ITEMS_INFO_BYTES"]["ALIGN"]["OFS"]+Extractions_Fields["DATAOFS"], Package["ITEMS_INFO_BYTES"]["ALIGN"]["SIZE"]), prefix="[{}] ".format(Extract["KEY"]))
+                                eprint("{} {} PKG3 Items Info from offset {:#x} with size {}".format(Extract["FUNCTION"], Extract["DATATYPE"].lower(), Package["ITEMS_INFO_BYTES"]["ALIGN"]["OFS"]+Extractions_Fields["DATAOFS"], Package["ITEMS_INFO_BYTES"]["ALIGN"]["SIZE"]), prefix="[{}] ".format(Extract["KEY"]))
                             Extract["BYTES_WRITTEN"] += Extract["STREAM"].write(Package["ITEMS_INFO_BYTES"][Extract["DATATYPE"]])
                     #
                     del Extract
@@ -3961,7 +4070,7 @@ if __name__ == "__main__":
                 ## Extract PKG3 items
                 Path_Pattern = None
                 if Arguments.pathpattern \
-                and CONST_EXTRACT_CONTENT in Extract:
+                and CONST_EXTRACT_CONTENT in Extractions:
                     Path_Pattern = re.compile(Arguments.pathpattern, flags=re.UNICODE|re.IGNORECASE)
                 #
                 if not Pkg_Item_Entries is None \
@@ -4029,13 +4138,25 @@ if __name__ == "__main__":
                                         and Name_Parts[0] == "sce_sys" \
                                         and Name_Parts[1] == "package" :
                                             Extract["SCESYS_PACKAGE_CREATED"] = True
+                                        #
+                                        if Key == CONST_EXTRACT_UX0:
+                                            ## UX0 PSV extraction
+                                            ## Special case: PSV Livearea extraction
+                                            if Results["PKG_CONTENT_TYPE"] == 0x17 \
+                                            and len(Name_Parts) > 0 \
+                                            and Name_Parts[0] == "sce_sys":
+                                                del Name_Parts[0]
                                     ## --> PSM packages
                                     elif Results["PLATFORM"] == CONST_PLATFORM.PSM:
                                         if Key == CONST_EXTRACT_UX0:
                                             ## UX0 PSM extraction: Rename base directory
                                             if len(Name_Parts) > 0 \
                                             and Name_Parts[0] == "contents":
-                                                Name_Parts[0] = "RO"
+                                                if len(Name_Parts) > 1 \
+                                                and Name_Parts[1] == "runtime":
+                                                    del Name_Parts[0]
+                                                else:
+                                                    Name_Parts[0] = "RO"
 
                                 ## Build and check item extract path
                                 if Name_Parts:
@@ -4170,20 +4291,36 @@ if __name__ == "__main__":
                                                     Name_Parts = None  ## skip file
                                         ## --> PSV packages
                                         elif Results["PLATFORM"] == CONST_PLATFORM.PSV:
-                                            ## Special case: PSV encrypted sce_sys/package/digs.bin as body.bin
-                                            if len(Name_Parts) == 3 \
-                                            and Name_Parts[0] == "sce_sys" \
-                                            and Name_Parts[1] == "package" \
-                                            and Name_Parts[2] == "digs.bin":  ## Item_Flags == 0x18
-                                                Extract["ITEM_DATATYPE"] = CONST_DATATYPE_AS_IS
-                                                Name_Parts[2] = "body.bin"
+                                            if Key == CONST_EXTRACT_UX0:
+                                                ## UX0 PSV extraction
+                                                ## Special case: PSV encrypted sce_sys/package/(digs|cert).bin as body.bin
+                                                if len(Name_Parts) == 3 \
+                                                and Name_Parts[0] == "sce_sys" \
+                                                and Name_Parts[1] == "package" \
+                                                and (Name_Parts[2] == "digs.bin" \
+                                                     or Name_Parts[2] == "cert.bin"):  ## digs.bin: Item_Flags == 0xa0007018/0xa0007818 / cert.bin: Item_Flags == 0xa0007017
+                                                    Extract["ITEM_DATATYPE"] = CONST_DATATYPE_AS_IS
+                                                    Name_Parts[2] = "body.bin"
+                                                    ## Display rename
+                                                    if Arguments.quiet <= 0:
+                                                        eprint("Renaming #{} \"{}\" to \"{}\"".format(Item_Entry["INDEX"], Item_Entry["NAME"], "/".join(Name_Parts)), prefix="[{}] ".format(Extract["KEY"]))
+                                                ## Special case: PSV Livearea extraction
+                                                if Results["PKG_CONTENT_TYPE"] == 0x17 \
+                                                and len(Name_Parts) > 0 \
+                                                and Name_Parts[0] == "sce_sys":
+                                                    del Name_Parts[0]
                                         ## --> PSM packages
                                         elif Results["PLATFORM"] == CONST_PLATFORM.PSM:
-                                            if Key == CONST_EXTRACT_UX0:  ## UX0-only PSM extraction
-                                                ## UX0 extraction: Rename base directory
+                                            if Key == CONST_EXTRACT_UX0:
+                                                ## UX0 PSM extraction
+                                                ## Rename base directory
                                                 if len(Name_Parts) > 0 \
                                                 and Name_Parts[0] == "contents":
-                                                    Name_Parts[0] = "RO"
+                                                    if len(Name_Parts) > 1 \
+                                                    and Name_Parts[1] == "runtime":
+                                                        del Name_Parts[0]
+                                                    else:
+                                                        Name_Parts[0] = "RO"
 
                                 ## Build and check item extract path
                                 if Name_Parts:
@@ -4258,7 +4395,7 @@ if __name__ == "__main__":
                                         Values = ["aligned ", Extractions_Fields["DATAOFS"]+Item_Entry["ALIGN"]["OFS"], Item_Entry["ALIGN"]["SIZE"]]
                                     else:
                                         Values = ["", Extractions_Fields["DATAOFS"]+Item_Entry["DATAOFS"], Item_Entry["DATASIZE"]]
-                                    eprint("{} {} {} from {}offset {:#x} and size {}".format(Extract["FUNCTION"], Item_Name, Extract["ITEM_DATATYPE"].lower(), *Values), prefix="[{}] ".format(Extract["KEY"]))
+                                    eprint("{} {} {} from {}offset {:#x} with size {}".format(Extract["FUNCTION"], Item_Name, Extract["ITEM_DATATYPE"].lower(), *Values), prefix="[{}] ".format(Extract["KEY"]))
                                     del Values
                                     del Item_Name
 
@@ -4327,7 +4464,8 @@ if __name__ == "__main__":
                             or Key == CONST_EXTRACT_CONTENT) \
                         and "PLATFORM" in Results:  ## UX0/CONTENT extraction
                             ## --> PSV packages
-                            if Results["PLATFORM"] == CONST_PLATFORM.PSV:
+                            if Results["PLATFORM"] == CONST_PLATFORM.PSV \
+                            and Results["PKG_CONTENT_TYPE"] != 0x17:
                                 ## Dirs
                                 if Extract["DIRS"]:
                                     Dirs = []
@@ -4449,7 +4587,7 @@ if __name__ == "__main__":
                                                 continue  ## next file
                                             #
                                             Values = ["Write", "\"{}\"".format(Extract["ITEM_NAME"]), "license", "", "zrif", len(Rifs[Results["PKG_CONTENT_ID"]]["BYTES"])]
-                                        eprint("{} {} {} from {}{} and size {}".format(*Values), prefix="[{}] ".format(Extract["KEY"]))
+                                        eprint("{} {} {} from {}{} with size {}".format(*Values), prefix="[{}] ".format(Extract["KEY"]))
                                         del Values
 
                                     ## Build and check target path

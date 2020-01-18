@@ -1,5 +1,18 @@
 # PSN_get_pkg_info.py - Changelog
 
+## 2020.01.00.beta1
+* NEW: Adapt PSV/PSM `--ux0` extraction changes from lusid1's pkg2zip 2.2.2
+  * PSV: Also rename `sce_sys/package/cert.bin` to `body.bin` and extract it encrypted as-is
+  * PSM: Put runtime folder (e.g. Unity) not inside extra RO folder
+* NEW: Add recognition and "UX0" (actually UR0) extraction for PSV Livearea update packages with content type 23/0x17 and key #3 (issue #3)
+* NEW: Add recognition for PS3 RIF licenses
+* NEW: All timestamps in UTC
+* NEW: Support dates and timestamps for JSON output
+* FIX: Error in `--pathpattern` code
+* FIX: PSV `--content` extraction do not rename `sce_sys/package/(digs|cert).bin` and extract it decrypted
+* FIX: Update all firmware versions for http headers
+* FIX: RIF data is actually in big endian
+
 ## 2019.06.30.post1
 * FIX: Still display determined data if reading/decryption of items fail
 

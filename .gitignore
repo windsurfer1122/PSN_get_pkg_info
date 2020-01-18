@@ -1,0 +1,10 @@
+# Eclipse specific
+.settings/
+.classpath
+.project
+
+# PyDev specific (Python IDE for Eclipse)
+.pydevproject
+
+# others
+_*

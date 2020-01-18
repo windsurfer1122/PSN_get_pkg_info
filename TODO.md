@@ -15,8 +15,14 @@
 - [ ] `-x` extract functionality from pkg2zip (similar to `--make-dirs=ux` extract functionality from pkg_dec)
   * [x] extraction of PSV/PSM packages
   * [x] zrif support for PSV/PSM packages
-  * [x] extraction of PSX packages
+  * [ ] extraction of PSX packages
+    * [ ] pbp support
+    * [ ] iso support (see pkg2zip_out.c, variable out_zipped)
+    * [ ] cso support (see pkg2zip_out.c, variable out_zipped)
   * [ ] extraction of PSP packages
+    * [ ] pbp support
+    * [ ] iso support (see pkg2zip_out.c, variable out_zipped)
+    * [ ] cso support (see pkg2zip_out.c, variable out_zipped)
   * [ ] zip support (see pkg2zip_out.c, variable out_zipped)
 - [ ] Read PSM's "contents/Application/app.info" for details (wiki entries present?)
 
@@ -50,6 +56,9 @@
   * [x] extraction of PS3 packages
 - [x] --raw functionality from pkg2dec
   * Needs to read complete file.
+
+## Test Cases
+* Livearea Update PKG: http://livearea.np.dl.playstation.net/livearea/e/info/np/PCSC00001/ff6e27b59c527e6d133e8548783f4431c3a35c892d6aa620c1d9a4444b8b134c/PCSC00001-0.pkg
 
 ## Done
 - [x] Parse PBP PARAM.SFO inside a PS3/PSX/PSP package
