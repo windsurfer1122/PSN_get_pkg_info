@@ -1363,7 +1363,7 @@ def dprintBytesStructure(CONST_STRUCTURE_FIELDS, CONST_STRUCTURE_ENDIAN, temp_fi
             elif CONST_STRUCTURE_ENDIAN == CONST_FMT_LITTLE_ENDIAN \
             and (field_format == CONST_FMT_UINT16 \
                  or field_format == CONST_FMT_UINT32 \
-                 or field_format == CONST_FMT_UINT64) :
+                 or field_format == CONST_FMT_UINT64):
                 output = "".join((output, " => ", convertBytesToHexString(temp_fields[field_def["INDEX"]], format="".join((CONST_FMT_BIG_ENDIAN, field_format)), sep=sep)))
             #
             dprint(output)
@@ -2976,7 +2976,7 @@ if __name__ == "__main__":
                 ## Get PKG3 unencrypted tail data
                 if Debug_Level >= 2:
                     dprint(">>>>> PKG3 Tail:")
-                    dprint("Get PKG3 unencrypted tail data from offset {:#x} size {}".format(Pkg_Header["DATAOFS"]+Pkg_Header["DATASIZE"], Pkg_Header["TOTALSIZE"]-(Pkg_Header["DATAOFS"]+Pkg_Header["DATASIZE"])))
+                    dprint("Get PKG3 unencrypted tail data from offset {:#x} with size {}".format(Pkg_Header["DATAOFS"]+Pkg_Header["DATASIZE"], Pkg_Header["TOTALSIZE"]-(Pkg_Header["DATAOFS"]+Pkg_Header["DATASIZE"])))
                 try:
                     Package["TAIL_BYTES"] = Input_Stream.read(Pkg_Header["DATAOFS"]+Pkg_Header["DATASIZE"], Pkg_Header["TOTALSIZE"]-(Pkg_Header["DATAOFS"]+Pkg_Header["DATASIZE"]), function_debug_level=max(0, Debug_Level))
                 except:
@@ -3207,7 +3207,7 @@ if __name__ == "__main__":
                                         Results["SFO_TITLE"] = " ".join((Results["TITLE_ID"], "- Unlock Key"))
                                         break
                         #
-                        Results["PKG_EXTRACT_ROOT_CONT"] = Pkg_Header["CONTENT_ID"][7:]
+                        Results["PKG_EXTRACT_CONT_ROOT"] = Pkg_Header["CONTENT_ID"][7:]
                         #
                         if "TITLE_ID" in Results \
                         and Results["TITLE_ID"].strip():
@@ -3220,7 +3220,7 @@ if __name__ == "__main__":
                         if Results["PKG_CONTENT_TYPE"] == 0x14:
                             Results["PKG_SUB_TYPE"] = CONST_PKG_SUB_TYPE.PSP_REMASTER
                         #
-                        Results["PKG_EXTRACT_ROOT_CONT"] = Pkg_Header["CONTENT_ID"][7:]
+                        Results["PKG_EXTRACT_CONT_ROOT"] = Pkg_Header["CONTENT_ID"][7:]
                         #
                         Nps_Type = "PS3 GAME"
                         #
@@ -3237,12 +3237,12 @@ if __name__ == "__main__":
                             Results["PLATFORM"] = CONST_PLATFORM.PSP
                             Nps_Type = "PSP THEME"
                         #
-                        Results["PKG_EXTRACT_ROOT_CONT"] = Pkg_Header["CONTENT_ID"][7:]
+                        Results["PKG_EXTRACT_CONT_ROOT"] = Pkg_Header["CONTENT_ID"][7:]
                     elif Results["PKG_CONTENT_TYPE"] == 0xD:
                         Results["PLATFORM"] = CONST_PLATFORM.PS3
                         Results["PKG_TYPE"] = CONST_PKG_TYPE.AVATAR
                         #
-                        Results["PKG_EXTRACT_ROOT_CONT"] = Pkg_Header["CONTENT_ID"][7:]
+                        Results["PKG_EXTRACT_CONT_ROOT"] = Pkg_Header["CONTENT_ID"][7:]
                         #
                         Nps_Type = "PS3 AVATAR"
                     elif Results["PKG_CONTENT_TYPE"] == 0x12:  ## PS2 /SFO_CATEGORY = 2P
@@ -3250,7 +3250,7 @@ if __name__ == "__main__":
                         Results["PKG_TYPE"] = CONST_PKG_TYPE.GAME
                         Results["PKG_SUB_TYPE"] = CONST_PKG_SUB_TYPE.PS2
                         #
-                        Results["PKG_EXTRACT_ROOT_CONT"] = Pkg_Header["CONTENT_ID"][7:]
+                        Results["PKG_EXTRACT_CONT_ROOT"] = Pkg_Header["CONTENT_ID"][7:]
                         #
                         Nps_Type = "PS3 GAME"
                         #
@@ -3262,10 +3262,10 @@ if __name__ == "__main__":
                         Results["PLATFORM"] = CONST_PLATFORM.PSX
                         Results["PKG_TYPE"] = CONST_PKG_TYPE.GAME
                         #
-                        Results["PKG_EXTRACT_ROOT_UX0"] = os.path.join("pspemu", "PSP", "GAME", Results["PKG_CID_TITLE_ID1"])
-                        Results["PKG_EXTRACT_LIC_UX0"] = os.path.join("pspemu", "PSP", "LICENSE", "".join((Results["PKG_CONTENT_ID"], ".rif")))
+                        Results["PKG_EXTRACT_UX0_ROOT"] = os.path.join("pspemu", "PSP", "GAME", Results["PKG_CID_TITLE_ID1"])
+                        Results["PKG_EXTRACT_UX0_LIC"] = os.path.join("pspemu", "PSP", "LICENSE", "".join((Results["PKG_CONTENT_ID"], ".rif")))
                         #
-                        Results["PKG_EXTRACT_ROOT_CONT"] = Pkg_Header["CONTENT_ID"][7:]
+                        Results["PKG_EXTRACT_CONT_ROOT"] = Pkg_Header["CONTENT_ID"][7:]
                         #
                         Nps_Type = "PSX GAME"
                         #
@@ -3273,7 +3273,7 @@ if __name__ == "__main__":
                         if Results["TITLE_ID"] == CONST_TITLE_ID_PSV_POCKETSTATION:
                             Results["PLATFORM"] = CONST_PLATFORM.PSV
                             Results["PKG_SUB_TYPE"] = CONST_PLATFORM.PSX
-                            Results["PKG_EXTRACT_ROOT_UX0"] = os.path.join("ps1emu", Results["PKG_CID_TITLE_ID1"])
+                            Results["PKG_EXTRACT_UX0_ROOT"] = os.path.join("ps1emu", Results["PKG_CID_TITLE_ID1"])
                             Nps_Type = "PSV GAME"
                         #
                         if Results["PKG_CONTENT_TYPE"] == 0x6 \
@@ -3298,8 +3298,8 @@ if __name__ == "__main__":
                             Nps_Type = "PSP GAME"
                         #
                         ## TODO: Verify when ISO and when GAME directory has to be used?
-                        Results["PKG_EXTRACT_ROOT_UX0"] = os.path.join("pspemu", "PSP", "GAME", Results["PKG_CID_TITLE_ID1"])
-                        Results["PKG_EXTRACT_ISOR_UX0"] = os.path.join("pspemu", "ISO")
+                        Results["PKG_EXTRACT_UX0_ROOT"] = os.path.join("pspemu", "PSP", "GAME", Results["PKG_CID_TITLE_ID1"])
+                        Results["PKG_EXTRACT_UX0_ISOR"] = os.path.join("pspemu", "ISO")
                         Results["PKG_EXTRACT_ISO_NAME"] = "".join((Results["SFO_TITLE"], " [", Results["PKG_CID_TITLE_ID1"], "]", ".iso"))
                         #
                         if Results["PKG_CONTENT_TYPE"] == 0x7:
@@ -3313,7 +3313,7 @@ if __name__ == "__main__":
                         elif Results["PKG_CONTENT_TYPE"] == 0x10:
                             Results["PKG_SUB_TYPE"] = CONST_PKG_SUB_TYPE.PSP_NEOGEO
                         #
-                        Results["PKG_EXTRACT_ROOT_CONT"] = Pkg_Header["CONTENT_ID"][7:]
+                        Results["PKG_EXTRACT_CONT_ROOT"] = Pkg_Header["CONTENT_ID"][7:]
                         #
                         if "TITLE_ID" in Results \
                         and Results["TITLE_ID"].strip():
@@ -3325,14 +3325,14 @@ if __name__ == "__main__":
                         if "SFO_CATEGORY" in Results \
                         and Results["SFO_CATEGORY"] == "gp":
                             Results["PKG_TYPE"] = CONST_PKG_TYPE.PATCH
-                            Results["PKG_EXTRACT_ROOT_UX0"] = os.path.join("patch", Results["CID_TITLE_ID1"])
+                            Results["PKG_EXTRACT_UX0_ROOT"] = os.path.join("patch", Results["CID_TITLE_ID1"])
                             Nps_Type = "PSV UPDATE"
                         else:
                             Results["PKG_TYPE"] = CONST_PKG_TYPE.GAME
-                            Results["PKG_EXTRACT_ROOT_UX0"] = os.path.join("app", Results["CID_TITLE_ID1"])
+                            Results["PKG_EXTRACT_UX0_ROOT"] = os.path.join("app", Results["CID_TITLE_ID1"])
                             Nps_Type = "PSV GAME"
                         #
-                        Results["PKG_EXTRACT_ROOT_CONT"] = Pkg_Header["CONTENT_ID"][7:]
+                        Results["PKG_EXTRACT_CONT_ROOT"] = Pkg_Header["CONTENT_ID"][7:]
                         #
                         if "TITLE_ID" in Results \
                         and Results["TITLE_ID"].strip():
@@ -3349,9 +3349,9 @@ if __name__ == "__main__":
                         Results["PLATFORM"] = CONST_PLATFORM.PSV
                         Results["PKG_TYPE"] = CONST_PKG_TYPE.DLC
                         #
-                        Results["PKG_EXTRACT_ROOT_UX0"] = os.path.join("addcont", Results["CID_TITLE_ID1"], Results["CID_TITLE_ID2"])
+                        Results["PKG_EXTRACT_UX0_ROOT"] = os.path.join("addcont", Results["CID_TITLE_ID1"], Results["CID_TITLE_ID2"])
                         #
-                        Results["PKG_EXTRACT_ROOT_CONT"] = Pkg_Header["CONTENT_ID"][7:]
+                        Results["PKG_EXTRACT_CONT_ROOT"] = Pkg_Header["CONTENT_ID"][7:]
                         #
                         Nps_Type = "PSV DLC"
                         #
@@ -3369,9 +3369,9 @@ if __name__ == "__main__":
                         Results["PLATFORM"] = CONST_PLATFORM.PSV
                         Results["PKG_TYPE"] = CONST_PKG_TYPE.LIVEAREA
                         #
-                        Results["PKG_EXTRACT_ROOT_UX0"] = os.path.join("appmeta-ur0", Results["CID_TITLE_ID1"])
+                        Results["PKG_EXTRACT_UX0_ROOT"] = os.path.join("appmeta-ur0", Results["CID_TITLE_ID1"])
                         #
-                        Results["PKG_EXTRACT_ROOT_CONT"] = Pkg_Header["CONTENT_ID"][7:]
+                        Results["PKG_EXTRACT_CONT_ROOT"] = Pkg_Header["CONTENT_ID"][7:]
                         #
                         if "TITLE_ID" in Results \
                         and Results["TITLE_ID"].strip():
@@ -3387,17 +3387,17 @@ if __name__ == "__main__":
                         Results["PLATFORM"] = CONST_PLATFORM.PSV
                         Results["PKG_TYPE"] = CONST_PKG_TYPE.THEME
                         #
-                        Results["PKG_EXTRACT_ROOT_UX0"] = os.path.join("theme", "-".join((Results["CID_TITLE_ID1"], Results["CID_TITLE_ID2"])))
+                        Results["PKG_EXTRACT_UX0_ROOT"] = os.path.join("theme", "-".join((Results["CID_TITLE_ID1"], Results["CID_TITLE_ID2"])))
                         ## TODO/FUTURE: bgdl
                         ## - find next free xxxxxxxx dir (hex 00000000-FFFFFFFF)
                         ##   Note that Vita has issues with handling more than 32 bgdls at once
                         ## - package sub dir is Results["PKG_CID_TITLE_ID1"] for Game/DLC/Theme
                         ## - create additional d0/d1.pdb and temp.dat files in root dir for Game/Theme
                         ## - create additional f0.pdb for DLC
-                        #Results["PKG_EXTRACT_ROOT_UX0"] = os.path.join("bgdl", "t", "xxxxxx")
+                        #Results["PKG_EXTRACT_UX0_ROOT"] = os.path.join("bgdl", "t", "xxxxxx")
                         #, )))
                         #
-                        Results["PKG_EXTRACT_ROOT_CONT"] = Pkg_Header["CONTENT_ID"][7:]
+                        Results["PKG_EXTRACT_CONT_ROOT"] = Pkg_Header["CONTENT_ID"][7:]
                         #
                         Nps_Type = "PSV THEME"
                     ## --> PSM packages
@@ -3406,16 +3406,16 @@ if __name__ == "__main__":
                         Results["PLATFORM"] = CONST_PLATFORM.PSM
                         Results["PKG_TYPE"] = CONST_PKG_TYPE.GAME
                         #
-                        Results["PKG_EXTRACT_ROOT_UX0"] = os.path.join("psm", Results["PKG_CID_TITLE_ID1"])
+                        Results["PKG_EXTRACT_UX0_ROOT"] = os.path.join("psm", Results["PKG_CID_TITLE_ID1"])
                         #
-                        Results["PKG_EXTRACT_ROOT_CONT"] = Pkg_Header["CONTENT_ID"][7:]
+                        Results["PKG_EXTRACT_CONT_ROOT"] = Pkg_Header["CONTENT_ID"][7:]
                         #
                         Nps_Type = "PSM GAME"
                     ## --> UNKNOWN packages
                     else:
                         eprint("PKG content type {0}/{0:#0x}.".format(Results["PKG_CONTENT_TYPE"]), Input_Stream.getSource(function_debug_level=max(0, Debug_Level)), prefix="[UNKNOWN] ")
                         #
-                        Results["PKG_EXTRACT_ROOT_CONT"] = Pkg_Header["CONTENT_ID"][7:]
+                        Results["PKG_EXTRACT_CONT_ROOT"] = Pkg_Header["CONTENT_ID"][7:]
             ## --> PKG4
             elif Pkg_Magic == CONST_PKG4_MAGIC:
                 Results["PLATFORM"] = CONST_PLATFORM.PS4
@@ -3451,7 +3451,7 @@ if __name__ == "__main__":
             elif Pkg_Magic == CONST_PBP_MAGIC:
                 pass  ## TODO
                 #
-                Results["PKG_EXTRACT_ROOT_CONT"] = Results["TITLE_ID"]
+                Results["PKG_EXTRACT_CONT_ROOT"] = Results["TITLE_ID"]
             #
             Results["NPS_TYPE"] = Nps_Type
             ## e) Media/App/Firmware Version
@@ -3971,7 +3971,7 @@ if __name__ == "__main__":
                 ## UX0 extraction
                 if Arguments.ux0 \
                 and Pkg_Magic == CONST_PKG3_MAGIC:
-                    if "PKG_EXTRACT_ROOT_UX0" in Results:
+                    if "PKG_EXTRACT_UX0_ROOT" in Results:
                         Extractions[CONST_EXTRACT_UX0] = {}
                         Extract = Extractions[CONST_EXTRACT_UX0]
                         Extract["KEY"] = CONST_EXTRACT_UX0
@@ -3993,7 +3993,7 @@ if __name__ == "__main__":
                         #
                         Extract["TOPDIR"] = Arguments.ux0
                         #
-                        Extract["ROOT"] = os.path.join(Extract["TOPDIR"], Results["PKG_EXTRACT_ROOT_UX0"])
+                        Extract["ROOT"] = os.path.join(Extract["TOPDIR"], Results["PKG_EXTRACT_UX0_ROOT"])
                         if Arguments.quiet <= 1:
                             eprint(">>>>> Extraction Directory:", Extract["ROOT"], prefix="[{}] ".format(Extract["KEY"]))
                         #
@@ -4002,8 +4002,8 @@ if __name__ == "__main__":
                         if createDirectory(Extract["ROOT"], "package extraction", Extract["KEY"], True, Arguments.quiet, max(0, Debug_Level)) != 0:
                             Extract["PROCESS"] = False
                         #
-                        if "PKG_EXTRACT_ISOR_UX0" in Results:
-                            Extract["ROOT_ISO"] = os.path.join(Extract["TOPDIR"], Results["PKG_EXTRACT_ISOR_UX0"])
+                        if "PKG_EXTRACT_UX0_ISOR" in Results:
+                            Extract["ROOT_ISO"] = os.path.join(Extract["TOPDIR"], Results["PKG_EXTRACT_UX0_ISOR"])
                             Extract["NAME_ISO"] = Results["PKG_EXTRACT_ISO_NAME"]
                             #
                             if createDirectory(Extract["ROOT_ISO"], "package iso extraction", Extract["KEY"], True, Arguments.quiet, max(0, Debug_Level)) != 0:
@@ -4025,7 +4025,7 @@ if __name__ == "__main__":
 
                 ## CONTENT extraction
                 if Arguments.content:
-                    if "PKG_EXTRACT_ROOT_CONT" in Results:
+                    if "PKG_EXTRACT_CONT_ROOT" in Results:
                         Extractions[CONST_EXTRACT_CONTENT] = {}
                         Extract = Extractions[CONST_EXTRACT_CONTENT]
                         Extract["KEY"] = CONST_EXTRACT_CONTENT
@@ -4048,7 +4048,7 @@ if __name__ == "__main__":
                         if Arguments.nosubdirs:
                             Extract["ROOT"] = Extract["TOPDIR"]
                         else:
-                            Extract["ROOT"] = os.path.join(Extract["TOPDIR"], Results["PKG_EXTRACT_ROOT_CONT"])
+                            Extract["ROOT"] = os.path.join(Extract["TOPDIR"], Results["PKG_EXTRACT_CONT_ROOT"])
                         if Arguments.quiet <= 1:
                             eprint(">>>>> Extraction Directory:", Extract["ROOT"], prefix="[{}] ".format(Extract["KEY"]), end="")
                             eprint(" (no subdirs created)" if Arguments.nosubdirs else "", prefix=None)
@@ -4086,22 +4086,26 @@ if __name__ == "__main__":
                             Item_Flags = Item_Entry["FLAGS"] & 0xff
                         Item_Name_Parts = Item_Entry["NAME"].split("/")
                         #
-                        if Item_Entry["IS_FILE_OFS"] == -1:
-                            ## 0x04: Directory
-                            ## 0x12: Directory
-                            for Key in Extractions:
-                                Extract = Extractions[Key]
-                                #
-                                if Extract["SEPARATE_FILES"] \
-                                and "STREAM" in Extract:
-                                    del Extract["STREAM"]
-                                if "ITEM_EXTRACT_PATH" in Extract:
-                                    del Extract["ITEM_EXTRACT_PATH"]
-                                if "ITEM_EXTRACT_DIR" in Extract:
-                                    del Extract["ITEM_EXTRACT_DIR"]
-                                #
-                                if not Extract["DIRS"] \
-                                or not Extract["PROCESS"]:
+                        Key = None
+                        Extract = None
+                        for Key in Extractions:
+                            Extract = Extractions[Key]
+                            #
+                            if not Extract["PROCESS"]:
+                                continue  ## next extract
+                            #
+                            if Extract["SEPARATE_FILES"] \
+                            and "STREAM" in Extract:
+                                del Extract["STREAM"]
+                            if "ITEM_EXTRACT_PATH" in Extract:
+                                del Extract["ITEM_EXTRACT_PATH"]
+                            if "ITEM_EXTRACT_DIR" in Extract:
+                                del Extract["ITEM_EXTRACT_DIR"]
+                            #
+                            if Item_Entry["IS_FILE_OFS"] == -1:
+                                ## 0x04: Directory
+                                ## 0x12: Directory
+                                if not Extract["DIRS"]:
                                     continue  ## next extract
 
                                 ## Check path pattern if set
@@ -4130,13 +4134,13 @@ if __name__ == "__main__":
                                         if Key == CONST_EXTRACT_UX0:
                                             ## UX0 PSP extraction = no dirs (safety check only)
                                             Name_Parts = None
-                                    ## --> PSV packages
+                                    ## --> PSV extraction
                                     elif Results["PLATFORM"] == CONST_PLATFORM.PSV:
                                         ## Check if special dir "sce_sys/package" is created
                                         if not Extract["SCESYS_PACKAGE_CREATED"] \
                                         and len(Name_Parts) >= 2 \
                                         and Name_Parts[0] == "sce_sys" \
-                                        and Name_Parts[1] == "package" :
+                                        and Name_Parts[1] == "package":
                                             Extract["SCESYS_PACKAGE_CREATED"] = True
                                         #
                                         if Key == CONST_EXTRACT_UX0:
@@ -4146,7 +4150,7 @@ if __name__ == "__main__":
                                             and len(Name_Parts) > 0 \
                                             and Name_Parts[0] == "sce_sys":
                                                 del Name_Parts[0]
-                                    ## --> PSM packages
+                                    ## --> PSM extraction
                                     elif Results["PLATFORM"] == CONST_PLATFORM.PSM:
                                         if Key == CONST_EXTRACT_UX0:
                                             ## UX0 PSM extraction: Rename base directory
@@ -4195,40 +4199,23 @@ if __name__ == "__main__":
                                     eprint("[{}] ABORT extraction".format(Extract["KEY"]))
                                     Extract["PROCESS"] = False
                                 del Extract["ITEM_EXTRACT_PATH"]
-                            ## Clean-up
-                            del Extract
-                            del Key
-                            del Item_Name_Parts
-                            del Item_Flags
-                            #
-                            continue  ## next extract
-                        else:  ## should all be files
-                            ## taken from pkg_dec 1.3.2 from Weaknespase
-                            ## 0x00:
-                            ## 0x01:
-                            ## 0x03: all regular data files have this type
-                            ## 0x0E: user-mode executables have this type (eboot.bin, sce_modules contents)
-                            ## 0x0F:
-                            ## 0x10: keystone have this type
-                            ## 0x11: PFS files have this type (files.db, unicv.db, pflist)
-                            ## 0x13: temp.bin have this type
-                            ## 0x14:
-                            ## 0x15: clearsign have this type
-                            ## 0x16: right.suprx have this type
-                            ## 0x18: digs.bin have this type, unpack encrypted
-                            for Key in Extractions:
-                                Extract = Extractions[Key]
                                 #
-                                if Extract["SEPARATE_FILES"] \
-                                and "STREAM" in Extract:
-                                    del Extract["STREAM"]
-                                if "ITEM_EXTRACT_PATH" in Extract:
-                                    del Extract["ITEM_EXTRACT_PATH"]
-                                if "ITEM_EXTRACT_DIR" in Extract:
-                                    del Extract["ITEM_EXTRACT_DIR"]
-                                #
-                                if not Extract["PROCESS"]:
-                                    continue  ## next extract
+                                continue  ## next extract
+                            else:  ## should all be files
+                                ## taken from pkg_dec 1.3.2 from Weaknespase
+                                ## 0x00:
+                                ## 0x01:
+                                ## 0x03: all regular data files have this type
+                                ## 0x0E: user-mode executables have this type (eboot.bin, sce_modules contents)
+                                ## 0x0F:
+                                ## 0x10: keystone have this type
+                                ## 0x11: PFS files have this type (files.db, unicv.db, pflist)
+                                ## 0x13: temp.bin have this type
+                                ## 0x14:
+                                ## 0x15: clearsign have this type
+                                ## 0x16: right.suprx have this type
+                                ## 0x17: cert.bin have this type, unpack encrypted
+                                ## 0x18: digs.bin have this type, unpack encrypted
 
                                 ## Check path pattern if set
                                 if Key == CONST_EXTRACT_CONTENT \
@@ -4289,7 +4276,7 @@ if __name__ == "__main__":
                                                         del Name_Parts[0]
                                                 else:
                                                     Name_Parts = None  ## skip file
-                                        ## --> PSV packages
+                                        ## --> PSV extraction
                                         elif Results["PLATFORM"] == CONST_PLATFORM.PSV:
                                             if Key == CONST_EXTRACT_UX0:
                                                 ## UX0 PSV extraction
@@ -4309,7 +4296,7 @@ if __name__ == "__main__":
                                                 and len(Name_Parts) > 0 \
                                                 and Name_Parts[0] == "sce_sys":
                                                     del Name_Parts[0]
-                                        ## --> PSM packages
+                                        ## --> PSM extraction
                                         elif Results["PLATFORM"] == CONST_PLATFORM.PSM:
                                             if Key == CONST_EXTRACT_UX0:
                                                 ## UX0 PSM extraction
@@ -4367,7 +4354,7 @@ if __name__ == "__main__":
                                         del Extract["ITEM_EXTRACT_PATH"]
                                     continue  ## next extract
 
-                                ## Special case: create missing directory when path pattern is set
+                                ## Special case: create missing directory, e.g. when path pattern is set
                                 if Key == CONST_EXTRACT_CONTENT \
                                 and Extract["DIRS"] \
                                 and "ITEM_EXTRACT_DIR" in Extract:
@@ -4411,11 +4398,13 @@ if __name__ == "__main__":
                                 #
                                 if "STREAM" in Extract:
                                     Use_Extractions = Extractions
-                            ## Clean-up
-                            del Extract
-                            del Key
-                            del Item_Name_Parts
-                            del Item_Flags
+                                #
+                                continue  ## next extract
+                        ## Clean-up
+                        del Extract
+                        del Key
+                        del Item_Name_Parts
+                        del Item_Flags
                         #
                         if not Use_Extractions:
                             continue  ## next item
@@ -4460,10 +4449,40 @@ if __name__ == "__main__":
                         if not Extract["PROCESS"]:
                             continue  ## next extract
 
-                        if (Key == CONST_EXTRACT_UX0 \
-                            or Key == CONST_EXTRACT_CONTENT) \
-                        and "PLATFORM" in Results:  ## UX0/CONTENT extraction
-                            ## --> PSV packages
+                        if Key == CONST_EXTRACT_RAW:
+                            ## Write PKG3 unencrypted tail data
+                            if Arguments.quiet <= 0:
+                                eprint("{} unencrypted PKG3 tail data from offset {:#x} with size {}".format(Extract["FUNCTION"], Extractions_Fields["DATAOFS"]+Pkg_Header["DATASIZE"], Results["PKG_TAIL_SIZE"]), prefix="[{}] ".format(Extract["KEY"]))
+                            if not "TAIL_BYTES" in Package:
+                                ## Data not available
+                                eprint("MISSING tail data, maybe this is only the first file of a multi-part package or it is a head.bin", prefix="[{}] ".format(Extract["KEY"]))
+                                del Extract["ITEM_EXTRACT_PATH"]
+                                continue  ## next file
+                            else:
+                                Extract["BYTES_WRITTEN"] += Extract["STREAM"].write(Package["TAIL_BYTES"])
+                            Extract["STREAM"].close()
+                            del Extract["STREAM"]
+
+                            ## Check written package size
+                            if ("PKG_TOTAL_SIZE" in Results \
+                                and Extract["BYTES_WRITTEN"] != Results["PKG_TOTAL_SIZE"]) \
+                            or ("FILE_SIZE" in Results \
+                                and Extract["BYTES_WRITTEN"] != Results["FILE_SIZE"]):
+                                eprint("Written size {} of unencrypted/decrypted data from".format(Extract["BYTES_WRITTEN"]), Input_Stream.getSource(function_debug_level=max(0, Debug_Level)))
+                                if "PKG_TOTAL_SIZE" in Results \
+                                and Extract["BYTES_WRITTEN"] != Results["PKG_TOTAL_SIZE"]:
+                                    eprint("mismatches package total size of", Results["PKG_TOTAL_SIZE"])
+                                if "FILE_SIZE" in Results \
+                                and Extract["BYTES_WRITTEN"] != Results["FILE_SIZE"]:
+                                    eprint("mismatches file size of", Results["FILE_SIZE"])
+                                eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info")
+                        #
+                        elif Key == CONST_EXTRACT_UX0 \
+                        or Key == CONST_EXTRACT_CONTENT:
+                            if not "PLATFORM" in Results:
+                                continue  ## next extract
+
+                            ## --> PSV extraction
                             if Results["PLATFORM"] == CONST_PLATFORM.PSV \
                             and Results["PKG_CONTENT_TYPE"] != 0x17:
                                 ## Dirs
@@ -4496,7 +4515,7 @@ if __name__ == "__main__":
                                             continue  ## next dir
 
                                         ## Create directory
-                                        if createDirectory(Extract, "items", Key, True, Arguments.quiet, max(0, Debug_Level)) != 0:
+                                        if createDirectory(Extract, "extra", Key, True, Arguments.quiet, max(0, Debug_Level)) != 0:
                                             eprint("[{}] ABORT extraction".format(Extract["KEY"]))
                                             Extract["PROCESS"] = False
                                         del Extract["ITEM_EXTRACT_PATH"]
@@ -4539,11 +4558,11 @@ if __name__ == "__main__":
                                     #
                                     if not "ITEM_EXTRACT_PATH" in Extract \
                                     or not Extract["ITEM_EXTRACT_PATH"]:
-                                        if not "ITEM_EXTRACT_PATH" in Extract:
+                                        if "ITEM_EXTRACT_PATH" in Extract:
                                             del Extract["ITEM_EXTRACT_PATH"]
                                         continue  ## next file
 
-                                    ## Special case: create missing directory when path pattern is set
+                                    ## Special case: create missing directory, e.g. when path pattern is set
                                     if Key == CONST_EXTRACT_CONTENT \
                                     and Extract["DIRS"] \
                                     and "ITEM_EXTRACT_DIR" in Extract:
@@ -4552,7 +4571,7 @@ if __name__ == "__main__":
                                         #
                                         Extract["ITEM_EXTRACT_PATH"] = Extract["ITEM_EXTRACT_DIR"]
                                         Extract["ITEM_NAME"] = Extract["ITEM_EXTRACT_DIR_NAME"]
-                                        createDirectory(Extract, "items", Key, True, Arguments.quiet, max(0, Debug_Level))
+                                        createDirectory(Extract, "missing extra", Key, True, Arguments.quiet, max(0, Debug_Level))
                                         #
                                         Extract["ITEM_EXTRACT_PATH"] = Extract["ITEM_BACKUP_EXTRACT"]
                                         Extract["ITEM_NAME"] = Extract["ITEM_BACKUP_NAME"]
@@ -4564,9 +4583,11 @@ if __name__ == "__main__":
                                     ## Display item extract path
                                     if Arguments.quiet <= 0:
                                         Values = None
-                                        if File_Number == 1:  ## head.bin
+                                        ## --> PSV head.bin
+                                        if File_Number == 1:
                                             Values = [Extract["FUNCTION"], "\"{}\"".format(Extract["ITEM_NAME"]), "unencrypted head + encrypted items info", "", "offset {:#x}".format(0), len(Package["HEAD_BYTES"])+len(Package["ITEMS_INFO_BYTES"][CONST_DATATYPE_AS_IS])]
-                                        elif File_Number == 2:  ## tail.bin
+                                        ## --> PSV tail.bin
+                                        elif File_Number == 2:
                                             if not "TAIL_BYTES" in Package:
                                                 ## Data not available
                                                 eprint("MISSING tail data, maybe this is only the first file of a multi-part package or it is a head.bin", prefix="[{}] ".format(Extract["KEY"]))
@@ -4574,9 +4595,11 @@ if __name__ == "__main__":
                                                 continue  ## next file
                                             else:
                                                 Values = [Extract["FUNCTION"], "\"{}\"".format(Extract["ITEM_NAME"]), "unencrypted tail", "", "offset {:#x}".format(Extractions_Fields["DATAOFS"]+Pkg_Header["DATASIZE"]), len(Package["TAIL_BYTES"])]
-                                        elif File_Number == 3:  ## stat.bin
+                                        ## --> PSV stat.bin
+                                        elif File_Number == 3:
                                             Values = ["Write", "\"{}\"".format(Extract["ITEM_NAME"]), "fake data", "", "zeroes", 0x300]
-                                        elif File_Number == 4:  ## work.bin
+                                        ## --> PSV work.bin (license)
+                                        elif File_Number == 4:
                                             if Results["PKG_TYPE"] == CONST_PKG_TYPE.PATCH:
                                                 ## Patches do not not need a license file
                                                 del Extract["ITEM_EXTRACT_PATH"]
@@ -4600,20 +4623,24 @@ if __name__ == "__main__":
                                         continue  ## next file
 
                                     ## Write data
-                                    if File_Number == 1:  ## head.bin
+                                    ## --> PSV head.bin
+                                    if File_Number == 1:
                                         Extract["STREAM"].write(Package["HEAD_BYTES"])
                                         Extract["STREAM"].write(Package["ITEMS_INFO_BYTES"][CONST_DATATYPE_AS_IS])
                                         Extract["STREAM"].close()
                                         del Extract["STREAM"]
-                                    elif File_Number == 2:  ## tail.bin
+                                    ## --> PSV tail.bin
+                                    elif File_Number == 2:
                                         Extract["STREAM"].write(Package["TAIL_BYTES"])
                                         Extract["STREAM"].close()
                                         del Extract["STREAM"]
-                                    elif File_Number == 3:  ## stat.bin
+                                    ## --> PSV stat.bin
+                                    elif File_Number == 3:
                                         Extract["STREAM"].write(bytearray(0x300))
                                         Extract["STREAM"].close()
                                         del Extract["STREAM"]
-                                    elif File_Number == 4:  ## work.bin
+                                    ## --> PSV work.bin (license)
+                                    elif File_Number == 4:
                                         Extract["STREAM"].write(Rifs[Results["PKG_CONTENT_ID"]]["BYTES"])
                                         Extract["STREAM"].close()
                                         del Extract["STREAM"]
@@ -4621,7 +4648,7 @@ if __name__ == "__main__":
                                 #
                                 del Name_Parts
                                 del File_Number
-                            ## --> PSM packages
+                            ## --> PSM extraction
                             elif Results["PLATFORM"] == CONST_PLATFORM.PSM:
                                 if Key == CONST_EXTRACT_UX0:  ## UX0-only PSM extraction
                                     if Extract["DIRS"]:
@@ -4652,7 +4679,7 @@ if __name__ == "__main__":
                                                 continue  ## next dir
 
                                             ## Create directory
-                                            if createDirectory(Extract, "PSM RW", Key, True, Arguments.quiet, max(0, Debug_Level)) != 0:
+                                            if createDirectory(Extract, "extra", Key, True, Arguments.quiet, max(0, Debug_Level)) != 0:
                                                 eprint("[{}] ABORT extraction".format(Extract["KEY"]))
                                                 Extract["PROCESS"] = False
                                             del Extract["ITEM_EXTRACT_PATH"]
@@ -4695,11 +4722,11 @@ if __name__ == "__main__":
                                         #
                                         if not "ITEM_EXTRACT_PATH" in Extract \
                                         or not Extract["ITEM_EXTRACT_PATH"]:
-                                            if not "ITEM_EXTRACT_PATH" in Extract:
+                                            if "ITEM_EXTRACT_PATH" in Extract:
                                                 del Extract["ITEM_EXTRACT_PATH"]
                                             continue  ## next file
 
-                                        ## Special case: create missing directory when path pattern is set
+                                        ## Special case: create missing directory, e.g. when path pattern is set
                                         if Key == CONST_EXTRACT_CONTENT \
                                         and Extract["DIRS"] \
                                         and "ITEM_EXTRACT_DIR" in Extract:
@@ -4708,7 +4735,7 @@ if __name__ == "__main__":
                                             #
                                             Extract["ITEM_EXTRACT_PATH"] = Extract["ITEM_EXTRACT_DIR"]
                                             Extract["ITEM_NAME"] = Extract["ITEM_EXTRACT_DIR_NAME"]
-                                            createDirectory(Extract, "items", Key, True, Arguments.quiet, max(0, Debug_Level))
+                                            createDirectory(Extract, "missing extra", Key, True, Arguments.quiet, max(0, Debug_Level))
                                             #
                                             Extract["ITEM_EXTRACT_PATH"] = Extract["ITEM_BACKUP_EXTRACT"]
                                             Extract["ITEM_NAME"] = Extract["ITEM_BACKUP_NAME"]
@@ -4744,50 +4771,26 @@ if __name__ == "__main__":
                                             continue  ## next file
 
                                         ## Write data
-                                        if File_Number == 1:  ## content_id
+                                        ## --> PSM content_id
+                                        if File_Number == 1:
                                             Extract["STREAM"].write(Package["HEAD_BYTES"][CONST_PKG3_MAIN_HEADER_FIELDS["CONTENT_ID"]["OFFSET"]:CONST_PKG3_MAIN_HEADER_FIELDS["CONTENT_ID"]["OFFSET"]+CONST_PKG3_MAIN_HEADER_FIELDS["CONTENT_ID"]["SIZE"]])
                                             Extract["STREAM"].close()
                                             del Extract["STREAM"]
-                                        elif File_Number == 2:  ## pm.dat
+                                        ## --> PSM pm.dat
+                                        elif File_Number == 2:
                                             Extract["STREAM"].write(bytearray(0x10000))
                                             Extract["STREAM"].close()
                                             del Extract["STREAM"]
-                                        elif File_Number == 3:  ## FAKE.rif
+                                        ## --> PSM FAKE.rif (license)
+                                        elif File_Number == 3:
                                             Extract["STREAM"].write(Rifs[Results["PKG_CONTENT_ID"]]["BYTES"])
                                             Extract["STREAM"].close()
                                             del Extract["STREAM"]
+                                        #
                                         del Extract["ITEM_EXTRACT_PATH"]
                                     #
                                     del Name_Parts
                                     del File_Number
-                        #
-                        elif Key == CONST_EXTRACT_RAW:
-                            ## Write PKG3 unencrypted tail data
-                            if Arguments.quiet <= 0:
-                                eprint("{} unencrypted PKG3 tail data from offset {:#x} and size {}".format(Extract["FUNCTION"], Extractions_Fields["DATAOFS"]+Pkg_Header["DATASIZE"], Results["PKG_TAIL_SIZE"]), prefix="[{}] ".format(Extract["KEY"]))
-                            if not "TAIL_BYTES" in Package:
-                                ## Data not available
-                                eprint("MISSING tail data, maybe this is only the first file of a multi-part package or it is a head.bin", prefix="[{}] ".format(Extract["KEY"]))
-                                del Extract["ITEM_EXTRACT_PATH"]
-                                continue  ## next file
-                            else:
-                                Extract["BYTES_WRITTEN"] += Extract["STREAM"].write(Package["TAIL_BYTES"])
-                            Extract["STREAM"].close()
-                            del Extract["STREAM"]
-
-                            ## Check written package size
-                            if ("PKG_TOTAL_SIZE" in Results \
-                                and Extract["BYTES_WRITTEN"] != Results["PKG_TOTAL_SIZE"]) \
-                            or ("FILE_SIZE" in Results \
-                                and Extract["BYTES_WRITTEN"] != Results["FILE_SIZE"]):
-                                eprint("Written size {} of unencrypted/decrypted data from".format(Extract["BYTES_WRITTEN"]), Input_Stream.getSource(function_debug_level=max(0, Debug_Level)))
-                                if "PKG_TOTAL_SIZE" in Results \
-                                and Extract["BYTES_WRITTEN"] != Results["PKG_TOTAL_SIZE"]:
-                                    eprint("mismatches package total size of", Results["PKG_TOTAL_SIZE"])
-                                if "FILE_SIZE" in Results \
-                                and Extract["BYTES_WRITTEN"] != Results["FILE_SIZE"]:
-                                    eprint("mismatches file size of", Results["FILE_SIZE"])
-                                eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info")
                     ## Clean-up
                     del Extract
                     del Key
