@@ -58,10 +58,10 @@ from builtins import bytes
 
 ## Version definition
 ## see https://www.python.org/dev/peps/pep-0440/
-__version__ = "2020.01.00.beta1"
+__version__ = "2020.01.00.beta2"
 __author__ = "https://github.com/windsurfer1122/PSN_get_pkg_info"
 __license__ = "GPL"
-__copyright__ = "Copyright 2018-2019, windsurfer1122"
+__copyright__ = "Copyright 2018-2020, windsurfer1122"
 
 
 ## Imports
@@ -4108,33 +4108,32 @@ if __name__ == "__main__":
                                 if not Extract["DIRS"]:
                                     continue  ## next extract
 
-                                ## Check path pattern if set
-                                if Key == CONST_EXTRACT_CONTENT \
-                                and Path_Pattern:  ## CONTENT extraction with path pattern
-                                    if not Path_Pattern.search(Item_Entry["NAME"]):
+                                ## Special exclusions
+                                if Key == CONST_EXTRACT_RAW:
+                                    ## no dirs (safety check only)
+                                    continue  ## next extract
+                                elif Key == CONST_EXTRACT_CONTENT:
+                                    if Arguments.nosubdirs:
+                                        ## no dirs (safety check only)
+                                        continue  ## next extract
+                                    ## Check path pattern if set
+                                    if Path_Pattern \
+                                    and not Path_Pattern.search(Item_Entry["NAME"]):
                                         continue  ## next extract
 
-                                ## Process item name
+                                ## Process item name for item-wise extraction
                                 Name_Parts = copy.copy(Item_Name_Parts)
-                                #
-                                if (Key == CONST_EXTRACT_UX0 \
-                                    or Key == CONST_EXTRACT_CONTENT) \
-                                and "PLATFORM" in Results:  ## UX0/CONTENT extraction
+
+                                ## UX0 special cases
+                                if Key == CONST_EXTRACT_UX0 \
+                                and "PLATFORM" in Results:
                                     ## Process name parts depending on platform
-                                    ## --> PS3 extraction
-                                    if Results["PLATFORM"] == CONST_PLATFORM.PS3:
-                                        pass  ## as-is
-                                    ## --> PSX extraction
-                                    elif Results["PLATFORM"] == CONST_PLATFORM.PSX:
-                                        if Key == CONST_EXTRACT_UX0:
-                                            ## UX0 PSX extraction = no dirs (safety check only)
-                                            Name_Parts = None
-                                    ## --> PSP extraction
-                                    elif Results["PLATFORM"] == CONST_PLATFORM.PSP:
-                                        if Key == CONST_EXTRACT_UX0:
-                                            ## UX0 PSP extraction = no dirs (safety check only)
-                                            Name_Parts = None
-                                    ## --> PSV extraction
+                                    ## --> UX0 PSX/PSP extraction
+                                    if Results["PLATFORM"] == CONST_PLATFORM.PSX \
+                                    or Results["PLATFORM"] == CONST_PLATFORM.PSP:
+                                        ## no dirs (safety check only)
+                                        Name_Parts = None
+                                    ## --> UX0 PSV extraction
                                     elif Results["PLATFORM"] == CONST_PLATFORM.PSV:
                                         ## Check if special dir "sce_sys/package" is created
                                         if not Extract["SCESYS_PACKAGE_CREATED"] \
@@ -4142,25 +4141,23 @@ if __name__ == "__main__":
                                         and Name_Parts[0] == "sce_sys" \
                                         and Name_Parts[1] == "package":
                                             Extract["SCESYS_PACKAGE_CREATED"] = True
-                                        #
-                                        if Key == CONST_EXTRACT_UX0:
-                                            ## UX0 PSV extraction
-                                            ## Special case: PSV Livearea extraction
-                                            if Results["PKG_CONTENT_TYPE"] == 0x17 \
-                                            and len(Name_Parts) > 0 \
-                                            and Name_Parts[0] == "sce_sys":
-                                                del Name_Parts[0]
-                                    ## --> PSM extraction
+                                        ## Special case: PSV Livearea extraction
+                                        if Results["PKG_CONTENT_TYPE"] == 0x17 \
+                                        and len(Name_Parts) > 0 \
+                                        and Name_Parts[0] == "sce_sys":
+                                            del Name_Parts[0]
+                                    ## --> UX0 PSM extraction
                                     elif Results["PLATFORM"] == CONST_PLATFORM.PSM:
-                                        if Key == CONST_EXTRACT_UX0:
-                                            ## UX0 PSM extraction: Rename base directory
-                                            if len(Name_Parts) > 0 \
-                                            and Name_Parts[0] == "contents":
-                                                if len(Name_Parts) > 1 \
-                                                and Name_Parts[1] == "runtime":
-                                                    del Name_Parts[0]
-                                                else:
-                                                    Name_Parts[0] = "RO"
+                                        ## Rename base directory
+                                        if len(Name_Parts) > 0 \
+                                        and Name_Parts[0] == "contents":
+                                            if len(Name_Parts) > 1 \
+                                            and Name_Parts[1] == "runtime":
+                                                del Name_Parts[0]
+                                            else:
+                                                Name_Parts[0] = "RO"
+                                    else:
+                                        pass  ## as-is
 
                                 ## Build and check item extract path
                                 if Name_Parts:
@@ -4217,167 +4214,181 @@ if __name__ == "__main__":
                                 ## 0x17: cert.bin have this type, unpack encrypted
                                 ## 0x18: digs.bin have this type, unpack encrypted
 
-                                ## Check path pattern if set
-                                if Key == CONST_EXTRACT_CONTENT \
-                                and Path_Pattern:  ## CONTENT extraction with path pattern
-                                    if not Path_Pattern.search(Item_Entry["NAME"]):
-                                        continue  ## next extract
-
-                                ## Process item name
-                                Name_Parts = copy.copy(Item_Name_Parts)
-                                #
-                                if Key == CONST_EXTRACT_UX0 \
-                                or Key == CONST_EXTRACT_CONTENT:  ## UX0/CONTENT extraction
-                                    Extract["ITEM_DATATYPE"] = Extract["DATATYPE"]
-
-                                    ## Process name parts depending on platform
-                                    if "PLATFORM" in Results:
-                                        ## --> PS3 extraction
-                                        if Results["PLATFORM"] == CONST_PLATFORM.PS3:
-                                            pass  ## as-is
-                                        ## --> PSX extraction
-                                        elif Results["PLATFORM"] == CONST_PLATFORM.PSX:
-                                            if Key == CONST_EXTRACT_UX0:
-                                                ## UX0 PSX extraction
-                                                if len(Name_Parts) == 3 \
-                                                and Name_Parts[0] == "USRDIR" \
-                                                and Name_Parts[1] == "CONTENT" \
-                                                and (Name_Parts[2] == "DOCUMENT.DAT" \
-                                                     or Name_Parts[2] == "EBOOT.PBP"):
-                                                    del Name_Parts[1]
-                                                    del Name_Parts[0]
-                                                else:
-                                                    Name_Parts = None  ## skip file
-                                        ## --> PSP extraction
-                                        elif Results["PLATFORM"] == CONST_PLATFORM.PSP:
-                                            if Key == CONST_EXTRACT_UX0:
-                                                ## UX0 PSP extraction
-                                                if len(Name_Parts) == 3 \
-                                                and Name_Parts[0] == "USRDIR" \
-                                                and Name_Parts[1] == "CONTENT" \
-                                                and (Name_Parts[2] == "EBOOT.PBP" \
-                                                     or Name_Parts[2] == "PSP-KEY.EDAT" \
-                                                     or Name_Parts[2] == "CONTENT.DAT"):
-                                                    if Name_Parts[2] == "EBOOT.PBP":
-                                                        ## https://www.psdevwiki.com/ps3/Eboot.PBP
-                                                        ## TODO:
-                                                        ## a) pkg decrypt
-                                                        ## b) EBOOT header
-                                                        ## c) psp decrypt & uncompress .psar
-                                                        ## - unpack USRDIR/CONTENT/EBOOT.PBP as iso/cso to pspemu/ISO/<title> [%.9s<id>].%s
-                                                        #os.path.join(Extract["ROOT_ISO"], Extract["NAME_ISO"])
-                                                        Name_Parts = None  ## TODO: replace
-                                                    elif Name_Parts[2] == "PSP-KEY.EDAT":
-                                                        ## TODO:
-                                                        ## - unpack USRDIR/CONTENT/PSP-KEY.EDAT to pspemu/PSP/GAME/%.9s<id>/
-                                                        Name_Parts = None  ## TODO: replace
-                                                    elif Name_Parts[2] == "CONTENT.DAT":
-                                                        del Name_Parts[1]
-                                                        del Name_Parts[0]
-                                                else:
-                                                    Name_Parts = None  ## skip file
-                                        ## --> PSV extraction
-                                        elif Results["PLATFORM"] == CONST_PLATFORM.PSV:
-                                            if Key == CONST_EXTRACT_UX0:
-                                                ## UX0 PSV extraction
-                                                ## Special case: PSV encrypted sce_sys/package/(digs|cert).bin as body.bin
-                                                if len(Name_Parts) == 3 \
-                                                and Name_Parts[0] == "sce_sys" \
-                                                and Name_Parts[1] == "package" \
-                                                and (Name_Parts[2] == "digs.bin" \
-                                                     or Name_Parts[2] == "cert.bin"):  ## digs.bin: Item_Flags == 0xa0007018/0xa0007818 / cert.bin: Item_Flags == 0xa0007017
-                                                    Extract["ITEM_DATATYPE"] = CONST_DATATYPE_AS_IS
-                                                    Name_Parts[2] = "body.bin"
-                                                    ## Display rename
-                                                    if Arguments.quiet <= 0:
-                                                        eprint("Renaming #{} \"{}\" to \"{}\"".format(Item_Entry["INDEX"], Item_Entry["NAME"], "/".join(Name_Parts)), prefix="[{}] ".format(Extract["KEY"]))
-                                                ## Special case: PSV Livearea extraction
-                                                if Results["PKG_CONTENT_TYPE"] == 0x17 \
-                                                and len(Name_Parts) > 0 \
-                                                and Name_Parts[0] == "sce_sys":
-                                                    del Name_Parts[0]
-                                        ## --> PSM extraction
-                                        elif Results["PLATFORM"] == CONST_PLATFORM.PSM:
-                                            if Key == CONST_EXTRACT_UX0:
-                                                ## UX0 PSM extraction
-                                                ## Rename base directory
-                                                if len(Name_Parts) > 0 \
-                                                and Name_Parts[0] == "contents":
-                                                    if len(Name_Parts) > 1 \
-                                                    and Name_Parts[1] == "runtime":
-                                                        del Name_Parts[0]
-                                                    else:
-                                                        Name_Parts[0] = "RO"
-
-                                ## Build and check item extract path
-                                if Name_Parts:
-                                    Extract["ITEM_NAME"] = "/".join(Name_Parts)
-                                    #
-                                    if Key == CONST_EXTRACT_CONTENT \
-                                    and Arguments.nosubdirs:
-                                        Name_Parts = Name_Parts[-1:]
-                                    else:
-                                        ## Avoid writing outside of extraction root dir
-                                        Dir_Level = 0
-                                        Name_Parts_New = []
-                                        for _i in range(len(Name_Parts)):
-                                            if Name_Parts[_i] == '..':
-                                                if Dir_Level > 0:
-                                                    Name_Parts_New.append(Name_Parts[_i])
-                                                    Dir_Level -= 1
-                                            elif Name_Parts[_i] == '.':
-                                                Name_Parts_New.append(Name_Parts[_i])
-                                            else:
-                                                Name_Parts_New.append(Name_Parts[_i])
-                                                Dir_Level += 1
-                                        Name_Parts = Name_Parts_New
-                                        del Name_Parts_New
-                                        del Dir_Level
-                                    #
-                                    Extract["ITEM_EXTRACT_PATH"] = os.path.join(*Name_Parts)
-                                    #
-                                    if len(Name_Parts) > 1:
-                                        Extract["ITEM_EXTRACT_DIR"] = os.path.join(*Name_Parts[:-1])
-                                        Extract["ITEM_EXTRACT_DIR_NAME"] = "/".join(Name_Parts[:-1])
-                                del Name_Parts
-                                #
-                                ## Special case: always write for RAW decrypted PKG3 package
+                                ## Special exclusions
                                 if Key == CONST_EXTRACT_RAW:
-                                    if "STREAM" in Extract \
-                                    and Item_Entry["DATASIZE"] > 0:
-                                        pass  ## write
-                                    else:
+                                    if not "STREAM" in Extract \
+                                    or Item_Entry["DATASIZE"] <= 0:
                                         continue  ## next extract
-                                elif not "ITEM_EXTRACT_PATH" in Extract \
-                                or not Extract["ITEM_EXTRACT_PATH"]:
-                                    if "ITEM_EXTRACT_PATH" in Extract:
-                                        del Extract["ITEM_EXTRACT_PATH"]
-                                    continue  ## next extract
+                                elif Key == CONST_EXTRACT_CONTENT:
+                                    ## Check path pattern if set
+                                    if Path_Pattern \
+                                    and not Path_Pattern.search(Item_Entry["NAME"]):
+                                        continue  ## next extract
 
-                                ## Special case: create missing directory, e.g. when path pattern is set
+                                Extract["ITEM_DATATYPE"] = Extract["DATATYPE"]
+                                Extract["ITEM_NAME"] = Item_Entry["NAME"]
+
+                                ## Process item name for item-wise extraction
                                 if Key == CONST_EXTRACT_CONTENT \
-                                and Extract["DIRS"] \
-                                and "ITEM_EXTRACT_DIR" in Extract:
-                                    Extract["ITEM_BACKUP_NAME"] = Extract["ITEM_NAME"]
-                                    Extract["ITEM_BACKUP_EXTRACT"] = Extract["ITEM_EXTRACT_PATH"]
+                                or Key == CONST_EXTRACT_UX0:
+                                    Name_Parts = copy.copy(Item_Name_Parts)
+
+                                    ## UX0 special cases
+                                    if Key == CONST_EXTRACT_UX0 \
+                                    and "PLATFORM" in Results:
+                                        ## Process name parts depending on platform
+                                        ## --> UX0 PSX extraction
+                                        if Results["PLATFORM"] == CONST_PLATFORM.PSX:
+                                            if len(Name_Parts) == 3 \
+                                            and Name_Parts[0] == "USRDIR" \
+                                            and Name_Parts[1] == "CONTENT" \
+                                            and (Name_Parts[2] == "DOCUMENT.DAT" \
+                                                 or Name_Parts[2] == "EBOOT.PBP"):
+                                                ## no dirs
+                                                Name_Parts = Name_Parts[-1:]
+                                            else:
+                                                ## skip file
+                                                Name_Parts = None
+                                        ## --> UX0 PSP extraction
+                                        elif Results["PLATFORM"] == CONST_PLATFORM.PSP:
+                                            if len(Name_Parts) == 3 \
+                                            and Name_Parts[0] == "USRDIR" \
+                                            and Name_Parts[1] == "CONTENT" \
+                                            and (Name_Parts[2] == "EBOOT.PBP" \
+                                                 or Name_Parts[2] == "PSP-KEY.EDAT" \
+                                                 or Name_Parts[2] == "CONTENT.DAT"):
+                                                if Name_Parts[2] == "EBOOT.PBP":
+                                                    ## https://www.psdevwiki.com/ps3/Eboot.PBP
+                                                    ## TODO:
+                                                    ## a) pkg decrypt
+                                                    ## b) EBOOT header
+                                                    ## c) psp decrypt & uncompress .psar
+                                                    ## - unpack USRDIR/CONTENT/EBOOT.PBP as iso/cso to pspemu/ISO/<title> [%.9s<id>].%s
+                                                    #os.path.join(Extract["ROOT_ISO"], Extract["NAME_ISO"])
+                                                    Name_Parts = None  ## TODO: replace
+                                                elif Name_Parts[2] == "PSP-KEY.EDAT":
+                                                    ## TODO:
+                                                    ## - unpack USRDIR/CONTENT/PSP-KEY.EDAT to pspemu/PSP/GAME/%.9s<id>/
+                                                    Name_Parts = None  ## TODO: replace
+                                                elif Name_Parts[2] == "CONTENT.DAT":
+                                                    ## no dirs
+                                                    Name_Parts = Name_Parts[-1:]
+                                            else:
+                                                ## skip file
+                                                Name_Parts = None
+                                        ## --> UX0 PSV extraction
+                                        elif Results["PLATFORM"] == CONST_PLATFORM.PSV:
+                                            ## Special case: PSV encrypted sce_sys/package/(digs|cert).bin as body.bin
+                                            if len(Name_Parts) == 3 \
+                                            and Name_Parts[0] == "sce_sys" \
+                                            and Name_Parts[1] == "package" \
+                                            and (Name_Parts[2] == "digs.bin" \
+                                                 or Name_Parts[2] == "cert.bin"):  ## digs.bin: Item_Flags == 0xa0007018/0xa0007818 / cert.bin: Item_Flags == 0xa0007017
+                                                Extract["ITEM_DATATYPE"] = CONST_DATATYPE_AS_IS
+                                                Name_Parts[2] = "body.bin"
+                                                ## Display rename
+                                                if Arguments.quiet <= 0:
+                                                    eprint("Renaming #{} \"{}\" to \"{}\"".format(Item_Entry["INDEX"], Item_Entry["NAME"], "/".join(Name_Parts)), prefix="[{}] ".format(Extract["KEY"]))
+                                            ## Special case: PSV Livearea extraction
+                                            if Results["PKG_CONTENT_TYPE"] == 0x17 \
+                                            and len(Name_Parts) > 0 \
+                                            and Name_Parts[0] == "sce_sys":
+                                                del Name_Parts[0]
+                                        ## --> UX0 PSM extraction
+                                        elif Results["PLATFORM"] == CONST_PLATFORM.PSM:
+                                            ## Rename base directory
+                                            if len(Name_Parts) > 0 \
+                                            and Name_Parts[0] == "contents":
+                                                if len(Name_Parts) > 1 \
+                                                and Name_Parts[1] == "runtime":
+                                                    del Name_Parts[0]
+                                                else:
+                                                    Name_Parts[0] = "RO"
+                                        else:
+                                            pass  ## as-is
+
+                                    ## Build and check item extract path
+                                    if Name_Parts:
+                                        Extract["ITEM_NAME"] = "/".join(Name_Parts)
+                                        #
+                                        if Key == CONST_EXTRACT_CONTENT \
+                                        and Arguments.nosubdirs:
+                                            Name_Parts = Name_Parts[-1:]
+                                        else:
+                                            ## Avoid writing outside of extraction root dir
+                                            Dir_Level = 0
+                                            Name_Parts_New = []
+                                            for _i in range(len(Name_Parts)):
+                                                if Name_Parts[_i] == '..':
+                                                    if Dir_Level > 0:
+                                                        Name_Parts_New.append(Name_Parts[_i])
+                                                        Dir_Level -= 1
+                                                elif Name_Parts[_i] == '.':
+                                                    Name_Parts_New.append(Name_Parts[_i])
+                                                else:
+                                                    Name_Parts_New.append(Name_Parts[_i])
+                                                    Dir_Level += 1
+                                            Name_Parts = Name_Parts_New
+                                            del Name_Parts_New
+                                            del Dir_Level
+                                        #
+                                        Extract["ITEM_EXTRACT_PATH"] = os.path.join(*Name_Parts)
+                                        #
+                                        if len(Name_Parts) > 1:
+                                            Extract["ITEM_EXTRACT_DIR"] = os.path.join(*Name_Parts[:-1])
+                                            Extract["ITEM_EXTRACT_DIR_NAME"] = "/".join(Name_Parts[:-1])
+                                    del Name_Parts
                                     #
-                                    Extract["ITEM_EXTRACT_PATH"] = Extract["ITEM_EXTRACT_DIR"]
-                                    Extract["ITEM_NAME"] = Extract["ITEM_EXTRACT_DIR_NAME"]
-                                    createDirectory(Extract, "items", Key, True, Arguments.quiet, max(0, Debug_Level))
-                                    #
-                                    Extract["ITEM_EXTRACT_PATH"] = Extract["ITEM_BACKUP_EXTRACT"]
-                                    Extract["ITEM_NAME"] = Extract["ITEM_BACKUP_NAME"]
-                                    del Extract["TARGET"]
-                                    del Extract["ITEM_BACKUP_EXTRACT"]
-                                    del Extract["ITEM_BACKUP_NAME"]
-                                    del Extract["ITEM_EXTRACT_DIR"]
+                                    if not "ITEM_EXTRACT_PATH" in Extract \
+                                    or not Extract["ITEM_EXTRACT_PATH"]:
+                                        if "ITEM_EXTRACT_PATH" in Extract:
+                                            del Extract["ITEM_EXTRACT_PATH"]
+                                        continue  ## next extract
+
+                                    ## Special case: create missing directory, e.g. when path pattern is set
+                                    if "ITEM_EXTRACT_DIR" in Extract:
+                                        Extract["ITEM_BACKUP_NAME"] = Extract["ITEM_NAME"]
+                                        Extract["ITEM_BACKUP_EXTRACT"] = Extract["ITEM_EXTRACT_PATH"]
+                                        #
+                                        Extract["ITEM_EXTRACT_PATH"] = Extract["ITEM_EXTRACT_DIR"]
+                                        Extract["ITEM_NAME"] = Extract["ITEM_EXTRACT_DIR_NAME"]
+                                        #
+                                        if Key == CONST_EXTRACT_CONTENT \
+                                        and Path_Pattern \
+                                        and Extract["DIRS"]:
+                                            Dir_Type = "items"
+                                            Quiet = Arguments.quiet
+                                            Func_Debug_Level = 0
+                                        else:
+                                            Dir_Type = "MISSING items"
+                                            Quiet = 0
+                                            Func_Debug_Level = Debug_Level
+                                        Result = createDirectory(Extract, Dir_Type, Key, True, Quiet, max(0, Func_Debug_Level))
+                                        #
+                                        Extract["ITEM_EXTRACT_PATH"] = Extract["ITEM_BACKUP_EXTRACT"]
+                                        Extract["ITEM_NAME"] = Extract["ITEM_BACKUP_NAME"]
+                                        del Func_Debug_Level
+                                        del Quiet
+                                        del Dir_Type
+                                        del Extract["TARGET"]
+                                        del Extract["ITEM_BACKUP_EXTRACT"]
+                                        del Extract["ITEM_BACKUP_NAME"]
+                                        del Extract["ITEM_EXTRACT_DIR"]
+                                        #
+                                        if Result != 0:
+                                            eprint("[{}] ABORT extraction".format(Extract["KEY"]))
+                                            Extract["PROCESS"] = False
+                                            del Extract["ITEM_EXTRACT_PATH"]
+                                            del Result
+                                            continue  ## next extract
+                                        del Result
 
                                 ## Display item extract path
                                 if Arguments.quiet <= 0:
                                     if Extract["ITEM_NAME"].strip():
                                         Item_Name = "#{} \"{}\"".format(Item_Entry["INDEX"], Extract["ITEM_NAME"])
                                     else:
-                                        Item_Name = "#{} unnamed item".format(Item_Entry["INDEX"], Item_Entry["INDEX"])
+                                        Item_Name = "#{} unnamed item".format(Item_Entry["INDEX"])
                                     if Extract["ALIGNED"]:
                                         Values = ["aligned ", Extractions_Fields["DATAOFS"]+Item_Entry["ALIGN"]["OFS"], Item_Entry["ALIGN"]["SIZE"]]
                                     else:
@@ -4386,8 +4397,9 @@ if __name__ == "__main__":
                                     del Values
                                     del Item_Name
 
-                                if Key != CONST_EXTRACT_RAW:
-                                    ## Build and check target path
+                                ## Build and check target path for item-wise extraction
+                                if Key == CONST_EXTRACT_CONTENT \
+                                or Key == CONST_EXTRACT_UX0:
                                     Extract["TARGET"] = os.path.join(Extract["ROOT"], Extract["ITEM_EXTRACT_PATH"])
                                     Extract["TARGET_CHECK"] = checkExtractFile(Extract, Arguments.overwrite, Arguments.quiet, max(0, Debug_Level))
                                     if Extract["TARGET_CHECK"] != 0:

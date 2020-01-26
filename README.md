@@ -1,4 +1,4 @@
-# PSN_get_pkg_info.py (c) 2018-2019 by "windsurfer1122"
+# PSN_get_pkg_info.py (c) 2018-2020 by "windsurfer1122"
 Extract package information from header and PARAM.SFO of PS3/PSX/PSP/PSV/PSM and PS4 packages.
 
 ## Goals
@@ -92,6 +92,10 @@ Executing python scripts can be done via Windows Explorer or a Command Prompt. N
 
 ## Using a HTTP Proxy with Python
 * Linux: `export HTTP_PROXY="http://192.168.0.1:3128"; export HTTPS_PROXY="http://192.168.0.1:1080";`
+
+## Path Pattern Examples for `--content` Extraction
+* eboot.bin: `--pathpattern '^(USRDIR/EBOOT\.BIN|(contents/runtime/){0,1}eboot\.bin)$'`
+* *.edat: `--pathpattern '\.(edat|EDAT)$'`
 
 ## Original Source
 git master repository at https://github.com/windsurfer1122
