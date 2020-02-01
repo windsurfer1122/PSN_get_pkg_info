@@ -4591,6 +4591,8 @@ if __name__ == "__main__":
                                 if createDirectory(Extract, "extra", Key, True, Arguments.quiet, max(0, Debug_Level)) != 0:
                                     eprint("[{}] ABORT extraction".format(Extract["KEY"]))
                                     Extract["PROCESS"] = False
+                                    del Extract["ITEM_EXTRACT_PATH"]
+                                    break  ## no more dirs
                                 del Extract["ITEM_EXTRACT_PATH"]
                                 #
                                 continue  ## next dir
@@ -4647,26 +4649,42 @@ if __name__ == "__main__":
                                     continue  ## next file
 
                                 ## Special case: create missing directory, e.g. when path pattern is set
-                                    #if Key == CONST_EXTRACT_CONTENT \
-                                    #and Extract["DIRS"] \
-                                    #and "ITEM_EXTRACT_DIR" in Extract:
-                                if "ITEM_EXTRACT_DIR" in Extract \
-                                and ((Key == CONST_EXTRACT_CONTENT \
-                                      and Extract["DIRS"]) \
-                                     or Key == CONST_EXTRACT_UX0):
+                                if "ITEM_EXTRACT_DIR" in Extract:
                                     Extract["ITEM_BACKUP_NAME"] = Extract["ITEM_NAME"]
                                     Extract["ITEM_BACKUP_EXTRACT"] = Extract["ITEM_EXTRACT_PATH"]
                                     #
                                     Extract["ITEM_EXTRACT_PATH"] = Extract["ITEM_EXTRACT_DIR"]
                                     Extract["ITEM_NAME"] = Extract["ITEM_EXTRACT_DIR_NAME"]
-                                    createDirectory(Extract, "missing extra", Key, True, Arguments.quiet, max(0, Debug_Level))
+                                    #
+                                    if Key == CONST_EXTRACT_CONTENT \
+                                    and Path_Pattern \
+                                    and Extract["DIRS"]:
+                                        Dir_Type = "extra"
+                                        Quiet = Arguments.quiet
+                                        Func_Debug_Level = 0
+                                    else:
+                                        Dir_Type = "MISSING extra"
+                                        Quiet = 0
+                                        Func_Debug_Level = Debug_Level
+                                    Result = createDirectory(Extract, Dir_Type, Key, True, Quiet, max(0, Func_Debug_Level))
                                     #
                                     Extract["ITEM_EXTRACT_PATH"] = Extract["ITEM_BACKUP_EXTRACT"]
                                     Extract["ITEM_NAME"] = Extract["ITEM_BACKUP_NAME"]
+                                    del Func_Debug_Level
+                                    del Quiet
+                                    del Dir_Type
                                     del Extract["TARGET"]
                                     del Extract["ITEM_BACKUP_EXTRACT"]
                                     del Extract["ITEM_BACKUP_NAME"]
                                     del Extract["ITEM_EXTRACT_DIR"]
+                                    #
+                                    if Result != 0:
+                                        eprint("[{}] ABORT extraction".format(Extract["KEY"]))
+                                        Extract["PROCESS"] = False
+                                        del Extract["ITEM_EXTRACT_PATH"]
+                                        del Result
+                                        break  ## no more files
+                                    del Result
 
                                 ## Display item extract path
                                 if Arguments.quiet <= 0:
@@ -4745,6 +4763,9 @@ if __name__ == "__main__":
                             del File_Data
                             del File_Number
                             del Files
+                            #
+                            if not Extract["PROCESS"]:
+                                continue  ## next extract
                     ## Clean-up
                     del Extract
                     del Key
