@@ -291,12 +291,12 @@ class CONST_PKG_SUB_TYPE(aenum.OrderedEnum):
     def __str__(self):
         return unicode(self.value)
 
-    __ordered__ = "PSP_PC_ENGINE PSP_GO PSP_MINI PSP_NEOGEO"
+    __ordered__ = "PSP_PC_ENGINE PSP_GO PSP_MINI PSP_NEOGEO PS2_CLASSIC PSP_REMASTER"
     PSP_PC_ENGINE = "PC Engine"
     PSP_GO = "Go"
     PSP_MINI = "PSP Mini"
     PSP_NEOGEO = "PSP NeoGeo"
-    PS2 = "PS2 Classic"
+    PS2_CLASSIC = "PS2 Classic"
     PSP_REMASTER = "PSP Remaster"
 
 ##
@@ -2449,7 +2449,7 @@ def createDirectory(extract, dirtype, extracttype, overwrite, quiet, function_de
 
     if isinstance(extract, dict):
         target_display = extract["ITEM_NAME"]
-        target = extract["TARGET"] = os.path.join(extract["ROOT"], extract["ITEM_EXTRACT_PATH"])
+        target = extract["TARGET"] = os.path.join(extract["ITEM_EXTRACT_ROOT"], extract["ITEM_EXTRACT_PATH"])
     else:
         target_display = target = extract
 
@@ -3248,7 +3248,7 @@ if __name__ == "__main__":
                     elif Results["PKG_CONTENT_TYPE"] == 0x12:  ## PS2 /SFO_CATEGORY = 2P
                         Results["PLATFORM"] = CONST_PLATFORM.PS3
                         Results["PKG_TYPE"] = CONST_PKG_TYPE.GAME
-                        Results["PKG_SUB_TYPE"] = CONST_PKG_SUB_TYPE.PS2
+                        Results["PKG_SUB_TYPE"] = CONST_PKG_SUB_TYPE.PS2_CLASSIC
                         #
                         Results["PKG_EXTRACT_CONT_ROOT"] = Pkg_Header["CONTENT_ID"][7:]
                         #
@@ -4102,6 +4102,8 @@ if __name__ == "__main__":
                             if "ITEM_EXTRACT_DIR" in Extract:
                                 del Extract["ITEM_EXTRACT_DIR"]
                             #
+                            Extract["ITEM_EXTRACT_ROOT"] = Extract["ROOT"]
+                            #
                             if Item_Entry["IS_FILE_OFS"] == -1:
                                 ## 0x04: Directory
                                 ## 0x12: Directory
@@ -4190,8 +4192,6 @@ if __name__ == "__main__":
                                     continue  ## next extract
 
                                 ## Create directory
-                                Extract["TARGET"] = os.path.join(Extract["ROOT"], Extract["ITEM_EXTRACT_PATH"])
-                                #
                                 if createDirectory(Extract, "#{} items".format(Item_Entry["INDEX"]), Key, True, Arguments.quiet, max(0, Debug_Level)) != 0:
                                     eprint("[{}] ABORT extraction".format(Extract["KEY"]))
                                     Extract["PROCESS"] = False
@@ -4400,7 +4400,7 @@ if __name__ == "__main__":
                                 ## Build and check target path for item-wise extraction
                                 if Key == CONST_EXTRACT_CONTENT \
                                 or Key == CONST_EXTRACT_UX0:
-                                    Extract["TARGET"] = os.path.join(Extract["ROOT"], Extract["ITEM_EXTRACT_PATH"])
+                                    Extract["TARGET"] = os.path.join(Extract["ITEM_EXTRACT_ROOT"], Extract["ITEM_EXTRACT_PATH"])
                                     Extract["TARGET_CHECK"] = checkExtractFile(Extract, Arguments.overwrite, Arguments.quiet, max(0, Debug_Level))
                                     if Extract["TARGET_CHECK"] != 0:
                                         if Extract["TARGET_CHECK"] < 0:
@@ -4454,12 +4454,12 @@ if __name__ == "__main__":
                     for Key in Extractions:
                         Extract = Extractions[Key]
                         #
+                        if not Extract["PROCESS"]:
+                            continue  ## next extract
+                        #
                         if Extract["SEPARATE_FILES"] \
                         and "STREAM" in Extract:
                             del Extract["STREAM"]
-                        #
-                        if not Extract["PROCESS"]:
-                            continue  ## next extract
 
                         if Key == CONST_EXTRACT_RAW:
                             ## Write PKG3 unencrypted tail data
@@ -4494,147 +4494,204 @@ if __name__ == "__main__":
                             if not "PLATFORM" in Results:
                                 continue  ## next extract
 
+                            ## Definitions
+                            Dirs = collections.OrderedDict()
+                            Files = collections.OrderedDict()
                             ## --> PSV extraction
                             if Results["PLATFORM"] == CONST_PLATFORM.PSV \
                             and Results["PKG_CONTENT_TYPE"] != 0x17:
                                 ## Dirs
                                 if Extract["DIRS"]:
-                                    Dirs = []
                                     if not Extract["SCESYS_PACKAGE_CREATED"]:
-                                        Dirs.append(["sce_sys", "package"])
+                                        Dirs[1] = { "PATH": ["sce_sys", "package"], }
+                                ## Files
+                                ## --> PSV head.bin
+                                Files[1] = { "PATH": ["sce_sys", "package", "head.bin"], "VALUES": [Extract["FUNCTION"], None, "unencrypted head + encrypted items info", "", "offset {:#x}".format(0), len(Package["HEAD_BYTES"])+len(Package["ITEMS_INFO_BYTES"][CONST_DATATYPE_AS_IS])], }
+                                ## --> PSV tail.bin
+                                if not "TAIL_BYTES" in Package:  ## Tail data not available
+                                    eprint("MISSING tail data, maybe this is only the first file of a multi-part package or it is a head.bin", prefix="[{}] ".format(Extract["KEY"]))
+                                else:
+                                    Files[2] = { "PATH": ["sce_sys", "package", "tail.bin"], "VALUES": [Extract["FUNCTION"], None, "unencrypted tail", "", "offset {:#x}".format(Extractions_Fields["DATAOFS"]+Pkg_Header["DATASIZE"]), len(Package["TAIL_BYTES"])], }
+                                ## --> PSV stat.bin
+                                if Key == CONST_EXTRACT_UX0:  ## UX0-only PSV extraction
+                                    Files[3] = { "PATH": ["sce_sys", "package", "stat.bin"], "VALUES": ["Write", None, "fake data", "", "zeroes", 0x300], }
+                                ## --> PSV work.bin (license)
+                                if Results["PKG_TYPE"] != CONST_PKG_TYPE.PATCH:  ## Patches do not need a license file
+                                    if not Results["PKG_CONTENT_ID"] in Rifs:
+                                        eprint("MISSING zrif license for package content id", Results["PKG_CONTENT_ID"], prefix="[{}] ".format(Extract["KEY"]))
+                                    else:
+                                        Files[4] = { "PATH": ["sce_sys", "package", "work.bin"], "VALUES": ["Write", None, "license", "", "zrif", len(Rifs[Results["PKG_CONTENT_ID"]]["BYTES"])], }
+                            ## --> PSM extraction
+                            elif Results["PLATFORM"] == CONST_PLATFORM.PSM:
+                                ## Dirs
+                                if Extract["DIRS"]:
+                                    Dirs[1] = { "PATH": ["RW", "System"], }
                                     #
-                                    Name_Parts = None
-                                    for Name_Parts in Dirs:
-                                        if "ITEM_EXTRACT_PATH" in Extract:
-                                            del Extract["ITEM_EXTRACT_PATH"]
-                                        if "ITEM_EXTRACT_DIR" in Extract:
-                                            del Extract["ITEM_EXTRACT_DIR"]
-                                        ## Build and check item extract path
-                                        if Name_Parts:
-                                            Extract["ITEM_NAME"] = "/".join(Name_Parts)
-                                            ## Check path pattern if set
-                                            if Key == CONST_EXTRACT_CONTENT \
-                                            and Path_Pattern:  ## CONTENT extraction with path pattern
-                                                if not Path_Pattern.search(Extract["ITEM_NAME"]):
-                                                    continue  ## next dir
-                                            #
-                                            Extract["ITEM_EXTRACT_PATH"] = os.path.join(*Name_Parts)
-                                        #
-                                        if not "ITEM_EXTRACT_PATH" in Extract \
-                                        or not Extract["ITEM_EXTRACT_PATH"]:
-                                            if "ITEM_EXTRACT_PATH" in Extract:
-                                                del Extract["ITEM_EXTRACT_PATH"]
-                                            continue  ## next dir
+                                    if Key == CONST_EXTRACT_UX0:  ## UX0-only PSM extraction
+                                        Dirs[2] = { "PATH": ["RW", "Documents"], }
+                                        Dirs[3] = { "PATH": ["RW", "Temp"], }
+                                    #
+                                    Dirs[4] = { "PATH": ["RO", "License"], }
+                                ## --> PSM content_id
+                                Files[1] = { "PATH": ["RW", "System", "content_id"], "VALUES": [Extract["FUNCTION"], None, "content id", "", "offset {:#x}".format(CONST_PKG3_MAIN_HEADER_FIELDS["CONTENT_ID"]["OFFSET"]), CONST_PKG3_MAIN_HEADER_FIELDS["CONTENT_ID"]["SIZE"]], }
+                                ## --> PSM pm.dat
+                                if Key == CONST_EXTRACT_UX0:  ## UX0-only PSM extraction
+                                    Files[2] = { "PATH": ["RW", "System", "pm.dat"], "VALUES": ["Write", None, "fake data", "", "zeroes", 0x10000], }
+                                ## --> PSM FAKE.rif (license)
+                                if not Results["PKG_CONTENT_ID"] in Rifs:
+                                    eprint("MISSING zrif license for package content id", Results["PKG_CONTENT_ID"], prefix="[{}] ".format(Extract["KEY"]))
+                                else:
+                                    Files[3] = { "PATH": ["RO", "License", "FAKE.rif"], "VALUES": ["Write", None, "license", "", "zrif", len(Rifs[Results["PKG_CONTENT_ID"]]["BYTES"])], }
 
-                                        ## Create directory
-                                        if createDirectory(Extract, "extra", Key, True, Arguments.quiet, max(0, Debug_Level)) != 0:
-                                            eprint("[{}] ABORT extraction".format(Extract["KEY"]))
-                                            Extract["PROCESS"] = False
-                                        del Extract["ITEM_EXTRACT_PATH"]
-                                    #
-                                    del Name_Parts
-                                    del Dirs
-                                    #
-                                    if not Extract["PROCESS"]:
+                            ## Process dirs
+                            Dir_Number = None
+                            Dir_Data = None
+                            for Dir_Number, Dir_Data in Dirs.items():
+                                if not Extract["DIRS"]:
+                                    continue  ## next dir
+
+                                ## Special exclusions
+                                if Key == CONST_EXTRACT_CONTENT:
+                                    if Arguments.nosubdirs:
+                                        ## no dirs (safety check only)
                                         continue  ## next extract
 
-                                ## Files
-                                File_Number = 0
-                                Name_Parts = None
-                                for Name_Parts in [["sce_sys", "package", "head.bin"], ["sce_sys", "package", "tail.bin"], ["sce_sys", "package", "stat.bin"], ["sce_sys", "package", "work.bin"]]:
-                                    File_Number += 1
+                                if "ITEM_EXTRACT_PATH" in Extract:
+                                    del Extract["ITEM_EXTRACT_PATH"]
+                                if "ITEM_EXTRACT_DIR" in Extract:
+                                    del Extract["ITEM_EXTRACT_DIR"]
+                                #
+                                Extract["ITEM_EXTRACT_ROOT"] = Extract["ROOT"]
+
+                                ## Process item name for item-wise extraction
+                                Name_Parts = copy.copy(Dir_Data["PATH"])
+
+                                ## Build and check item extract path
+                                if Name_Parts:
+                                    Extract["ITEM_NAME"] = "/".join(Name_Parts)
                                     #
+                                    ## Special exclusions
+                                    if Key == CONST_EXTRACT_CONTENT:
+                                        ## Check path pattern if set
+                                        if Path_Pattern \
+                                        and not Path_Pattern.search(Extract["ITEM_NAME"]):
+                                            del Name_Parts
+                                            continue  ## next dir
+                                    #
+                                    Extract["ITEM_EXTRACT_PATH"] = os.path.join(*Name_Parts)
+                                del Name_Parts
+                                #
+                                if not "ITEM_EXTRACT_PATH" in Extract \
+                                or not Extract["ITEM_EXTRACT_PATH"]:
                                     if "ITEM_EXTRACT_PATH" in Extract:
                                         del Extract["ITEM_EXTRACT_PATH"]
-                                    if "ITEM_EXTRACT_DIR" in Extract:
-                                        del Extract["ITEM_EXTRACT_DIR"]
+                                    continue  ## next dir
 
-                                    ## Build and check item extract path
-                                    if Name_Parts:
-                                        Extract["ITEM_NAME"] = "/".join(Name_Parts)
-                                        ## Check path pattern if set
-                                        if Key == CONST_EXTRACT_CONTENT \
-                                        and Path_Pattern:  ## CONTENT extraction with path pattern
-                                            if not Path_Pattern.search(Extract["ITEM_NAME"]):
-                                                continue  ## next file
-                                        #
-                                        if Key == CONST_EXTRACT_CONTENT \
-                                        and Arguments.nosubdirs:
-                                            Name_Parts = Name_Parts[-1:]
-                                        #
-                                        Extract["ITEM_EXTRACT_PATH"] = os.path.join(*Name_Parts)
-                                        #
-                                        if len(Name_Parts) > 1:
-                                            Extract["ITEM_EXTRACT_DIR"] = os.path.join(*Name_Parts[:-1])
-                                            Extract["ITEM_EXTRACT_DIR_NAME"] = "/".join(Name_Parts[:-1])
+                                ## Create directory
+                                if createDirectory(Extract, "extra", Key, True, Arguments.quiet, max(0, Debug_Level)) != 0:
+                                    eprint("[{}] ABORT extraction".format(Extract["KEY"]))
+                                    Extract["PROCESS"] = False
+                                del Extract["ITEM_EXTRACT_PATH"]
+                                #
+                                continue  ## next dir
+                            #
+                            del Dir_Data
+                            del Dir_Number
+                            del Dirs
+                            #
+                            if not Extract["PROCESS"]:
+                                continue  ## next extract
+
+                            ## Process files
+                            File_Number = None
+                            File_Data = None
+                            for File_Number, File_Data in Files.items():
+                                if "ITEM_EXTRACT_PATH" in Extract:
+                                    del Extract["ITEM_EXTRACT_PATH"]
+                                if "ITEM_EXTRACT_DIR" in Extract:
+                                    del Extract["ITEM_EXTRACT_DIR"]
+                                #
+                                Extract["ITEM_EXTRACT_ROOT"] = Extract["ROOT"]
+                                Extract["ITEM_DATATYPE"] = Extract["DATATYPE"]
+
+                                ## Process item name for item-wise extraction
+                                Name_Parts = copy.copy(File_Data["PATH"])
+
+                                ## Build and check item extract path
+                                if Name_Parts:
+                                    Extract["ITEM_NAME"] = "/".join(Name_Parts)
                                     #
-                                    if not "ITEM_EXTRACT_PATH" in Extract \
-                                    or not Extract["ITEM_EXTRACT_PATH"]:
-                                        if "ITEM_EXTRACT_PATH" in Extract:
-                                            del Extract["ITEM_EXTRACT_PATH"]
-                                        continue  ## next file
-
-                                    ## Special case: create missing directory, e.g. when path pattern is set
-                                    if Key == CONST_EXTRACT_CONTENT \
-                                    and Extract["DIRS"] \
-                                    and "ITEM_EXTRACT_DIR" in Extract:
-                                        Extract["ITEM_BACKUP_NAME"] = Extract["ITEM_NAME"]
-                                        Extract["ITEM_BACKUP_EXTRACT"] = Extract["ITEM_EXTRACT_PATH"]
-                                        #
-                                        Extract["ITEM_EXTRACT_PATH"] = Extract["ITEM_EXTRACT_DIR"]
-                                        Extract["ITEM_NAME"] = Extract["ITEM_EXTRACT_DIR_NAME"]
-                                        createDirectory(Extract, "missing extra", Key, True, Arguments.quiet, max(0, Debug_Level))
-                                        #
-                                        Extract["ITEM_EXTRACT_PATH"] = Extract["ITEM_BACKUP_EXTRACT"]
-                                        Extract["ITEM_NAME"] = Extract["ITEM_BACKUP_NAME"]
-                                        del Extract["TARGET"]
-                                        del Extract["ITEM_BACKUP_EXTRACT"]
-                                        del Extract["ITEM_BACKUP_NAME"]
-                                        del Extract["ITEM_EXTRACT_DIR"]
-
-                                    ## Display item extract path
-                                    if Arguments.quiet <= 0:
-                                        Values = None
-                                        ## --> PSV head.bin
-                                        if File_Number == 1:
-                                            Values = [Extract["FUNCTION"], "\"{}\"".format(Extract["ITEM_NAME"]), "unencrypted head + encrypted items info", "", "offset {:#x}".format(0), len(Package["HEAD_BYTES"])+len(Package["ITEMS_INFO_BYTES"][CONST_DATATYPE_AS_IS])]
-                                        ## --> PSV tail.bin
-                                        elif File_Number == 2:
-                                            if not "TAIL_BYTES" in Package:
-                                                ## Data not available
-                                                eprint("MISSING tail data, maybe this is only the first file of a multi-part package or it is a head.bin", prefix="[{}] ".format(Extract["KEY"]))
-                                                del Extract["ITEM_EXTRACT_PATH"]
-                                                continue  ## next file
-                                            else:
-                                                Values = [Extract["FUNCTION"], "\"{}\"".format(Extract["ITEM_NAME"]), "unencrypted tail", "", "offset {:#x}".format(Extractions_Fields["DATAOFS"]+Pkg_Header["DATASIZE"]), len(Package["TAIL_BYTES"])]
-                                        ## --> PSV stat.bin
-                                        elif File_Number == 3:
-                                            Values = ["Write", "\"{}\"".format(Extract["ITEM_NAME"]), "fake data", "", "zeroes", 0x300]
-                                        ## --> PSV work.bin (license)
-                                        elif File_Number == 4:
-                                            if Results["PKG_TYPE"] == CONST_PKG_TYPE.PATCH:
-                                                ## Patches do not not need a license file
-                                                del Extract["ITEM_EXTRACT_PATH"]
-                                                continue  ## next file
-                                            elif not Results["PKG_CONTENT_ID"] in Rifs:
-                                                eprint("MISSING zrif license for package content id", Results["PKG_CONTENT_ID"], prefix="[{}] ".format(Extract["KEY"]))
-                                                del Extract["ITEM_EXTRACT_PATH"]
-                                                continue  ## next file
-                                            #
-                                            Values = ["Write", "\"{}\"".format(Extract["ITEM_NAME"]), "license", "", "zrif", len(Rifs[Results["PKG_CONTENT_ID"]]["BYTES"])]
-                                        eprint("{} {} {} from {}{} with size {}".format(*Values), prefix="[{}] ".format(Extract["KEY"]))
-                                        del Values
-
-                                    ## Build and check target path
-                                    Extract["TARGET"] = os.path.join(Extract["ROOT"], Extract["ITEM_EXTRACT_PATH"])
-                                    Extract["TARGET_CHECK"] = checkExtractFile(Extract, Arguments.overwrite, Arguments.quiet, max(0, Debug_Level))
-                                    if Extract["TARGET_CHECK"] != 0:
-                                        if Extract["TARGET_CHECK"] < 0:
-                                            eprint("[{}] BROKEN extraction".format(Extract["KEY"]))
+                                    ## Special exclusions
+                                    if Key == CONST_EXTRACT_CONTENT:
+                                        ## Check path pattern if set
+                                        if Path_Pattern \
+                                        and not Path_Pattern.search(Extract["ITEM_NAME"]):
+                                            del Name_Parts
+                                            continue  ## next file
+                                    #
+                                    if Key == CONST_EXTRACT_CONTENT:
+                                        if Arguments.nosubdirs:
+                                            Name_Parts = Name_Parts[-1:]
+                                    #
+                                    Extract["ITEM_EXTRACT_PATH"] = os.path.join(*Name_Parts)
+                                    #
+                                    if len(Name_Parts) > 1:
+                                        Extract["ITEM_EXTRACT_DIR"] = os.path.join(*Name_Parts[:-1])
+                                        Extract["ITEM_EXTRACT_DIR_NAME"] = "/".join(Name_Parts[:-1])
+                                del Name_Parts
+                                #
+                                if not "ITEM_EXTRACT_PATH" in Extract \
+                                or not Extract["ITEM_EXTRACT_PATH"]:
+                                    if "ITEM_EXTRACT_PATH" in Extract:
                                         del Extract["ITEM_EXTRACT_PATH"]
-                                        continue  ## next file
+                                    continue  ## next file
 
-                                    ## Write data
+                                ## Special case: create missing directory, e.g. when path pattern is set
+                                    #if Key == CONST_EXTRACT_CONTENT \
+                                    #and Extract["DIRS"] \
+                                    #and "ITEM_EXTRACT_DIR" in Extract:
+                                if "ITEM_EXTRACT_DIR" in Extract \
+                                and ((Key == CONST_EXTRACT_CONTENT \
+                                      and Extract["DIRS"]) \
+                                     or Key == CONST_EXTRACT_UX0):
+                                    Extract["ITEM_BACKUP_NAME"] = Extract["ITEM_NAME"]
+                                    Extract["ITEM_BACKUP_EXTRACT"] = Extract["ITEM_EXTRACT_PATH"]
+                                    #
+                                    Extract["ITEM_EXTRACT_PATH"] = Extract["ITEM_EXTRACT_DIR"]
+                                    Extract["ITEM_NAME"] = Extract["ITEM_EXTRACT_DIR_NAME"]
+                                    createDirectory(Extract, "missing extra", Key, True, Arguments.quiet, max(0, Debug_Level))
+                                    #
+                                    Extract["ITEM_EXTRACT_PATH"] = Extract["ITEM_BACKUP_EXTRACT"]
+                                    Extract["ITEM_NAME"] = Extract["ITEM_BACKUP_NAME"]
+                                    del Extract["TARGET"]
+                                    del Extract["ITEM_BACKUP_EXTRACT"]
+                                    del Extract["ITEM_BACKUP_NAME"]
+                                    del Extract["ITEM_EXTRACT_DIR"]
+
+                                ## Display item extract path
+                                if Arguments.quiet <= 0:
+                                    Values = None
+                                    if "VALUES" in File_Data:
+                                        Values = File_Data["VALUES"]
+                                    else:
+                                        Values = ["Write", None, "item", "unknown", "", "unknown"]
+                                    if Values[1] is None:
+                                        Values[1] = "\"{}\"".format(Extract["ITEM_NAME"])
+                                    eprint("{} {} {} from {}{} with size {}".format(*Values), prefix="[{}] ".format(Extract["KEY"]))
+                                    del Values
+
+                                ## Build and check target path for item-wise extraction
+                                Extract["TARGET"] = os.path.join(Extract["ITEM_EXTRACT_ROOT"], Extract["ITEM_EXTRACT_PATH"])
+                                Extract["TARGET_CHECK"] = checkExtractFile(Extract, Arguments.overwrite, Arguments.quiet, max(0, Debug_Level))
+                                if Extract["TARGET_CHECK"] != 0:
+                                    if Extract["TARGET_CHECK"] < 0:
+                                        eprint("[{}] BROKEN extraction".format(Extract["KEY"]))
+                                    del Extract["ITEM_EXTRACT_PATH"]
+                                    continue  ## next file
+
+                                ## Write data
+                                ## --> PSV extraction
+                                if Results["PLATFORM"] == CONST_PLATFORM.PSV:
                                     ## --> PSV head.bin
                                     if File_Number == 1:
                                         Extract["STREAM"].write(Package["HEAD_BYTES"])
@@ -4656,153 +4713,38 @@ if __name__ == "__main__":
                                         Extract["STREAM"].write(Rifs[Results["PKG_CONTENT_ID"]]["BYTES"])
                                         Extract["STREAM"].close()
                                         del Extract["STREAM"]
-                                    del Extract["ITEM_EXTRACT_PATH"]
+                                ## --> PSM extraction
+                                elif Results["PLATFORM"] == CONST_PLATFORM.PSM:
+                                    ## --> PSM content_id
+                                    if File_Number == 1:
+                                        Extract["STREAM"].write(Package["HEAD_BYTES"][CONST_PKG3_MAIN_HEADER_FIELDS["CONTENT_ID"]["OFFSET"]:CONST_PKG3_MAIN_HEADER_FIELDS["CONTENT_ID"]["OFFSET"]+CONST_PKG3_MAIN_HEADER_FIELDS["CONTENT_ID"]["SIZE"]])
+                                        Extract["STREAM"].close()
+                                        del Extract["STREAM"]
+                                    ## --> PSM pm.dat
+                                    elif File_Number == 2:
+                                        Extract["STREAM"].write(bytearray(0x10000))
+                                        Extract["STREAM"].close()
+                                        del Extract["STREAM"]
+                                    ## --> PSM FAKE.rif (license)
+                                    elif File_Number == 3:
+                                        Extract["STREAM"].write(Rifs[Results["PKG_CONTENT_ID"]]["BYTES"])
+                                        Extract["STREAM"].close()
+                                        del Extract["STREAM"]
                                 #
-                                del Name_Parts
-                                del File_Number
-                            ## --> PSM extraction
-                            elif Results["PLATFORM"] == CONST_PLATFORM.PSM:
-                                if Key == CONST_EXTRACT_UX0:  ## UX0-only PSM extraction
-                                    if Extract["DIRS"]:
-                                        ## Dirs
-                                        Dirs = [["RW", "Documents"], ["RW", "Temp"], ["RW", "System"], ["RO", "License"]]
-                                        #
-                                        Name_Parts = None
-                                        for Name_Parts in Dirs:
-                                            if "ITEM_EXTRACT_PATH" in Extract:
-                                                del Extract["ITEM_EXTRACT_PATH"]
-                                            if "ITEM_EXTRACT_DIR" in Extract:
-                                                del Extract["ITEM_EXTRACT_DIR"]
-                                            ## Build and check item extract path
-                                            if Name_Parts:
-                                                Extract["ITEM_NAME"] = "/".join(Name_Parts)
-                                                ## Check path pattern if set
-                                                if Key == CONST_EXTRACT_CONTENT \
-                                                and Path_Pattern:  ## CONTENT extraction with path pattern
-                                                    if not Path_Pattern.search(Extract["ITEM_NAME"]):
-                                                        continue  ## next dir
-                                                #
-                                                Extract["ITEM_EXTRACT_PATH"] = os.path.join(*Name_Parts)
-                                            #
-                                            if not "ITEM_EXTRACT_PATH" in Extract \
-                                            or not Extract["ITEM_EXTRACT_PATH"]:
-                                                if "ITEM_EXTRACT_PATH" in Extract:
-                                                    del Extract["ITEM_EXTRACT_PATH"]
-                                                continue  ## next dir
-
-                                            ## Create directory
-                                            if createDirectory(Extract, "extra", Key, True, Arguments.quiet, max(0, Debug_Level)) != 0:
-                                                eprint("[{}] ABORT extraction".format(Extract["KEY"]))
-                                                Extract["PROCESS"] = False
-                                            del Extract["ITEM_EXTRACT_PATH"]
-                                        #
-                                        del Name_Parts
-                                        del Dirs
-                                        #
-                                        if not Extract["PROCESS"]:
-                                            continue  ## next extract
-
-                                    ## Files
-                                    File_Number = 0
-                                    Name_Parts = None
-                                    for Name_Parts in [["RW", "System", "content_id"], ["RW", "System", "pm.dat"], ["RO", "License", "FAKE.rif"]]:
-                                        File_Number += 1
-                                        #
-                                        if "ITEM_EXTRACT_PATH" in Extract:
-                                            del Extract["ITEM_EXTRACT_PATH"]
-                                        if "ITEM_EXTRACT_DIR" in Extract:
-                                            del Extract["ITEM_EXTRACT_DIR"]
-
-                                        ## Build and check item extract path
-                                        if Name_Parts:
-                                            Extract["ITEM_NAME"] = "/".join(Name_Parts)
-                                            ## Check path pattern if set
-                                            if Key == CONST_EXTRACT_CONTENT \
-                                            and Path_Pattern:  ## CONTENT extraction with path pattern
-                                                if not Path_Pattern.search(Extract["ITEM_NAME"]):
-                                                    continue  ## next file
-                                            #
-                                            if Key == CONST_EXTRACT_CONTENT \
-                                            and Arguments.nosubdirs:
-                                                Name_Parts = Name_Parts[-1:]
-                                            #
-                                            Extract["ITEM_EXTRACT_PATH"] = os.path.join(*Name_Parts)
-                                            #
-                                            if len(Name_Parts) > 1:
-                                                Extract["ITEM_EXTRACT_DIR"] = os.path.join(*Name_Parts[:-1])
-                                                Extract["ITEM_EXTRACT_DIR_NAME"] = "/".join(Name_Parts[:-1])
-                                        #
-                                        if not "ITEM_EXTRACT_PATH" in Extract \
-                                        or not Extract["ITEM_EXTRACT_PATH"]:
-                                            if "ITEM_EXTRACT_PATH" in Extract:
-                                                del Extract["ITEM_EXTRACT_PATH"]
-                                            continue  ## next file
-
-                                        ## Special case: create missing directory, e.g. when path pattern is set
-                                        if Key == CONST_EXTRACT_CONTENT \
-                                        and Extract["DIRS"] \
-                                        and "ITEM_EXTRACT_DIR" in Extract:
-                                            Extract["ITEM_BACKUP_NAME"] = Extract["ITEM_NAME"]
-                                            Extract["ITEM_BACKUP_EXTRACT"] = Extract["ITEM_EXTRACT_PATH"]
-                                            #
-                                            Extract["ITEM_EXTRACT_PATH"] = Extract["ITEM_EXTRACT_DIR"]
-                                            Extract["ITEM_NAME"] = Extract["ITEM_EXTRACT_DIR_NAME"]
-                                            createDirectory(Extract, "missing extra", Key, True, Arguments.quiet, max(0, Debug_Level))
-                                            #
-                                            Extract["ITEM_EXTRACT_PATH"] = Extract["ITEM_BACKUP_EXTRACT"]
-                                            Extract["ITEM_NAME"] = Extract["ITEM_BACKUP_NAME"]
-                                            del Extract["TARGET"]
-                                            del Extract["ITEM_BACKUP_EXTRACT"]
-                                            del Extract["ITEM_BACKUP_NAME"]
-                                            del Extract["ITEM_EXTRACT_DIR"]
-
-                                        ## Display item extract path
-                                        if Arguments.quiet <= 0:
-                                            Values = None
-                                            if File_Number == 1:  ## content_id
-                                                Values = [Extract["FUNCTION"], "\"{}\"".format(Extract["ITEM_NAME"]), "content id", "", "offset {:#x}".format(CONST_PKG3_MAIN_HEADER_FIELDS["CONTENT_ID"]["OFFSET"]), CONST_PKG3_MAIN_HEADER_FIELDS["CONTENT_ID"]["SIZE"]]
-                                            elif File_Number == 2:  ## pm.dat
-                                                Values = ["Write", "\"{}\"".format(Extract["ITEM_NAME"]), "fake data", "", "zeroes", 0x10000]
-                                            elif File_Number == 3:  ## FAKE.rif
-                                                if not Results["PKG_CONTENT_ID"] in Rifs:
-                                                    eprint("MISSING zrif license for package content id", Results["PKG_CONTENT_ID"], prefix="[{}] ".format(Extract["KEY"]))
-                                                    del Extract["ITEM_EXTRACT_PATH"]
-                                                    continue  ## next file
-                                                #
-                                                Values = ["Write", "\"{}\"".format(Extract["ITEM_NAME"]), "license", "", "zrif", len(Rifs[Results["PKG_CONTENT_ID"]]["BYTES"])]
-                                            eprint("{} {} {} from {}{} and size {}".format(*Values), prefix="[{}] ".format(Extract["KEY"]))
-                                            del Values
-
-                                        ## Build and check target path
-                                        Extract["TARGET"] = os.path.join(Extract["ROOT"], Extract["ITEM_EXTRACT_PATH"])
-                                        Extract["TARGET_CHECK"] = checkExtractFile(Extract, Arguments.overwrite, Arguments.quiet, max(0, Debug_Level))
-                                        if Extract["TARGET_CHECK"] != 0:
-                                            if Extract["TARGET_CHECK"] < 0:
-                                                eprint("[{}] BROKEN extraction".format(Extract["KEY"]))
-                                            del Extract["ITEM_EXTRACT_PATH"]
-                                            continue  ## next file
-
-                                        ## Write data
-                                        ## --> PSM content_id
-                                        if File_Number == 1:
-                                            Extract["STREAM"].write(Package["HEAD_BYTES"][CONST_PKG3_MAIN_HEADER_FIELDS["CONTENT_ID"]["OFFSET"]:CONST_PKG3_MAIN_HEADER_FIELDS["CONTENT_ID"]["OFFSET"]+CONST_PKG3_MAIN_HEADER_FIELDS["CONTENT_ID"]["SIZE"]])
-                                            Extract["STREAM"].close()
-                                            del Extract["STREAM"]
-                                        ## --> PSM pm.dat
-                                        elif File_Number == 2:
-                                            Extract["STREAM"].write(bytearray(0x10000))
-                                            Extract["STREAM"].close()
-                                            del Extract["STREAM"]
-                                        ## --> PSM FAKE.rif (license)
-                                        elif File_Number == 3:
-                                            Extract["STREAM"].write(Rifs[Results["PKG_CONTENT_ID"]]["BYTES"])
-                                            Extract["STREAM"].close()
-                                            del Extract["STREAM"]
-                                        #
-                                        del Extract["ITEM_EXTRACT_PATH"]
-                                    #
-                                    del Name_Parts
-                                    del File_Number
+                                del Extract["ITEM_EXTRACT_PATH"]
+                                #
+                                if "STREAM" in Extract:
+                                    eprint("[{}]".format(Extract["KEY"]), "NOT IMPLEMENTED for item", "\"{}\"".format(Extract["ITEM_NAME"]))
+                                    Extract["STREAM"].close()
+                                    del Extract["STREAM"]
+                                    os.remove(Extract["TARGET"])
+                                    continue  ## next file
+                                #
+                                continue  ## next file
+                            #
+                            del File_Data
+                            del File_Number
+                            del Files
                     ## Clean-up
                     del Extract
                     del Key
