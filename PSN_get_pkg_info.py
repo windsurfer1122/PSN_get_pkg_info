@@ -292,8 +292,8 @@ class CONST_PKG_SUB_TYPE(aenum.OrderedEnum):
         return unicode(self.value)
 
     __ordered__ = "PSP_PC_ENGINE PSP_GO PSP_MINI PSP_NEOGEO PS2_CLASSIC PSP_REMASTER"
-    PSP_PC_ENGINE = "PC Engine"
-    PSP_GO = "Go"
+    PSP_PC_ENGINE = "PSP PC Engine"
+    PSP_GO = "PSP Go"
     PSP_MINI = "PSP Mini"
     PSP_NEOGEO = "PSP NeoGeo"
     PS2_CLASSIC = "PS2 Classic"
