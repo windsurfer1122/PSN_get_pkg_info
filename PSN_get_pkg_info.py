@@ -58,7 +58,7 @@ from builtins import bytes
 
 ## Version definition
 ## see https://www.python.org/dev/peps/pep-0440/
-__version__ = "2020.01.00.beta2"
+__version__ = "2020.01.00.beta3"
 __author__ = "https://github.com/windsurfer1122/PSN_get_pkg_info"
 __license__ = "GPL"
 __copyright__ = "Copyright 2018-2020, windsurfer1122"
@@ -3263,7 +3263,8 @@ if __name__ == "__main__":
                         Results["PKG_TYPE"] = CONST_PKG_TYPE.GAME
                         #
                         Results["PKG_EXTRACT_UX0_ROOT"] = os.path.join("pspemu", "PSP", "GAME", Results["PKG_CID_TITLE_ID1"])
-                        Results["PKG_EXTRACT_UX0_LIC"] = os.path.join("pspemu", "PSP", "LICENSE", "".join((Results["PKG_CONTENT_ID"], ".rif")))
+                        Results["PKG_EXTRACT_UX0_LIC_ROOT"] = os.path.join("pspemu", "PSP", "LICENSE")
+                        Results["PKG_EXTRACT_UX0_LIC_FILE"] = os.path.join(Results["PKG_EXTRACT_UX0_LIC_ROOT"], "".join((Results["PKG_CONTENT_ID"], ".rif")))
                         #
                         Results["PKG_EXTRACT_CNT_ROOT"] = Pkg_Header["CONTENT_ID"][7:]
                         #
@@ -3299,6 +3300,9 @@ if __name__ == "__main__":
                         #
                         ## TODO: Verify when ISO and when GAME directory has to be used?
                         Results["PKG_EXTRACT_UX0_ROOT"] = os.path.join("pspemu", "PSP", "GAME", Results["PKG_CID_TITLE_ID1"])
+                        if Results["PKG_TYPE"] != CONST_PKG_TYPE.PATCH:  ## Patches do not need a license file
+                            Results["PKG_EXTRACT_UX0_LIC_ROOT"] = os.path.join("pspemu", "PSP", "LICENSE")
+                            Results["PKG_EXTRACT_UX0_LIC_FILE"] = os.path.join(Results["PKG_EXTRACT_UX0_LIC_ROOT"], "".join((Results["PKG_CONTENT_ID"], ".rif")))
                         Results["PKG_EXTRACT_UX0_ISOR"] = os.path.join("pspemu", "ISO")
                         Results["PKG_EXTRACT_ISO_NAME"] = "".join((Results["SFO_TITLE"], " [", Results["PKG_CID_TITLE_ID1"], "]", ".iso"))
                         #
@@ -3977,9 +3981,10 @@ if __name__ == "__main__":
                         Extract["KEY"] = CONST_EXTRACT_UX0
                         Extract["FUNCTION"] = "Extract"
                         Extract["PROCESS"] = False
-                        if "PLATFORM" in Results \
-                        and (Results["PLATFORM"] == CONST_PLATFORM.PSX \
-                             or Results["PLATFORM"] == CONST_PLATFORM.PSP):
+                        if ("PLATFORM" in Results \
+                            and (Results["PLATFORM"] == CONST_PLATFORM.PSX \
+                                 or Results["PLATFORM"] == CONST_PLATFORM.PSP)) \
+                        or Results["TITLE_ID"] == CONST_TITLE_ID_PSV_POCKETSTATION:
                             Extract["DIRS"] = False
                         else:
                             Extract["DIRS"] = True
@@ -4129,12 +4134,15 @@ if __name__ == "__main__":
                                 and "PLATFORM" in Results:
                                     ## Process name parts depending on platform
                                     ## --> UX0 PSX/PSP extraction
+                                    ## --> Special case: PCSC80018 "PocketStation for Playstation Vita (PSX)"
                                     if Results["PLATFORM"] == CONST_PLATFORM.PSX \
-                                    or Results["PLATFORM"] == CONST_PLATFORM.PSP:
+                                    or Results["PLATFORM"] == CONST_PLATFORM.PSP \
+                                    or Results["TITLE_ID"] == CONST_TITLE_ID_PSV_POCKETSTATION:
                                         ## no dirs (safety check only)
                                         Name_Parts = None
                                     ## --> UX0 PSV extraction
-                                    elif Results["PLATFORM"] == CONST_PLATFORM.PSV:
+                                    elif Results["PLATFORM"] == CONST_PLATFORM.PSV \
+                                    and Results["TITLE_ID"] != CONST_TITLE_ID_PSV_POCKETSTATION:
                                         ## Check if special dir "sce_sys/package" is created
                                         if not Extract["SCESYS_PACKAGE_CREATED"] \
                                         and len(Name_Parts) >= 2 \
@@ -4236,12 +4244,15 @@ if __name__ == "__main__":
                                     and "PLATFORM" in Results:
                                         ## Process name parts depending on platform
                                         ## --> UX0 PSX extraction
-                                        if Results["PLATFORM"] == CONST_PLATFORM.PSX:
+                                        ## --> Special case: PCSC80018 "PocketStation for Playstation Vita (PSX)"
+                                        if Results["PLATFORM"] == CONST_PLATFORM.PSX \
+                                        or Results["TITLE_ID"] == CONST_TITLE_ID_PSV_POCKETSTATION:
                                             if len(Name_Parts) == 3 \
                                             and Name_Parts[0] == "USRDIR" \
                                             and Name_Parts[1] == "CONTENT" \
                                             and (Name_Parts[2] == "DOCUMENT.DAT" \
-                                                 or Name_Parts[2] == "EBOOT.PBP"):
+                                                 or Name_Parts[2] == "EBOOT.PBP" \
+                                                 or Name_Parts[2] == "texture.enc"):
                                                 ## no dirs
                                                 Name_Parts = Name_Parts[-1:]
                                             else:
@@ -4275,7 +4286,8 @@ if __name__ == "__main__":
                                                 ## skip file
                                                 Name_Parts = None
                                         ## --> UX0 PSV extraction
-                                        elif Results["PLATFORM"] == CONST_PLATFORM.PSV:
+                                        elif Results["PLATFORM"] == CONST_PLATFORM.PSV \
+                                        and Results["TITLE_ID"] != CONST_TITLE_ID_PSV_POCKETSTATION:
                                             ## Special case: PSV encrypted sce_sys/package/(digs|cert).bin as body.bin
                                             if len(Name_Parts) == 3 \
                                             and Name_Parts[0] == "sce_sys" \
@@ -4495,9 +4507,30 @@ if __name__ == "__main__":
                             ## Definitions
                             Dirs = collections.OrderedDict()
                             Files = collections.OrderedDict()
+                            ## --> PSX/PSP extraction
+                            ## --> Special case: PCSC80018 "PocketStation for Playstation Vita (PSX)"
+                            if Results["PLATFORM"] == CONST_PLATFORM.PSX \
+                            or Results["PLATFORM"] == CONST_PLATFORM.PSP \
+                            or Results["TITLE_ID"] == CONST_TITLE_ID_PSV_POCKETSTATION:
+                                ## --> PSX/PSP RIF (license)
+                                if "PKG_EXTRACT_UX0_LIC_FILE" in Results \
+                                and Results["PKG_TYPE"] != CONST_PKG_TYPE.PATCH:  ## Patches do not need a license file
+                                    if not Results["PKG_CONTENT_ID"] in Rifs:
+                                        eprint("MISSING zrif license for package content id", Results["PKG_CONTENT_ID"], prefix="[{}] ".format(Extract_Key))
+                                    else:
+                                        ## Dirs
+                                        Dirs[1] = { "PATH": Results["PKG_EXTRACT_UX0_LIC_ROOT"].split(os.sep), }
+                                        ## Files
+                                        Files[1] = { "PATH": Results["PKG_EXTRACT_UX0_LIC_FILE"].split(os.sep), "VALUES": ["Write", None, "license", "", "zrif", len(Rifs[Results["PKG_CONTENT_ID"]]["BYTES"])], }
+                                        #
+                                        if Extract_Key == CONST_EXTRACT_UX0:  ## UX0-only PSP extraction
+                                            Dirs[1]["ROOT"] = Extract["TOPDIR"]
+                                            Dirs[1]["DIRS"] = True
+                                            Files[1]["ROOT"] = Extract["TOPDIR"]
                             ## --> PSV extraction
-                            if Results["PLATFORM"] == CONST_PLATFORM.PSV \
-                            and Results["PKG_CONTENT_TYPE"] != 0x17:
+                            elif Results["PLATFORM"] == CONST_PLATFORM.PSV \
+                            and Results["PKG_CONTENT_TYPE"] != 0x17 \
+                            and Results["TITLE_ID"] != CONST_TITLE_ID_PSV_POCKETSTATION:
                                 ## Dirs
                                 if Extract["DIRS"]:
                                     if not Extract["SCESYS_PACKAGE_CREATED"]:
@@ -4545,7 +4578,9 @@ if __name__ == "__main__":
                             Dir_Number = None
                             Dir_Data = None
                             for Dir_Number, Dir_Data in Dirs.items():
-                                if not Extract["DIRS"]:
+                                if not Extract["DIRS"] \
+                                and not ("DIRS" in Dir_Data \
+                                         and Dir_Data["DIRS"]):
                                     continue  ## next dir
 
                                 ## Special exclusions
@@ -4559,7 +4594,10 @@ if __name__ == "__main__":
                                 if "ITEM_EXTRACT_DIR" in Extract:
                                     del Extract["ITEM_EXTRACT_DIR"]
                                 #
-                                Extract["ITEM_EXTRACT_ROOT"] = Extract["ROOT"]
+                                if "ROOT" in Dir_Data:
+                                    Extract["ITEM_EXTRACT_ROOT"] = Dir_Data["ROOT"]
+                                else:
+                                    Extract["ITEM_EXTRACT_ROOT"] = Extract["ROOT"]
 
                                 ## Process item name for item-wise extraction
                                 Name_Parts = copy.copy(Dir_Data["PATH"])
@@ -4611,7 +4649,10 @@ if __name__ == "__main__":
                                 if "ITEM_EXTRACT_DIR" in Extract:
                                     del Extract["ITEM_EXTRACT_DIR"]
                                 #
-                                Extract["ITEM_EXTRACT_ROOT"] = Extract["ROOT"]
+                                if "ROOT" in File_Data:
+                                    Extract["ITEM_EXTRACT_ROOT"] = File_Data["ROOT"]
+                                else:
+                                    Extract["ITEM_EXTRACT_ROOT"] = Extract["ROOT"]
                                 Extract["ITEM_DATATYPE"] = Extract["DATATYPE"]
 
                                 ## Process item name for item-wise extraction
@@ -4706,8 +4747,19 @@ if __name__ == "__main__":
                                     continue  ## next file
 
                                 ## Write data
+                                ## --> PSX/PSP extraction
+                                ## --> Special case: PCSC80018 "PocketStation for Playstation Vita (PSX)"
+                                if Results["PLATFORM"] == CONST_PLATFORM.PSX \
+                                or Results["PLATFORM"] == CONST_PLATFORM.PSP \
+                                or Results["TITLE_ID"] == CONST_TITLE_ID_PSV_POCKETSTATION:
+                                    ## --> PSX/PSP RIF (license)
+                                    if File_Number == 1:
+                                        Extract["STREAM"].write(Rifs[Results["PKG_CONTENT_ID"]]["BYTES"])
+                                        Extract["STREAM"].close()
+                                        del Extract["STREAM"]
                                 ## --> PSV extraction
-                                if Results["PLATFORM"] == CONST_PLATFORM.PSV:
+                                elif Results["PLATFORM"] == CONST_PLATFORM.PSV \
+                                and Results["TITLE_ID"] != CONST_TITLE_ID_PSV_POCKETSTATION:
                                     ## --> PSV head.bin
                                     if File_Number == 1:
                                         Extract["STREAM"].write(Package["HEAD_BYTES"])

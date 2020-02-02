@@ -1,5 +1,9 @@
 # PSN_get_pkg_info.py - Changelog
 
+## 2020.01.00.beta3
+* NEW: Handle extraction of PSP/PSX licenses
+* NEW: Handle extraction of PCSC80018 "PocketStation for Playstation Vita"
+
 ## 2020.01.00.beta2
 * NEW: Handle missing items directories for `--content` and `--ux0` extractions
 * FIX: Leave item names unchanged for `--content` extraction
