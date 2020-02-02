@@ -6,6 +6,7 @@
 * FIX: Leave item names unchanged for `--raw` extraction, display only
 * DOC: Add path pattern examples to README.md
 * INTERNAL: Rearrange extraction code
+* INTERNAL: Do not use reserved Python keywords (pow, format, etc.)
 
 ## 2020.01.00.beta1
 * NEW: Adapt PSV/PSM `--ux0` extraction changes from lusid1's pkg2zip 2.2.2
