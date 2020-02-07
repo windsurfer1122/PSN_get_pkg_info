@@ -60,3 +60,6 @@ http://zeus.dl.playstation.net/cdn/UP9000/UCUS98744_00/JS2QY6Iq0Nlx5JIvskoV1dKFL
 
 ### PS3 (EU) - NPIA00005 - PlayStation Home - Debug Package
 * Game 1.21: http://nopsn.com/pkg/ps3/playstation-home/debug/PlayStation-Home-v1.21-%5BNPIA00005%5D-DEBUG.pkg
+
+### PSV (INT) - PCSI00011 - PSM Runtime
+* App 1.00: http://ares.dl.playstation.net/psm-runtime/IP9100-PCSI00011_00-PSMRUNTIME000000.pkg

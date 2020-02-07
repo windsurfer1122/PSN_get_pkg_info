@@ -1353,7 +1353,7 @@ def dprintBytesStructure(CONST_STRUCTURE_FIELDS, CONST_STRUCTURE_ENDIAN, temp_fi
                 sep = field_def["SEP"]
             else:
                 sep = " "
-            output = format_string.format(field_def["INDEX"], field_def["OFFSET"], field_def["SIZE"], field_def["DESC"], convertBytesToHexString(temp_fields[field_def["INDEX"]], format="".join((CONST_STRUCTURE_ENDIAN, field_format)), sep=sep))
+            output = format_string.format(field_def["INDEX"], field_def["OFFSET"], field_def["SIZE"], field_def["DESC"], convertBytesToHexString(temp_fields[field_def["INDEX"]], format_string="".join((CONST_STRUCTURE_ENDIAN, field_format)), sep=sep))
             #
             if "CONV" in field_def:
                 if field_def["CONV"] == 0x0004 \
@@ -1364,7 +1364,7 @@ def dprintBytesStructure(CONST_STRUCTURE_FIELDS, CONST_STRUCTURE_ENDIAN, temp_fi
             and (field_format == CONST_FMT_UINT16 \
                  or field_format == CONST_FMT_UINT32 \
                  or field_format == CONST_FMT_UINT64):
-                output = "".join((output, " => ", convertBytesToHexString(temp_fields[field_def["INDEX"]], format="".join((CONST_FMT_BIG_ENDIAN, field_format)), sep=sep)))
+                output = "".join((output, " => ", convertBytesToHexString(temp_fields[field_def["INDEX"]], format_string="".join((CONST_FMT_BIG_ENDIAN, field_format)), sep=sep)))
             #
             dprint(output)
 
