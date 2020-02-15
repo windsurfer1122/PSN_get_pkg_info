@@ -84,8 +84,11 @@ import base64
 import xml.etree.ElementTree
 import math
 import datetime
+
+## pip install fastxor
 import fastxor
 
+## pip install pycryptodomex
 import Cryptodome.Cipher.AES
 import Cryptodome.Util.Counter
 import Cryptodome.Hash
@@ -482,27 +485,6 @@ CONST_PSM_RIF_FIELDS = collections.OrderedDict([ \
     #
     ( "LIC_TYPE",   { "VIRTUAL": -1, "DEBUG": 1, "DESC": "License Type", }, ),
 ])
-## --> NPD Header
-CONST_NPD_MAGIC = bytes.fromhex("4E504400")  ## "NPD\x00"
-CONST_NPD_ENDIAN = CONST_FMT_BIG_ENDIAN
-CONST_NPD_HEADER_FIELDS = collections.OrderedDict([ \
-    ( "MAGIC",      { "FORMAT": CONST_FMT_CHAR, "SIZE": 4, "DEBUG": 1, "DESC": "Magic", "SEP": "", }, ),
-    ( "VERSION",    { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Version", }, ),
-    ( "LICENSE",    { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "License", }, ),
-    ( "TYPE",       { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Type", }, ),
-    ( "CONTENT_ID", { "FORMAT": CONST_FMT_CHAR, "SIZE": CONST_CONTENT_ID_SIZE, "CONV": 0x0204, "DEBUG": 1, "DESC": "Content ID", "SEP": "", }, ),
-    ( "DIGEST",     { "FORMAT": CONST_FMT_CHAR, "SIZE": 16, "DEBUG": 1, "DESC": "Digest", "SEP": "", }, ),
-    ( "TITLE_HASH", { "FORMAT": CONST_FMT_CHAR, "SIZE": 16, "DEBUG": 1, "DESC": "Title Hash", "SEP": "", }, ),
-    ( "DEV_HASH",   { "FORMAT": CONST_FMT_CHAR, "SIZE": 16, "DEBUG": 1, "DESC": "Dev Hash", "SEP": "", }, ),
-    ( "UNKNOWN",    { "FORMAT": CONST_FMT_CHAR, "SIZE": 0x10, "DEBUG": 3, "DESC": "Unknown", "SEP": "", }, ),
-])
-## --> EDAT/SDAT Header
-CONST_EDAT_ENDIAN = CONST_FMT_BIG_ENDIAN
-CONST_EDAT_HEADER_FIELDS = collections.OrderedDict([ \
-    ( "FLAGS",     { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Flags", }, ),
-    ( "BLOCKSIZE", { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Block Size", }, ),
-    ( "FILESIZE",  { "FORMAT": CONST_FMT_UINT64, "DEBUG": 1, "DESC": "File Size", }, ),
-])
 
 ##
 ## PKG4 Definitions
@@ -709,10 +691,10 @@ del Key
 ##
 ## PARAM.SFO Definitions
 ##
-CONST_PARAM_SFO_ENDIAN = CONST_FMT_LITTLE_ENDIAN
-CONST_PARAM_SFO_MAGIC = bytes.fromhex("00505346")  ## "\x00PSF"
 #
 ## --> Header
+CONST_PARAM_SFO_ENDIAN = CONST_FMT_LITTLE_ENDIAN
+CONST_PARAM_SFO_MAGIC = bytes.fromhex("00505346")  ## "\x00PSF"
 CONST_PARAM_SFO_HEADER_FIELDS = collections.OrderedDict([ \
     ( "MAGIC",        { "FORMAT": CONST_FMT_CHAR, "SIZE": 4, "DEBUG": 1, "DESC": "Magic", "SEP": "", }, ),
     ( "VERSION",      { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Version", }, ),
@@ -733,12 +715,11 @@ CONST_PARAM_SFO_INDEX_ENTRY_FIELDS = collections.OrderedDict([ \
 ##
 ## PBP Definitions
 ##
+#
 CONST_REGEX_PBP_SUFFIX = re.compile(r"\.PBP$", flags=re.UNICODE|re.IGNORECASE)
-#
-CONST_PBP_ENDIAN = CONST_FMT_LITTLE_ENDIAN
-CONST_PBP_MAGIC = bytes.fromhex("00504250")  ## "\x00PBP"
-#
 ## --> Header
+CONST_PBP_HEADER_ENDIAN = CONST_FMT_LITTLE_ENDIAN
+CONST_PBP_MAGIC = bytes.fromhex("00504250")  ## "\x00PBP"
 CONST_PBP_HEADER_FIELDS = collections.OrderedDict([ \
     ( "MAGIC",         { "FORMAT": CONST_FMT_CHAR, "SIZE": 4, "DEBUG": 1, "DESC": "Magic", "SEP": "", }, ),
     ( "VERSION",       { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Version", }, ),
@@ -753,10 +734,40 @@ CONST_PBP_HEADER_FIELDS = collections.OrderedDict([ \
 ])
 
 ##
+## EDAT/SDAT (NPD) Definitions
+##
+#
+## --> Header
+CONST_EDAT_HEADER_ENDIAN = CONST_FMT_BIG_ENDIAN
+CONST_EDAT_MAGIC = bytes.fromhex("4E504400")  ## "NPD\x00"
+CONST_EDAT_HEADER_FIELDS = collections.OrderedDict([ \
+    ( "MAGIC",         { "FORMAT": CONST_FMT_CHAR, "SIZE": 4, "DEBUG": 1, "DESC": "Magic", "SEP": "", }, ),
+    ( "VERSION",       { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Version", }, ),  ## 1-4
+    ( "LICENSE",       { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "License Type", }, ),  ## 0=debug, 1=network, 2=local, 3=free
+    ( "TYPE",          { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Application Type", }, ),
+    ( "CONTENT_ID",    { "FORMAT": CONST_FMT_CHAR, "SIZE": CONST_CONTENT_ID_SIZE, "CONV": 0x0204, "DEBUG": 1, "DESC": "Content ID", "SEP": "", }, ),
+    ( "DIGEST",        { "FORMAT": CONST_FMT_CHAR, "SIZE": 16, "DEBUG": 1, "DESC": "Digest", "SEP": "", }, ),
+    ( "CID_FN_HASH",   { "FORMAT": CONST_FMT_CHAR, "SIZE": 16, "DEBUG": 1, "DESC": "Hash of CID+FN", "SEP": "", }, ),
+    ( "HEADER_HASH",   { "FORMAT": CONST_FMT_CHAR, "SIZE": 16, "DEBUG": 1, "DESC": "Header Hash", "SEP": "", }, ),
+    ## --> extended header
+    ( "VALID_FROM",    { "FORMAT": CONST_FMT_UINT64, "DEBUG": 1, "DESC": "Start validity period", }, ),
+    ( "VALID_TO",      { "FORMAT": CONST_FMT_UINT64, "DEBUG": 1, "DESC": "End validity period", }, ),
+    ( "FLAGS",         { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Flags", }, ),
+    ( "BLOCKSIZE",     { "FORMAT": CONST_FMT_UINT32, "DEBUG": 1, "DESC": "Block Size", }, ),
+    ( "FILESIZE",      { "FORMAT": CONST_FMT_UINT64, "DEBUG": 1, "DESC": "File Size", }, ),
+    ( "META_HASH",     { "FORMAT": CONST_FMT_CHAR, "SIZE": 16, "DEBUG": 1, "DESC": "Meta Data Hash", "SEP": "", }, ),
+    ( "EXT_HDR_HASH",  { "FORMAT": CONST_FMT_CHAR, "SIZE": 16, "DEBUG": 1, "DESC": "Extended Header Hash", "SEP": "", }, ),
+    ( "META_ECDSA",    { "FORMAT": CONST_FMT_CHAR, "SIZE": 40, "DEBUG": 1, "DESC": "Meta Data ECDSA", "SEP": "", }, ),
+    ( "EXT_HDR_ECDSA", { "FORMAT": CONST_FMT_CHAR, "SIZE": 40, "DEBUG": 1, "DESC": "Extended Header ECDSA", "SEP": "", }, ),
+    #
+    ( "DEBUG_PKG",     { "VIRTUAL": 1, "DEBUG": 1, "DESC": "Debug Package", }, ),
+])
+
+
+##
 ## Special Case Definitions
 ##
 CONST_TITLE_ID_PSV_POCKETSTATION = "PCSC80018"
-
 
 
 def currenttime():
@@ -1240,7 +1251,7 @@ class PkgAesCtrCounter():
     def __init__(self, key, iv):
         ## Python 2 workaround: must use bytes() for AES's .new()/.encrypt()/.decrypt() and hash's .update()
         self._key = bytes(key)
-        self._key_size = Cryptodome.Cipher.AES.key_size[0] * 8  ## Key length 16 bytes = 128 bits
+        self._key_bits = Cryptodome.Cipher.AES.key_size[0] * 8  ## Key length 16 bytes = 128 bits
         if isinstance(iv, bytes) \
         or isinstance(iv, bytearray):
             self._iv = int.from_bytes(iv, byteorder="big")
@@ -1262,7 +1273,7 @@ class PkgAesCtrCounter():
         #
         if hasattr(self, "_aes"):
             del self._aes
-        counter = Cryptodome.Util.Counter.new(self._key_size, initial_value=start_counter)
+        counter = Cryptodome.Util.Counter.new(self._key_bits, initial_value=start_counter)
         self._aes = Cryptodome.Cipher.AES.new(self._key, Cryptodome.Cipher.AES.MODE_CTR, counter=counter)
 
     def decrypt(self, offset, data):
@@ -1321,31 +1332,58 @@ class PkgXorSha1Counter():
         return decrypted_data
 
 
-def rap_to_rif(rap_bytes):
+def rapkey_to_rifkey(rapkey_bytes):
     aes = Cryptodome.Cipher.AES.new(CONST_RAP_KEYS[0]["KEY"], Cryptodome.Cipher.AES.MODE_CBC, iv=CONST_AES_EMPTY_IV)
     ## Python 2 workaround: must use bytes() for AES's .new()/.encrypt()/.decrypt() and hash's .update()
-    rif_bytes = bytearray(aes.decrypt(bytes(rap_bytes)))
+    temp_bytes = bytearray(aes.decrypt(bytes(rapkey_bytes)))
     #
-    for round in range(5):
-        fastxor.fast_xor_inplace(rif_bytes, bytearray(CONST_RAP_KEYS[1]["KEY"]))
+    for _ in range(5):
+        fastxor.fast_xor_inplace(temp_bytes, bytearray(CONST_RAP_KEYS[1]["KEY"]))
         #
-        for _i in range(15,0,-1):
+        for _i in range(Cryptodome.Cipher.AES.block_size-1,0,-1):
             pos1 = CONST_RAP_PBOX[_i]
             pos2 = CONST_RAP_PBOX[_i-1]
-            rif_bytes[pos1] ^= rif_bytes[pos2]
+            temp_bytes[pos1] ^= temp_bytes[pos2]
         #
         carryover = 0
-        for _i in range(16):
+        for _i in range(Cryptodome.Cipher.AES.block_size):
             pos1 = CONST_RAP_PBOX[_i]
-            new_byte = rif_bytes[pos1] - carryover - CONST_RAP_KEYS[2]["KEY"][pos1]
-            if new_byte < 0:
+            new_byte = temp_bytes[pos1] - carryover - CONST_RAP_KEYS[2]["KEY"][pos1]
+            if new_byte < 0x00:
                 carryover = 1
-                rif_bytes[pos1] = new_byte + 0x100  ## convert to positive counterpart
             else:
                 carryover = 0
-                rif_bytes[pos1] = new_byte
+            temp_bytes[pos1] = new_byte & 0xFF
     #
-    return rif_bytes
+    return temp_bytes
+
+
+def rifkey_to_rapkey(rifkey_bytes):
+    temp_bytes = bytearray(rifkey_bytes)
+    #
+    for _ in range(5):
+        carryover = 0
+        for _i in range(Cryptodome.Cipher.AES.block_size):
+            pos1 = CONST_RAP_PBOX[_i]
+            new_byte = temp_bytes[pos1] + carryover + CONST_RAP_KEYS[2]["KEY"][pos1]
+            if new_byte > 0xFF:
+                carryover = 1
+            else:
+                carryover = 0
+            temp_bytes[pos1] = new_byte & 0xFF
+        #
+        for _i in range(1,Cryptodome.Cipher.AES.block_size):
+            pos1 = CONST_RAP_PBOX[_i]
+            pos2 = CONST_RAP_PBOX[_i-1]
+            temp_bytes[pos1] ^= temp_bytes[pos2]
+        #
+        fastxor.fast_xor_inplace(temp_bytes, bytearray(CONST_RAP_KEYS[1]["KEY"]))
+    #
+    aes = Cryptodome.Cipher.AES.new(CONST_RAP_KEYS[0]["KEY"], Cryptodome.Cipher.AES.MODE_CBC, iv=CONST_AES_EMPTY_IV)
+    ## Python 2 workaround: must use bytes() for AES's .new()/.encrypt()/.decrypt() and hash's .update()
+    temp_bytes = bytearray(aes.encrypt(bytes(temp_bytes)))
+    #
+    return temp_bytes
 
 
 def getRegion(region_code):
@@ -1984,7 +2022,7 @@ def parsePbpHeader(head_bytes, input_stream, file_size, function_debug_level=0):
     temp_fields = struct.unpack(CONST_PBP_HEADER_FIELDS["STRUCTURE_UNPACK"], head_bytes)
     ## --> Debug print all
     if function_debug_level >= 2:
-        dprintBytesStructure(CONST_PBP_HEADER_FIELDS, CONST_PBP_ENDIAN, temp_fields, "PBP Header[{:1}]: [{:#04x}|{:1}] {} = {}", function_debug_level)
+        dprintBytesStructure(CONST_PBP_HEADER_FIELDS, CONST_PBP_HEADER_ENDIAN, temp_fields, "PBP Header[{:1}]: [{:#04x}|{:1}] {} = {}", function_debug_level)
 
     ## Convert to dictionary (associative array)
     pbp_header_fields = convertFieldsToOrdDict(CONST_PBP_HEADER_FIELDS, temp_fields)
@@ -2058,23 +2096,28 @@ def parsePbpHeader(head_bytes, input_stream, file_size, function_debug_level=0):
     return pbp_header_fields, item_entries
 
 
-def parseNpdHeader(head_bytes, input_stream, function_debug_level):
+def parseEdatHeader(head_bytes, input_stream, function_debug_level):
     if function_debug_level >= 2:
-        dprint(">>>>> NPD Header:")
+        dprint(">>>>> EDAT/SDAT Header:")
+
+    ## For definition see https://www.psdevwiki.com/ps3/EDAT_files
 
     ## Extract fields from NPD Header
-    temp_fields = struct.unpack(CONST_NPD_HEADER_FIELDS["STRUCTURE_UNPACK"], head_bytes)
+    temp_fields = struct.unpack(CONST_EDAT_HEADER_FIELDS["STRUCTURE_UNPACK"], head_bytes)
     ## --> Debug print all
     if function_debug_level >= 2:
-        dprintBytesStructure(CONST_NPD_HEADER_FIELDS, CONST_NPD_ENDIAN, temp_fields, "NPD Header[{:1}]: [{:#04x}|{:2}] {} = {}", function_debug_level)
+        dprintBytesStructure(CONST_EDAT_HEADER_FIELDS, CONST_EDAT_HEADER_ENDIAN, temp_fields, "EDAT/SDAT Header[{:2}]: [{:#04x}|{:2}] {} = {}", function_debug_level)
 
     ## Convert to dictionary (associative array)
-    header_fields = convertFieldsToOrdDict(CONST_NPD_HEADER_FIELDS, temp_fields)
+    header_fields = convertFieldsToOrdDict(CONST_EDAT_HEADER_FIELDS, temp_fields)
     del temp_fields
 
+    ## Determine debug edat
+    header_fields["DEBUG_PKG"] = (header_fields["FLAGS"] & 0x80000000) != 0
+
     ## Debug print results
-    dprint(">>>>> parseNpdHeader results:")
-    dprintFieldsDict(header_fields, "npdheaderfields[{KEY:12}|{INDEX:1}]", function_debug_level, None)
+    dprint(">>>>> parseEdatHeader results:")
+    dprintFieldsDict(header_fields, "edatheaderfields[{KEY:15}|{INDEX:2}]", function_debug_level, None)
 
     return header_fields
 
@@ -2628,7 +2671,9 @@ def createArgParser():
     if not Zrif_Support:
         help_zrif = "\n".join((help_zrif, " ".join(("NOT SUPPORTED!!! As this implementation of the Python", PYTHON_VERSION, "module zlib", zlib.__version__)), "lacks support for compression dictionaries."))
     ## --> RAP
-    help_rap = "To verify RAP key for PS3/PSX/PSP package."
+    help_rapkey = "To verify RAP key for EDAT file of PS3/PSX/PSP package."
+    ## --> RIF
+    help_rifkey = "To verify RIF key for EDAT file of PS3/PSX/PSP package."
     ## --> Unclean
     help_unclean = "".join(("Do not clean up international/english tile, except for condensing\n\
 multiple white spaces incl. new line to a single space.\n\
@@ -2663,7 +2708,8 @@ If you state URLs then only the necessary bytes are downloaded into memory.\nNot
     parser.add_argument("--overwrite", action="store_true", help=help_overwrite)
     parser.add_argument("--quiet", metavar="LEVEL", type=int, default=0, help=help_quiet)
     parser.add_argument("--zrif", metavar="LICENSE", action="append", help=help_zrif)
-    parser.add_argument("--rap", metavar="RAP", action="append", help=help_rap)
+    parser.add_argument("--rapkey", metavar="RAPKEY", action="append", help=help_rapkey)
+    parser.add_argument("--rifkey", metavar="RIFKEY", action="append", help=help_rifkey)
     parser.add_argument("--unclean", action="store_true", help=help_unclean)
     parser.add_argument("--unknown", action="store_true", help=help_unknown)
     parser.add_argument("--debug", "-d", metavar="LEVEL", type=int, default=0, choices=choices_debug, help=help_debug)
@@ -2745,85 +2791,126 @@ if __name__ == "__main__":
         ## --> PARAM.SFO Index Entry
         finalizeBytesStructure(CONST_PARAM_SFO_INDEX_ENTRY_FIELDS, CONST_PARAM_SFO_ENDIAN, "SFO Index Entry", "{}[{:1}]: ofs {:#03x} size {:1} key {:12} = {}", Debug_Level)
         ## --> PBP Header
-        finalizeBytesStructure(CONST_PBP_HEADER_FIELDS, CONST_PBP_ENDIAN, "PBP Header", "{}[{:1}]: ofs {:#04x} size {:1} key {:13} = {}", Debug_Level)
+        finalizeBytesStructure(CONST_PBP_HEADER_FIELDS, CONST_PBP_HEADER_ENDIAN, "PBP Header", "{}[{:1}]: ofs {:#04x} size {:1} key {:13} = {}", Debug_Level)
         ## --> RIF PS3
-        finalizeBytesStructure(CONST_PS3_RIF_FIELDS, CONST_PS3_RIF_ENDIAN, "PS3 RIF", "{}[{:2}]: ofs {:#05x} size {:3} key {:12} = {}", Debug_Level)
+        finalizeBytesStructure(CONST_PS3_RIF_FIELDS, CONST_PS3_RIF_ENDIAN, "PS3 RIF", "{}[{:2}]: ofs {:#05x} size {:2} key {:12} = {}", Debug_Level)
         ## --> RIF PSP/PSV
         finalizeBytesStructure(CONST_PSV_RIF_FIELDS, CONST_PSV_RIF_ENDIAN, "PSP/PSV RIF", "{}[{:2}]: ofs {:#05x} size {:3} key {:12} = {}", Debug_Level)
         ## --> RIF PSM
         finalizeBytesStructure(CONST_PSM_RIF_FIELDS, CONST_PSM_RIF_ENDIAN, "PSM RIF", "{}[{:2}]: ofs {:#05x} size {:3} key {:11} = {}", Debug_Level)
-        ## --> NPD Header
-        finalizeBytesStructure(CONST_NPD_HEADER_FIELDS, CONST_NPD_ENDIAN, "NPD Header", "{}[{:2}]: ofs {:#05x} size {:3} key {:11} = {}", Debug_Level)
         ## --> EDAT/SDAT Header
-        finalizeBytesStructure(CONST_EDAT_HEADER_FIELDS, CONST_EDAT_ENDIAN, "EDAT/SDAT Header", "{}[{:2}]: ofs {:#05x} size {:3} key {:11} = {}", Debug_Level)
+        finalizeBytesStructure(CONST_EDAT_HEADER_FIELDS, CONST_EDAT_HEADER_ENDIAN, "EDAT/SDAT Header", "{}[{:2}]: ofs {:#04x} size {:2} key {:13} = {}", Debug_Level)
 
         ## Prepare RAP/RIF keys
         Raps = collections.OrderedDict()
-        if Arguments.rap:
-            Rap_Number = 0
-            #
-            Rap = None
-            Rap_Bytes = None
-            Rap_Size = None
-            Is_Rif = None
-            for Rap in Arguments.rap:
+        Rap_Number = 0
+        Rap = None
+        Rap_Bytes = None
+        Rap_Size = None
+        Rif_Number = 0
+        ## --> RAP
+        if Arguments.rapkey:
+            for Rap in Arguments.rapkey:
                 Rap_Number += 1
                 if Debug_Level >= 3:
-                    dprint(">>>>> RAP/RIF #{}:".format(Rap_Number), Rap)
+                    dprint(">>>>> EDAT RAP #{}:".format(Rap_Number), Rap)
                 #
                 Rap_Bytes = bytearray()
                 #
-                Is_Rif = False
                 Rap_Size = len(Rap)
-                if Rap_Size == 32 \
+                if Rap_Size == (Cryptodome.Cipher.AES.block_size*2) \
                 and not CONST_REGEX_HEX_DIGITS.match(Rap) is None:
                     if Debug_Level >= 3:
                         dprint("Assuming RAP hex digits")
                     Rap_Bytes.extend(bytes.fromhex(Rap))
                 else:
                     if Debug_Level >= 3:
-                        dprint("Assuming RAP/RIF binary file")
+                        dprint("Assuming RAP binary file")
                     try:
                         Input_Stream = io.open(Rap, mode="rb", buffering=-1, encoding=None, errors=None, newline=None, closefd=True)
                     except:
-                        eprint("[INPUT] Could not open RAP/RIF FILE", Rap)
+                        eprint("[INPUT] Could not open RAP FILE", Rap)
                         eprint("", prefix=None)
                         raise  ## re-raise
                     #
                     Rap_Bytes.extend(Input_Stream.read())
                     Input_Stream.close()
                     del Input_Stream
-                    #
-                    if Rap.endswith("rifkey.bin"):
-                        Is_Rif = True
                 #
                 Rap_Size = len(Rap_Bytes)
                 if Debug_Level >= 3:
                     dprint(Rap_Size, convertBytesToHexString(Rap_Bytes, sep=""))
                 #
-                if Rap_Size != 16:
-                    eprint("RAP/RIF #{}:".format(Rap_Number), "Invalid RAP/RIF size {}".format(Rap_Size))
+                if Rap_Size != Cryptodome.Cipher.AES.block_size:
+                    eprint("EDAT RAP #{}:".format(Rap_Number), "Invalid RAP size {}".format(Rap_Size))
                     eprint("Input:", Rap)
                     eprint("Bytes:", convertBytesToHexString(Rap_Bytes, sep=""))
                     continue
                 #
                 Raps[Rap_Number] = {}
-                if Is_Rif:
-                    Raps[Rap_Number]["RIF_BYTES"] = bytes(Rap_Bytes)
-                else:
-                    Raps[Rap_Number]["RAP_BYTES"] = bytes(Rap_Bytes)
-                    Raps[Rap_Number]["RIF_BYTES"] = bytes(rap_to_rif(Raps[Rap_Number]["RAP_BYTES"]))
+                Raps[Rap_Number]["TYPE"] = "RAP"
+                Raps[Rap_Number]["RAPKEY"] = bytes(Rap_Bytes)
+                Raps[Rap_Number]["RIFKEY"] = bytes(rapkey_to_rifkey(Raps[Rap_Number]["RAPKEY"]))
 
                 ## Output additional results
                 if 50 in Arguments.format:  ## Additional debugging Output
-                    print(">>>>> RAP/RIF #{}".format(Rap_Number))
-                    dprintFieldsDict(Raps[Rap_Number], "rap[{KEY:11}]", 3, None, print_func=print)
-            #
-            del Is_Rif
-            del Rap_Size
-            del Rap_Bytes
-            del Rap
-            del Rap_Number
+                    print(">>>>> EDAT RAP #{}".format(Rap_Number))
+                    dprintFieldsDict(Raps[Rap_Number], "rap[{KEY:8}]", 3, None, print_func=print, sep="")
+        ## --> RIF Keys
+        if Arguments.rifkey:
+            for Rap in Arguments.rifkey:
+                Rif_Number += 1
+                Rap_Number += 1
+                if Debug_Level >= 3:
+                    dprint(">>>>> EDAT RIF/RAP #{}/{}:".format(Rif_Number, Rap_Number), Rap)
+                #
+                Rap_Bytes = bytearray()
+                #
+                Rap_Size = len(Rap)
+                if Rap_Size == (Cryptodome.Cipher.AES.block_size*2) \
+                and not CONST_REGEX_HEX_DIGITS.match(Rap) is None:
+                    if Debug_Level >= 3:
+                        dprint("Assuming RIF hex digits")
+                    Rap_Bytes.extend(bytes.fromhex(Rap))
+                else:
+                    if Debug_Level >= 3:
+                        dprint("Assuming RIF binary file")
+                    try:
+                        Input_Stream = io.open(Rap, mode="rb", buffering=-1, encoding=None, errors=None, newline=None, closefd=True)
+                    except:
+                        eprint("[INPUT] Could not open RIF FILE", Rap)
+                        eprint("", prefix=None)
+                        raise  ## re-raise
+                    #
+                    Rap_Bytes.extend(Input_Stream.read())
+                    Input_Stream.close()
+                    del Input_Stream
+                #
+                Rap_Size = len(Rap_Bytes)
+                if Debug_Level >= 3:
+                    dprint(Rap_Size, convertBytesToHexString(Rap_Bytes, sep=""))
+                #
+                if Rap_Size != Cryptodome.Cipher.AES.block_size:
+                    eprint("EDAT RIF/RAP #{}/{}:".format(Rif_Number, Rap_Number), "Invalid RIF size {}".format(Rap_Size))
+                    eprint("Input:", Rap)
+                    eprint("Bytes:", convertBytesToHexString(Rap_Bytes, sep=""))
+                    continue
+                #
+                Raps[Rap_Number] = {}
+                Raps[Rap_Number]["TYPE"] = "RIF"
+                Raps[Rap_Number]["RIFKEY"] = bytes(Rap_Bytes)
+                Raps[Rap_Number]["RAPKEY"] = bytes(rifkey_to_rapkey(Raps[Rap_Number]["RIFKEY"]))
+
+                ## Output additional results
+                if 50 in Arguments.format:  ## Additional debugging Output
+                    print(">>>>> EDAT RIF/RAP #{}/{}".format(Rif_Number, Rap_Number))
+                    dprintFieldsDict(Raps[Rap_Number], "rif[{KEY:8}]", 3, None, print_func=print, sep="")
+        #
+        del Rif_Number
+        del Rap_Size
+        del Rap_Bytes
+        del Rap
+        del Rap_Number
 
         ## Prepare ZRIF licenses
         Rifs = collections.OrderedDict()
@@ -2905,7 +2992,7 @@ if __name__ == "__main__":
                 ## Output additional results
                 if 50 in Arguments.format:  ## Additional debugging Output
                     print(">>>>> RIF #{} \"{}\" ({})".format(Rif_Number, Key, Rif_Fields["LIC_TYPE"]))
-                    dprintFieldsDict(Rif_Fields, "rif[{KEY:14}]", 3, None, print_func=print)
+                    dprintFieldsDict(Rif_Fields, "rif[{KEY:8}]", 3, None, print_func=print)
             #
             del Key
             del Temp_Fields
@@ -2995,10 +3082,10 @@ if __name__ == "__main__":
                 Header_Size = CONST_PBP_HEADER_FIELDS["STRUCTURE_SIZE"]
                 Nps_Type = "".join((Nps_Type, " (PBP)"))
                 dprint("Detected PBP")
-            ## --> NPD
-            elif Pkg_Magic == CONST_NPD_MAGIC:
-                Header_Size = CONST_NPD_HEADER_FIELDS["STRUCTURE_SIZE"]
-                dprint("Detected NPD")
+            ## --> EDAT/SDAT (NPD)
+            elif Pkg_Magic == CONST_EDAT_MAGIC:
+                Header_Size = CONST_EDAT_HEADER_FIELDS["STRUCTURE_SIZE"]
+                dprint("Detected EDAT/SDAT (NPD)")
             else:
                 Input_Stream.close(function_debug_level=max(0, Debug_Level))
                 eprint("Not a known PKG/PBP file ({} <> {}|{}|{})".format(convertBytesToHexString(Pkg_Magic, sep=""), convertBytesToHexString(CONST_PKG3_MAGIC, sep=""), convertBytesToHexString(CONST_PKG4_MAGIC, sep=""), convertBytesToHexString(CONST_PBP_MAGIC, sep="")), Input_Stream.getSource(function_debug_level=max(0, Debug_Level)))
@@ -3205,6 +3292,14 @@ if __name__ == "__main__":
                     del Sfo_Bytes
                     #
                     Main_Sfo_Values = Pbp_Sfo_Values
+            ## --> EDAT/SDAT (NPD)
+            elif Pkg_Magic == CONST_EDAT_MAGIC:
+                Pkg_Header = parseEdatHeader(Package["HEAD_BYTES"], Input_Stream, max(0, Debug_Level))
+                ## --> Package content id
+                if "CONTENT_ID" in Pkg_Header:
+                    Results["PKG_CONTENT_ID"] = Pkg_Header["CONTENT_ID"]
+                    Results["PKG_CID_TITLE_ID1"] = Results["PKG_CONTENT_ID"][7:16]
+                    Results["PKG_CID_TITLE_ID2"] = Results["PKG_CONTENT_ID"][20:]
             #
             if "PKG_CONTENT_ID" in Results \
             and Results["PKG_CONTENT_ID"].strip():
@@ -3266,16 +3361,6 @@ if __name__ == "__main__":
                     Results["CID_TITLE_ID2"] = Results["CONTENT_ID"][20:]
                     if not "TITLE_ID" in Results:
                         Results["TITLE_ID"] = Results["CID_TITLE_ID1"]
-            ## --> NPD
-            elif Pkg_Magic == CONST_NPD_MAGIC:
-                Pkg_Header = parseNpdHeader(Package["HEAD_BYTES"], Input_Stream, max(0, Debug_Level))
-                ## --> Package content id
-                if "CONTENT_ID" in Pkg_Header:
-                    Results["PKG_CONTENT_ID"] = Pkg_Header["CONTENT_ID"]
-                    Results["PKG_CID_TITLE_ID1"] = Results["PKG_CONTENT_ID"][7:16]
-                    Results["PKG_CID_TITLE_ID2"] = Results["PKG_CONTENT_ID"][20:]
-                Results["NPD_EDAT_OFFSET"] = CONST_NPD_HEADER_FIELDS["STRUCTURE_SIZE"]
-                Results["NPD_EDAT_SIZE"] = CONST_EDAT_HEADER_FIELDS["STRUCTURE_SIZE"]
 
             ## Determine some derived variables
             if Debug_Level >= 1:
@@ -3998,7 +4083,7 @@ if __name__ == "__main__":
                 or Output_Format == 99:  ## Results/Analysis Output
                     if Output_Format == 99:  ## Analysis Output
                         if Pkg_Header:
-                            dprintFieldsDict(Pkg_Header, "Pkg_Header[{KEY:14}|{INDEX:2}]", 2, None, print_func=print)
+                            dprintFieldsDict(Pkg_Header, "Pkg_Header[{KEY:15}|{INDEX:2}]", 2, None, print_func=print)
                         if Pkg_Ext_Header:
                             dprintFieldsDict(Pkg_Ext_Header, "Pkg_Ext_Header[{KEY:14}|{INDEX:2}]", 2, None, print_func=print)
                         if Pkg_Meta_Data:
