@@ -1,5 +1,8 @@
 # PSN_get_pkg_info.py - Changelog
 
+## 2020.01.00.beta4
+* NEW: Support for Namco System 357 packages
+
 ## 2020.01.00.beta3
 * NEW: Handle extraction of PSP/PSX licenses
 * NEW: Handle extraction of PCSC80018 "PocketStation for Playstation Vita"

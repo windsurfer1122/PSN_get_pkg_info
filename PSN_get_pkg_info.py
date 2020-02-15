@@ -58,7 +58,7 @@ from builtins import bytes
 
 ## Version definition
 ## see https://www.python.org/dev/peps/pep-0440/
-__version__ = "2020.01.00.beta3"
+__version__ = "2020.01.00.beta4"
 __author__ = "https://github.com/windsurfer1122/PSN_get_pkg_info"
 __license__ = "GPL"
 __copyright__ = "Copyright 2018-2020, windsurfer1122"
@@ -398,7 +398,7 @@ for Key in CONST_PKG3_UPDATE_KEYS:
         eprint("PKG3 Update Key #{}:".format(Key), base64.standard_b64encode(CONST_PKG3_UPDATE_KEYS[Key]["KEY"]), prefix="[CONVERT] ")
 del Key
 ## --> RAP Keys
-CONST_RAP_PBOX = ( 0x0C, 0x03, 0x06, 0x04, 0x01, 0x0B, 0x0F, 0x08, 0x02, 0x07, 0x00, 0x05, 0x0A, 0x0E, 0x0D, 0x09 )
+CONST_RAP_PBOX = ( 0x0c, 0x03, 0x06, 0x04, 0x01, 0x0b, 0x0f, 0x08, 0x02, 0x07, 0x00, 0x05, 0x0a, 0x0e, 0x0d, 0x09 )
 CONST_RAP_KEYS = {
     0: { "KEY": "hp93RcE/2JDM8pGI48w+3w==", "DESC": "RAP_KEY", },
     1: { "KEY": "qT4f1nxVoym3X92mKpXHpQ==", "DESC": "RAP_E1", },
@@ -1353,7 +1353,7 @@ def rapkey_to_rifkey(rapkey_bytes):
                 carryover = 1
             else:
                 carryover = 0
-            temp_bytes[pos1] = new_byte & 0xFF
+            temp_bytes[pos1] = new_byte & 0xff
     #
     return temp_bytes
 
@@ -1366,11 +1366,11 @@ def rifkey_to_rapkey(rifkey_bytes):
         for _i in range(Cryptodome.Cipher.AES.block_size):
             pos1 = CONST_RAP_PBOX[_i]
             new_byte = temp_bytes[pos1] + carryover + CONST_RAP_KEYS[2]["KEY"][pos1]
-            if new_byte > 0xFF:
+            if new_byte > 0xff:
                 carryover = 1
             else:
                 carryover = 0
-            temp_bytes[pos1] = new_byte & 0xFF
+            temp_bytes[pos1] = new_byte & 0xff
         #
         for _i in range(1,Cryptodome.Cipher.AES.block_size):
             pos1 = CONST_RAP_PBOX[_i]
@@ -1995,8 +1995,14 @@ def parsePkg3Header(head_bytes, input_stream, function_debug_level):
     pkg_key = bytearray(0x40)
     pkg_key[0x00:0x08] = header_fields["DIGEST"][0x00:0x08]
     pkg_key[0x08:0x10] = header_fields["DIGEST"][0x00:0x08]
-    pkg_key[0x10:0x18] = header_fields["DIGEST"][0x08:0x10]
+    if Arguments.arcade:
+        pkg_key[0x10:0x18] = header_fields["DIGEST"][0x00:0x08]
+    else:
+        pkg_key[0x10:0x18] = header_fields["DIGEST"][0x08:0x10]
     pkg_key[0x18:0x20] = header_fields["DIGEST"][0x08:0x10]
+    if Arguments.arcade:
+        for _i in range(0x20,0x38):
+            pkg_key[_i] = 0xa0
     header_fields["XOR_CTR"] = PkgXorSha1Counter(pkg_key)
     if function_debug_level >= 2:
         dprint("Debug XOR IV from DIGEST: {}".format(convertBytesToHexString(pkg_key, sep="")))
@@ -2674,6 +2680,8 @@ def createArgParser():
     help_rapkey = "To verify RAP key for EDAT file of PS3/PSX/PSP package."
     ## --> RIF
     help_rifkey = "To verify RIF key for EDAT file of PS3/PSX/PSP package."
+    ## --> Arcade
+    help_arcade = "Use different key creation for debug packages of arcade systems."
     ## --> Unclean
     help_unclean = "".join(("Do not clean up international/english tile, except for condensing\n\
 multiple white spaces incl. new line to a single space.\n\
@@ -2710,6 +2718,7 @@ If you state URLs then only the necessary bytes are downloaded into memory.\nNot
     parser.add_argument("--zrif", metavar="LICENSE", action="append", help=help_zrif)
     parser.add_argument("--rapkey", metavar="RAPKEY", action="append", help=help_rapkey)
     parser.add_argument("--rifkey", metavar="RIFKEY", action="append", help=help_rifkey)
+    parser.add_argument("--arcade", action="store_true", help=help_arcade)
     parser.add_argument("--unclean", action="store_true", help=help_unclean)
     parser.add_argument("--unknown", action="store_true", help=help_unknown)
     parser.add_argument("--debug", "-d", metavar="LEVEL", type=int, default=0, choices=choices_debug, help=help_debug)
