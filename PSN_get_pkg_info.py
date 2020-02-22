@@ -58,7 +58,7 @@ from builtins import bytes
 
 ## Version definition
 ## see https://www.python.org/dev/peps/pep-0440/
-__version__ = "2020.01.00.beta4"
+__version__ = "2020.01.00.beta5"
 __author__ = "https://github.com/windsurfer1122/PSN_get_pkg_info"
 __license__ = "GPL"
 __copyright__ = "Copyright 2018-2020, windsurfer1122"
@@ -68,7 +68,6 @@ __copyright__ = "Copyright 2018-2020, windsurfer1122"
 import sys
 import struct
 import io
-import requests
 import collections
 import locale
 import os
@@ -77,7 +76,6 @@ import re
 import traceback
 import json
 import random
-import aenum
 import copy
 import zlib
 import base64
@@ -85,13 +83,33 @@ import xml.etree.ElementTree
 import math
 import datetime
 
+## pip install requests
+## https://pypi.org/project/requests/
+import requests
+
+## pip install aenum
+## https://pypi.org/project/aenum/
+import aenum
+
 ## pip install fastxor
+## https://pypi.org/project/fastxor/
 import fastxor
 
 ## pip install pycryptodomex
+## https://pypi.org/project/pycryptodomex/
+## https://www.pycryptodome.org/en/latest/src/installation.html
 import Cryptodome.Cipher.AES
 import Cryptodome.Util.Counter
 import Cryptodome.Hash
+
+## pip install packaging
+## https://pypi.org/project/packaging/
+import packaging.version
+
+## pip install ecdsa
+## https://pypi.org/project/ecdsa/
+import ecdsa.ecdsa
+import ecdsa.ellipticcurve
 
 
 ## Debug level for Python initializations (will be reset in "main" code)
@@ -214,6 +232,27 @@ except:
         dprint("Define \"unicode = str\" for Python 3 :(")
     unicode = str
 
+### pycryptodomex <3.7.2 CMAC error workaround
+### https://github.com/Legrandin/pycryptodome/issues/238
+if packaging.version.parse(Cryptodome.__version__) >= packaging.version.parse("3.7.2"):
+    dprint("pycryptodomex", Cryptodome.__version__, "(>= 3.7.2) is good")
+    ### https://www.pycryptodome.org/en/latest/src/hash/cmac.html
+    def newCMAC(key):
+        return Cryptodome.Hash.CMAC.new(key, ciphermod=Cryptodome.Cipher.AES)
+    def getCMACDigest(self):
+        return self.digest()
+else:
+    dprint("pycryptodomex", Cryptodome.__version__, "(< 3.7.2) has an error in CMAC copying, therefore switching to module cryptography for CMAC hashing")
+    import cryptography.hazmat.backends
+    import cryptography.hazmat.primitives.hashes
+    import cryptography.hazmat.primitives.cmac
+    import cryptography.hazmat.primitives.ciphers.algorithms
+    ### https://cryptography.io/en/latest/hazmat/primitives/mac/cmac/
+    def newCMAC(key):
+        return cryptography.hazmat.primitives.cmac.CMAC(cryptography.hazmat.primitives.ciphers.algorithms.AES(key), backend=cryptography.hazmat.backends.default_backend())
+    def getCMACDigest(self):
+        return self.finalize()
+
 ## Python 2/3 shortcoming: older zlib modules do not support compression dictionaries
 Zrif_Support = False
 try:
@@ -224,8 +263,18 @@ except TypeError:
     pass
 
 
+def convertBytesToHexString(data, format_string="", sep=" "):
+    if isinstance(data, int):
+        data = struct.pack(format_string, data)
+    ## Python 2 workaround: convert byte string of struct.pack()/.unpack() to bytearray()
+    if isinstance(data, str):
+        data = bytearray(data)
+    #
+    return sep.join(["%02x" % b for b in data])
+
+
 ## Generic Definitions
-PYTHON_VERSION = ".".join((unicode(sys.version_info[0]), unicode(sys.version_info[1]), unicode(sys.version_info[2])))
+PYTHON_VERSION = ".".join(map(unicode, sys.version_info[0:3]))
 #
 OUTPUT_FORMATS = collections.OrderedDict([ \
     ( 0, "Human-readable reduced Output [default]" ),
@@ -378,24 +427,36 @@ CONST_PKG3_CONTENT_KEYS = {
     3: { "KEY": "QjrKOivVZJ+Whqutb9iAHw==", "DESC": "PSV Livearea", "DERIVE": True, },
     4: { "KEY": "rwf9WWUlJ7rxM4lmixfZ6g==", "DESC": "PSM",          "DERIVE": True, },
 }
-for Key in CONST_PKG3_CONTENT_KEYS:
-    if isinstance(CONST_PKG3_CONTENT_KEYS[Key]["KEY"], unicode):
-        CONST_PKG3_CONTENT_KEYS[Key]["KEY"] = base64.standard_b64decode(CONST_PKG3_CONTENT_KEYS[Key]["KEY"])
-    elif isinstance(CONST_PKG3_CONTENT_KEYS[Key]["KEY"], bytes) \
-    or isinstance(CONST_PKG3_CONTENT_KEYS[Key]["KEY"], bytearray):
-        eprint("PKG3 Content Key #{}:".format(Key), base64.standard_b64encode(CONST_PKG3_CONTENT_KEYS[Key]["KEY"]), prefix="[CONVERT] ")
+for Key, Values in CONST_PKG3_CONTENT_KEYS.items():
+    if isinstance(Values["KEY"], unicode):
+        Values["KEY"] = base64.standard_b64decode(Values["KEY"])
+    elif isinstance(Values["KEY"], bytes) \
+    or isinstance(Values["KEY"], bytearray):
+        eprint("PKG3 Content Key #{}:".format(Key), base64.standard_b64encode(Values["KEY"]), prefix="[CONVERT] ")
+    #
+    if Debug_Level >= 3:
+        Value = convertBytesToHexString(Values["KEY"], sep="")
+        dprint("PKG3 Content Key #{}:".format(Key), Value)
+        del Value
+del Values
 del Key
 ## --> PKG3 Update Keys
 CONST_PKG3_UPDATE_KEYS = {
     2: { "KEY": "5eJ4qh7jQIKgiCecg/m7yAaCHFLyq10rSr2ZVFA1URQ=", "DESC": "PSV", },
     3: { "KEY": "2Nvtdm6rzWjUfdvtnTyoJYN96Kp4m3/5LZoVlPzY6sQ=", "DESC": "PSV Livearea", },
 }
-for Key in CONST_PKG3_UPDATE_KEYS:
-    if isinstance(CONST_PKG3_UPDATE_KEYS[Key]["KEY"], unicode):
-        CONST_PKG3_UPDATE_KEYS[Key]["KEY"] = base64.standard_b64decode(CONST_PKG3_UPDATE_KEYS[Key]["KEY"])
-    elif isinstance(CONST_PKG3_UPDATE_KEYS[Key]["KEY"], bytes) \
-    or isinstance(CONST_PKG3_UPDATE_KEYS[Key]["KEY"], bytearray):
-        eprint("PKG3 Update Key #{}:".format(Key), base64.standard_b64encode(CONST_PKG3_UPDATE_KEYS[Key]["KEY"]), prefix="[CONVERT] ")
+for Key, Values in CONST_PKG3_UPDATE_KEYS.items():
+    if isinstance(Values["KEY"], unicode):
+        Values["KEY"] = base64.standard_b64decode(Values["KEY"])
+    elif isinstance(Values["KEY"], bytes) \
+    or isinstance(Values["KEY"], bytearray):
+        eprint("PKG3 Update Key #{}:".format(Key), base64.standard_b64encode(Values["KEY"]), prefix="[CONVERT] ")
+    #
+    if Debug_Level >= 3:
+        Value = convertBytesToHexString(Values["KEY"], sep="")
+        dprint("PKG3 Update Key #{}:".format(Key), Value)
+        del Value
+del Values
 del Key
 ## --> RAP Keys
 CONST_RAP_PBOX = ( 0x0c, 0x03, 0x06, 0x04, 0x01, 0x0b, 0x0f, 0x08, 0x02, 0x07, 0x00, 0x05, 0x0a, 0x0e, 0x0d, 0x09 )
@@ -404,12 +465,18 @@ CONST_RAP_KEYS = {
     1: { "KEY": "qT4f1nxVoym3X92mKpXHpQ==", "DESC": "RAP_E1", },
     2: { "KEY": "Z9RdoyltAGpOfFN79VOMdA==", "DESC": "RAP_E2", },
 }
-for Key in CONST_RAP_KEYS:
-    if isinstance(CONST_RAP_KEYS[Key]["KEY"], unicode):
-        CONST_RAP_KEYS[Key]["KEY"] = base64.standard_b64decode(CONST_RAP_KEYS[Key]["KEY"])
-    elif isinstance(CONST_RAP_KEYS[Key]["KEY"], bytes) \
-    or isinstance(CONST_RAP_KEYS[Key]["KEY"], bytearray):
-        eprint("RAP Key #{}:".format(Key), base64.standard_b64encode(CONST_RAP_KEYS[Key]["KEY"]), prefix="[CONVERT] ")
+for Key, Values in CONST_RAP_KEYS.items():
+    if isinstance(Values["KEY"], unicode):
+        Values["KEY"] = base64.standard_b64decode(Values["KEY"])
+    elif isinstance(Values["KEY"], bytes) \
+    or isinstance(Values["KEY"], bytearray):
+        eprint("RAP Key #{}:".format(Key), base64.standard_b64encode(Values["KEY"]), prefix="[CONVERT] ")
+    #
+    if Debug_Level >= 3:
+        Value = convertBytesToHexString(Values["KEY"], sep="")
+        dprint("RAP Key #{}:".format(Key), Value)
+        del Value
+del Values
 del Key
 ## --> RIF
 ## https://github.com/weaknespase/PkgDecrypt/blob/master/rif.h
@@ -620,56 +687,56 @@ CONST_PKG4_META_ENTRY_NAME_MAP = {
 for Count in range(0x1f):
     Key = 0x1201 + Count
     CONST_PKG4_META_ENTRY_NAME_MAP[Key] = "icon0_{:02}.png".format(Count)
-    if Debug_Level >= 2:
+    if Debug_Level >= 4:
         dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_META_ENTRY_NAME_MAP[Key]))
 #
 ## 0x1241-0x125f: pic1_<nn>.png
 for Count in range(0x1f):
     Key = 0x1241 + Count
     CONST_PKG4_META_ENTRY_NAME_MAP[Key] = "pic1_{:02}.png".format(Count)
-    if Debug_Level >= 2:
+    if Debug_Level >= 4:
         dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_META_ENTRY_NAME_MAP[Key]))
 #
 ## 0x1261-0x127f: pic1_<nn>.png
 for Count in range(0x1f):
     Key = 0x1261 + Count
     CONST_PKG4_META_ENTRY_NAME_MAP[Key] = "changeinfo/changeinfo_{:02}.xml".format(Count)
-    if Debug_Level >= 2:
+    if Debug_Level >= 4:
         dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_META_ENTRY_NAME_MAP[Key]))
 #
 ## 0x1281-0x129f: icon0_<nn>.dds
 for Count in range(0x1f):
     Key = 0x1281 + Count
     CONST_PKG4_META_ENTRY_NAME_MAP[Key] = "icon0_{:02}.dds".format(Count)
-    if Debug_Level >= 2:
+    if Debug_Level >= 4:
         dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_META_ENTRY_NAME_MAP[Key]))
 #
 ## 0x12c1-0x12df: pic1_<nn>.dds
 for Count in range(0x1f):
     Key = 0x12c1 + Count
     CONST_PKG4_META_ENTRY_NAME_MAP[Key] = "pic1_{:02}.dds".format(Count)
-    if Debug_Level >= 2:
+    if Debug_Level >= 4:
         dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_META_ENTRY_NAME_MAP[Key]))
 #
 ## 0x1400-0x1463: trophy/trophy<nn>.dds
 for Count in range(0x64):
     Key = 0x1400 + Count
     CONST_PKG4_META_ENTRY_NAME_MAP[Key] = "trophy/trophy{:02}.trp".format(Count)
-    if Debug_Level >= 2:
+    if Debug_Level >= 4:
         dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_META_ENTRY_NAME_MAP[Key]))
 #
 ## 0x1600-0x1609: keymap_rp/<nn>.png
 for Count in range(0x0a):
     Key = 0x1600 + Count
     CONST_PKG4_META_ENTRY_NAME_MAP[Key] = "keymap_rp/{:03}.png".format(Count)
-    if Debug_Level >= 2:
+    if Debug_Level >= 4:
         dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_META_ENTRY_NAME_MAP[Key]))
 #
 ## 0x1610-0x17f9: keymap_rp/<nn>/<nnn>.png
 for Count in range(0x01ea):
     Key = 0x1610 + Count
     CONST_PKG4_META_ENTRY_NAME_MAP[Key] = "keymap_rp/{:02}/{:03}.png".format(Count >> 4, Count & 0xf )
-    if Debug_Level >= 2:
+    if Debug_Level >= 4:
         dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_META_ENTRY_NAME_MAP[Key]))
 #
 CONST_PKG4_META_ENTRY_NAME_MAP = collections.OrderedDict(sorted(CONST_PKG4_META_ENTRY_NAME_MAP.items()))
@@ -680,12 +747,18 @@ del Count
 CONST_PKG4_UPDATE_KEYS = {
     0: { "KEY": "rWLjf5BeBrwZWTFCKBwRLOwOfsPpfv3K7826r6Y3jYQ=", "DESC": "PS4", },
 }
-for Key in CONST_PKG4_UPDATE_KEYS:
-    if isinstance(CONST_PKG4_UPDATE_KEYS[Key]["KEY"], unicode):
-        CONST_PKG4_UPDATE_KEYS[Key]["KEY"] = base64.standard_b64decode(CONST_PKG4_UPDATE_KEYS[Key]["KEY"])
-    elif isinstance(CONST_PKG4_UPDATE_KEYS[Key]["KEY"], bytes) \
-    or isinstance(CONST_PKG4_UPDATE_KEYS[Key]["KEY"], bytearray):
-        eprint("PKG4 Update Key #{}:".format(Key), base64.standard_b64encode(CONST_PKG4_UPDATE_KEYS[Key]["KEY"]), prefix="[CONVERT] ")
+for Key, Values in CONST_PKG4_UPDATE_KEYS.items():
+    if isinstance(Values["KEY"], unicode):
+        Values["KEY"] = base64.standard_b64decode(Values["KEY"])
+    elif isinstance(Values["KEY"], bytes) \
+    or isinstance(Values["KEY"], bytearray):
+        eprint("PKG4 Update Key #{}:".format(Key), base64.standard_b64encode(Values["KEY"]), prefix="[CONVERT] ")
+    #
+    if Debug_Level >= 3:
+        Value = convertBytesToHexString(Values["KEY"], sep="")
+        dprint("PKG4 Update Key #{}:".format(Key), Value)
+        del Value
+del Values
 del Key
 
 ##
@@ -762,6 +835,190 @@ CONST_EDAT_HEADER_FIELDS = collections.OrderedDict([ \
     #
     ( "DEBUG_PKG",     { "VIRTUAL": 1, "DEBUG": 1, "DESC": "Debug Package", }, ),
 ])
+CONST_EDAT_SDAT_FLAG = 0x01000000
+CONST_EDAT_ENCRYPTED_KEY = 0x00000008
+## --> SDAT Keys
+CONST_SDAT_KEYS = {
+    0: { "KEY": "DWVe+OZ0qYq4UFz6fQEpMw==", "DESC": "SDAT Key 0", },
+}
+for Key, Values in CONST_SDAT_KEYS.items():
+    if isinstance(Values["KEY"], unicode):
+        Values["KEY"] = base64.standard_b64decode(Values["KEY"])
+    elif isinstance(Values["KEY"], bytes) \
+    or isinstance(Values["KEY"], bytearray):
+        eprint("SDAT Key #{}:".format(Key), base64.standard_b64encode(Values["KEY"]), prefix="[CONVERT] ")
+    #
+    if Debug_Level >= 3:
+        Value = convertBytesToHexString(Values["KEY"], sep="")
+        dprint("SDAT Key #{}:".format(Key), Value)
+        del Value
+del Key
+## --> EDAT Keys
+CONST_EDAT_KEYS = {
+    0: { "KEY": "vpWcqDCN76Ll4YDGNxKprg==", "DESC": "EDAT Key 0", },
+    1: { "KEY": "TKnBSwHJUwmWm+xoqgvAgQ==", "DESC": "EDAT Key 1", },
+}
+for Key, Values in CONST_EDAT_KEYS.items():
+    if isinstance(Values["KEY"], unicode):
+        Values["KEY"] = base64.standard_b64decode(Values["KEY"])
+    elif isinstance(Values["KEY"], bytes) \
+    or isinstance(Values["KEY"], bytearray):
+        eprint("EDAT Key #{}:".format(Key), base64.standard_b64encode(Values["KEY"]), prefix="[CONVERT] ")
+    #
+    if Debug_Level >= 3:
+        Value = convertBytesToHexString(Values["KEY"], sep="")
+        dprint("EDAT Key #{}:".format(Key), Value)
+        del Value
+del Key
+## --> Dev KLicensee Keys
+CONST_KLICENSEE_KEYS = {
+    0: { "KEY": "AAAAAAAAAAAAAAAAAAAAAA==", "DESC": "None", },
+    1: { "KEY": "cvmQeI+c/3RXJfCOTBKDhw==", "DESC": "NPDRM_OMAC_KEY_1", },
+    2: { "KEY": "a6Updu/aFu88M5+ylx4law==", "DESC": "NPDRM_OMAC_KEY_2", },
+    3: { "KEY": "m1Ff6s91BkmBqmBNkaVOlw==", "DESC": "NPDRM_OMAC_KEY_3", },
+    4: { "KEY": "8vvKenWwTtwTkGOMzf3R7g==", "DESC": "NPDRM_KLIC_KEY", },
+    5: { "KEY": "UsC1ynbWE0u0X8ZspjfywQ==", "DESC": "NPDRM_PSX_KEY", },
+    6: { "KEY": "Kmr7z0PRV599c4dBoTvULg==", "DESC": "NPDRM_PSP_KEY_1", },
+    7: { "KEY": "DbhXMjZs1zT8h550M0O7Tw==", "DESC": "NPDRM_PSP_KEY_2", },
+}
+for Key, Values in CONST_KLICENSEE_KEYS.items():
+    if isinstance(Values["KEY"], unicode):
+        Values["KEY"] = base64.standard_b64decode(Values["KEY"])
+    elif isinstance(Values["KEY"], bytes) \
+    or isinstance(Values["KEY"], bytearray):
+        eprint("Dev KLicensee Key #{}:".format(Key), base64.standard_b64encode(Values["KEY"]), prefix="[CONVERT] ")
+    #
+    if Debug_Level >= 3:
+        Value = convertBytesToHexString(Values["KEY"], sep="")
+        dprint("Dev KLicensee Key #{}:".format(Key), Value)
+        del Value
+del Key
+
+##
+## VSH Definitions
+##
+#
+## --> ECDSA Curves
+CONST_ECDSA_VSH_CURVES = {
+    1: {
+         "DESC": "VSH #1",
+         "N":    { "INT": "//////////8AAbXGF/KQ6uHbrY8=", "DESC": "VSH #1 Order N/Q", },
+         "P":    { "INT": "//////////8AAAAB//////////8=", "DESC": "VSH #1 P", },
+         "A":    { "INT": "//////////8AAAAB//////////w=", "DESC": "VSH #1 A", },
+         "B":    { "INT": "ZdFIjANZ4jStyVvTkIAUvZGlJfk=", "DESC": "VSH #1 B", },
+         "GX":   { "INT": "Ilms7hVInLCWqILwrhz5/Y7l+Po=", "DESC": "VSH #1 Gx", },
+         "GY":   { "INT": "YENYRW0KHLKQjekPJ9dcgr7BCMA=", "DESC": "VSH #1 Gy", },
+    },
+    2: {
+         "DESC": "VSH #2",
+         "N":    { "INT": "//////////7//7WuPFI+Y5RPISc=", "DESC": "VSH #2 Order N/Q", },
+         "P":    { "INT": "//////////8AAAAB//////////8=", "DESC": "VSH #2 P", },
+         "A":    { "INT": "//////////8AAAAB//////////w=", "DESC": "VSH #2 A", },
+         "B":    { "INT": "povtwzQYApwdPOM7mjIfzLueDws=", "DESC": "VSH #2 B", },
+         "GX":   { "INT": "Eo7EJWSH/Y/fZOJDe8Ch9tWv3iw=", "DESC": "VSH #2 Gx", },
+         "GY":   { "INT": "WVhVfrHbABJgQlUk28N51axfSt8=", "DESC": "VSH #2 Gy", },
+    },
+}
+for Number, Curve in CONST_ECDSA_VSH_CURVES.items():
+    Bit_Len = None
+    Size = None
+    for Key in Curve:
+        Show_Convert = False
+        if isinstance(Curve[Key], dict) \
+        and "INT" in Curve[Key]:
+            if isinstance(Curve[Key]["INT"], unicode):
+                Curve[Key]["INT"] = base64.standard_b64decode(Curve[Key]["INT"])
+            elif isinstance(Curve[Key]["INT"], bytes) \
+            or isinstance(Curve[Key]["INT"], bytearray):
+                eprint("VSH ECDSA Curve #{}.{}:".format(Number, Key), base64.standard_b64encode(Curve[Key]["INT"]), prefix="[CONVERT] ")
+            elif isinstance(Curve[Key]["INT"], int):
+                Show_Convert = True
+            #
+            if isinstance(Curve[Key]["INT"], bytes) \
+            or isinstance(Curve[Key]["INT"], bytearray):
+                Curve[Key]["INT"] = int.from_bytes(Curve[Key]["INT"], byteorder="big")
+            #
+            if Key == "N":
+                Bit_Len = Curve["N"]["INT"].bit_length()
+                Size = math.ceil(Bit_Len / 8.0)
+                if Debug_Level >= 3:
+                    dprint("VSH ECDSA Curve #{} BITLEN:".format(Number), Bit_Len)
+            #
+            if Show_Convert:
+                eprint("VSH ECDSA Curve #{}.{}:".format(Number, Key), base64.standard_b64encode(Curve[Key]["INT"].to_bytes(Size, byteorder="big")), prefix="[CONVERT] ")
+        #
+        if Debug_Level >= 3:
+            if isinstance(Curve[Key], dict) \
+            and "INT" in Curve[Key]:
+                Value = "{:#x}".format(Curve[Key]["INT"])
+            else:
+                Value = Curve[Key]
+            dprint("VSH ECDSA Curve #{} {:2}:".format(Number, Key), Value)
+            del Value
+    Curve["BITLEN"] = Bit_Len
+    Curve["SIZE"] = Size
+    # --> Point Jacobi specialities
+    if not "GZ" in Curve:
+        Curve["GZ"] = {}
+    if not "INT" in Curve["GZ"] \
+    or Curve["GZ"]["INT"] is None:
+        Curve["GZ"]["INT"] = 1  ## equal to 1 when converting from affine coordinates
+    # --> Build Curve
+    Curve["CURVE"] = ecdsa.ellipticcurve.CurveFp(Curve["P"]["INT"], Curve["A"]["INT"], Curve["B"]["INT"])
+    Curve["POINT"] = ecdsa.ellipticcurve.PointJacobi(Curve["CURVE"], Curve["GX"]["INT"], Curve["GY"]["INT"], Curve["GZ"]["INT"], order=Curve["N"]["INT"], generator=False)
+del Key
+del Size
+del Bit_Len
+del Curve
+del Number
+## --> ECDSA Public Key
+CONST_ECDSA_VSH_PUBKEYS = {
+    0: {
+         "DESC": "VSH KLicensee PubKey",
+         "CURVE": 2,
+         "X": { "INT": "YiewCgKFb7BBCIdnGeCgGDKR7rk=", "DESC": "VSH KLicensee PubKey X", },
+         "Y": { "INT": "bnNqv4H3DukWGw3esCZ2Gv97yFs=", "DESC": "VSH KLicensee PubKey Y", },
+    },
+    1: {
+         "DESC": "VSH NPDRM PubKey",
+         "CURVE": 2,
+         "X": { "INT": "5nkuRGzronvK3zdLmVBP2OgK3+s=", "DESC": "VSH NPDRM PubKey X", },
+         "Y": { "INT": "Pmbec//ljTKRIhxlAYwDjTgiw8k=", "DESC": "VSH NPDRM PubKey Y", },
+    },
+}
+for Number, PubKey in CONST_ECDSA_VSH_PUBKEYS.items():
+    Size = CONST_ECDSA_VSH_CURVES[PubKey["CURVE"]]["SIZE"]
+    for Key in PubKey:
+        if isinstance(PubKey[Key], dict) \
+        and "INT" in PubKey[Key]:
+            if isinstance(PubKey[Key]["INT"], unicode):
+                PubKey[Key]["INT"] = base64.standard_b64decode(PubKey[Key]["INT"])
+            elif isinstance(PubKey[Key]["INT"], bytes) \
+            or isinstance(PubKey[Key]["INT"], bytearray):
+                eprint("VSH ECDSA {} PubKey {}:".format(Number, Key), base64.standard_b64encode(PubKey[Key]["INT"]), prefix="[CONVERT] ")
+            elif isinstance(PubKey[Key]["INT"], int):
+                eprint("VSH ECDSA {} PubKey {}:".format(Number, Key), base64.standard_b64encode(PubKey[Key]["INT"].to_bytes(Size, byteorder="big")), prefix="[CONVERT] ")
+            #
+            if isinstance(PubKey[Key]["INT"], bytes) \
+            or isinstance(PubKey[Key]["INT"], bytearray):
+                PubKey[Key]["INT"] = int.from_bytes(PubKey[Key]["INT"], byteorder="big")
+        #
+        if Debug_Level >= 3:
+            if isinstance(PubKey[Key], dict) \
+            and "INT" in PubKey[Key]:
+                Value = "{:#x}".format(PubKey[Key]["INT"])
+            else:
+                Value = PubKey[Key]
+            dprint("VSH ECDSA {} PubKey {}:".format(Number, Key), Value)
+            del Value
+    # --> Build Public Key
+    PubPoint = ecdsa.ellipticcurve.Point(CONST_ECDSA_VSH_CURVES[PubKey["CURVE"]]["CURVE"], PubKey["X"]["INT"], PubKey["Y"]["INT"], order=CONST_ECDSA_VSH_CURVES[PubKey["CURVE"]]["N"]["INT"])
+    PubKey["PUBKEY"] = ecdsa.ecdsa.Public_key(CONST_ECDSA_VSH_CURVES[PubKey["CURVE"]]["POINT"], PubPoint, verify=True)
+del PubPoint
+del Key
+del Size
+del PubKey
+del Number
 
 
 ##
@@ -813,16 +1070,6 @@ def specialToJSON(python_object):
     if isinstance(python_object, aenum.Enum):
         return unicode(python_object)
     raise TypeError("".join((repr(python_object), " is not JSON serializable")))
-
-
-def convertBytesToHexString(data, format_string="", sep=" "):
-    if isinstance(data, int):
-        data = struct.pack(format_string, data)
-    ## Python 2 workaround: convert byte string of struct.pack()/.unpack() to bytearray()
-    if isinstance(data, str):
-        data = bytearray(data)
-    #
-    return sep.join(["%02x" % b for b in data])
 
 
 def calculateAesAlignedOffsetAndSize(offset, size):
@@ -1332,7 +1579,7 @@ class PkgXorSha1Counter():
         return decrypted_data
 
 
-def rapkey_to_rifkey(rapkey_bytes):
+def convertRapkeyToRifkey(rapkey_bytes):
     aes = Cryptodome.Cipher.AES.new(CONST_RAP_KEYS[0]["KEY"], Cryptodome.Cipher.AES.MODE_CBC, iv=CONST_AES_EMPTY_IV)
     ## Python 2 workaround: must use bytes() for AES's .new()/.encrypt()/.decrypt() and hash's .update()
     temp_bytes = bytearray(aes.decrypt(bytes(rapkey_bytes)))
@@ -1355,10 +1602,10 @@ def rapkey_to_rifkey(rapkey_bytes):
                 carryover = 0
             temp_bytes[pos1] = new_byte & 0xff
     #
-    return temp_bytes
+    return bytes(temp_bytes)
 
 
-def rifkey_to_rapkey(rifkey_bytes):
+def convertRifkeyToRapkey(rifkey_bytes):
     temp_bytes = bytearray(rifkey_bytes)
     #
     for _ in range(5):
@@ -1381,9 +1628,9 @@ def rifkey_to_rapkey(rifkey_bytes):
     #
     aes = Cryptodome.Cipher.AES.new(CONST_RAP_KEYS[0]["KEY"], Cryptodome.Cipher.AES.MODE_CBC, iv=CONST_AES_EMPTY_IV)
     ## Python 2 workaround: must use bytes() for AES's .new()/.encrypt()/.decrypt() and hash's .update()
-    temp_bytes = bytearray(aes.encrypt(bytes(temp_bytes)))
+    temp_bytes = aes.encrypt(bytes(temp_bytes))
     #
-    return temp_bytes
+    return bytes(temp_bytes)
 
 
 def getRegion(region_code):
@@ -2102,7 +2349,7 @@ def parsePbpHeader(head_bytes, input_stream, file_size, function_debug_level=0):
     return pbp_header_fields, item_entries
 
 
-def parseEdatHeader(head_bytes, input_stream, function_debug_level):
+def parseEdatHeader(head_bytes, function_debug_level):
     if function_debug_level >= 2:
         dprint(">>>>> EDAT/SDAT Header:")
 
@@ -2680,6 +2927,8 @@ def createArgParser():
     help_rapkey = "To verify RAP key for EDAT file of PS3/PSX/PSP package."
     ## --> RIF
     help_rifkey = "To verify RIF key for EDAT file of PS3/PSX/PSP package."
+    ## --> Dev Klicensee Key
+    help_devklickey = "To verify Dev Klicensee Key for EDAT file of PS3/PSX/PSP package."
     ## --> Arcade
     help_arcade = "Use different key creation for debug packages of arcade systems."
     ## --> Unclean
@@ -2718,6 +2967,7 @@ If you state URLs then only the necessary bytes are downloaded into memory.\nNot
     parser.add_argument("--zrif", metavar="LICENSE", action="append", help=help_zrif)
     parser.add_argument("--rapkey", metavar="RAPKEY", action="append", help=help_rapkey)
     parser.add_argument("--rifkey", metavar="RIFKEY", action="append", help=help_rifkey)
+    parser.add_argument("--devklickey", metavar="DEVKLICKEY", action="append", help=help_devklickey)
     parser.add_argument("--arcade", action="store_true", help=help_arcade)
     parser.add_argument("--unclean", action="store_true", help=help_unclean)
     parser.add_argument("--unknown", action="store_true", help=help_unknown)
@@ -2859,7 +3109,7 @@ if __name__ == "__main__":
                 Raps[Rap_Number] = {}
                 Raps[Rap_Number]["TYPE"] = "RAP"
                 Raps[Rap_Number]["RAPKEY"] = bytes(Rap_Bytes)
-                Raps[Rap_Number]["RIFKEY"] = bytes(rapkey_to_rifkey(Raps[Rap_Number]["RAPKEY"]))
+                Raps[Rap_Number]["RIFKEY"] = convertRapkeyToRifkey(Raps[Rap_Number]["RAPKEY"])
 
                 ## Output additional results
                 if 50 in Arguments.format:  ## Additional debugging Output
@@ -2908,7 +3158,7 @@ if __name__ == "__main__":
                 Raps[Rap_Number] = {}
                 Raps[Rap_Number]["TYPE"] = "RIF"
                 Raps[Rap_Number]["RIFKEY"] = bytes(Rap_Bytes)
-                Raps[Rap_Number]["RAPKEY"] = bytes(rifkey_to_rapkey(Raps[Rap_Number]["RIFKEY"]))
+                Raps[Rap_Number]["RAPKEY"] = convertRifkeyToRapkey(Raps[Rap_Number]["RIFKEY"])
 
                 ## Output additional results
                 if 50 in Arguments.format:  ## Additional debugging Output
@@ -2920,6 +3170,58 @@ if __name__ == "__main__":
         del Rap_Bytes
         del Rap
         del Rap_Number
+
+        ## Prepare Dev KLicensee keys
+        if Arguments.devklickey:
+            Klic_Number = len(CONST_KLICENSEE_KEYS) - 1
+            Klic = None
+            Klic_Bytes = None
+            Klic_Size = None
+            for Klic in Arguments.devklickey:
+                Klic_Number += 1
+                if Debug_Level >= 3:
+                    dprint(">>>>> EDAT Dev KLicensee Key #{}:".format(Klic_Number), Klic)
+                #
+                Klic_Bytes = bytearray()
+                #
+                Klic_Size = len(Klic)
+                if Klic_Size == (Cryptodome.Cipher.AES.block_size*2) \
+                and not CONST_REGEX_HEX_DIGITS.match(Klic) is None:
+                    if Debug_Level >= 3:
+                        dprint("Assuming Dev KLicensee Key hex digits")
+                    Klic_Bytes.extend(bytes.fromhex(Klic))
+                else:
+                    if Debug_Level >= 3:
+                        dprint("Assuming Dev KLicensee Key binary file")
+                    try:
+                        Input_Stream = io.open(Klic, mode="rb", buffering=-1, encoding=None, errors=None, newline=None, closefd=True)
+                    except:
+                        eprint("[INPUT] Could not open Dev KLicensee Key file", Klic)
+                        eprint("", prefix=None)
+                        raise  ## re-raise
+                    #
+                    Klic_Bytes.extend(Input_Stream.read())
+                    Input_Stream.close()
+                    del Input_Stream
+                #
+                Klic_Size = len(Klic_Bytes)
+                if Debug_Level >= 3:
+                    dprint(Klic_Size, convertBytesToHexString(Klic_Bytes, sep=""))
+                #
+                if Klic_Size != Cryptodome.Cipher.AES.block_size:
+                    eprint("EDAT Dev KLicensee Key #{}:".format(Klic_Number), "Invalid Dev KLicensee Key size {}".format(Klic_Size))
+                    eprint("Input:", Klic)
+                    eprint("Bytes:", convertBytesToHexString(Klic_Bytes, sep=""))
+                    continue
+                #
+                CONST_KLICENSEE_KEYS[Klic_Number] = {}
+                CONST_KLICENSEE_KEYS[Klic_Number]["DESC"] = "From command line"
+                CONST_KLICENSEE_KEYS[Klic_Number]["KEY"] = bytes(Klic_Bytes)
+            #
+            del Klic_Size
+            del Klic_Bytes
+            del Klic
+            del Klic_Number
 
         ## Prepare ZRIF licenses
         Rifs = collections.OrderedDict()
@@ -3249,6 +3551,7 @@ if __name__ == "__main__":
                 if Package["TAIL_BYTES"]:  ## may not be present or have failed, e.g. when analyzing a head.bin file, a broken download or only thje first file of a multi-part package
                     Results["PKG_TAIL_SIZE"] = len(Package["TAIL_BYTES"])
                     Results["PKG_TAIL_SHA1"] = Package["TAIL_BYTES"][-0x20:-0x0c]
+            ## <-- PKG3
             ## --> PKG4
             elif Pkg_Magic == CONST_PKG4_MAGIC:
                 Pkg_Header, Pkg_Meta_Table, Pkg_Meta_Table_Map = parsePkg4Header(Package["HEAD_BYTES"], Input_Stream, max(0, Debug_Level), print_unknown=Arguments.unknown)
@@ -3282,6 +3585,7 @@ if __name__ == "__main__":
                     del Sfo_Bytes
                     #
                     Main_Sfo_Values = Pkg_Sfo_Values
+            ## <-- PKG4
             ## --> PBP
             elif Pkg_Magic == CONST_PBP_MAGIC:
                 Pbp_Header, Pbp_Item_Entries = parsePbpHeader(Package["HEAD_BYTES"], Input_Stream, Results["FILE_SIZE"], function_debug_level=max(0, Debug_Level))
@@ -3301,14 +3605,144 @@ if __name__ == "__main__":
                     del Sfo_Bytes
                     #
                     Main_Sfo_Values = Pbp_Sfo_Values
+            ## <-- PBP
             ## --> EDAT/SDAT (NPD)
             elif Pkg_Magic == CONST_EDAT_MAGIC:
-                Pkg_Header = parseEdatHeader(Package["HEAD_BYTES"], Input_Stream, max(0, Debug_Level))
+                Pkg_Header = parseEdatHeader(Package["HEAD_BYTES"], max(0, Debug_Level))
+                #
+                if Pkg_Header["VERSION"] > 4:
+                    eprint("EDAT/SDAT Version {}".format(Pkg_Header["LICENSE"]), prefix="[UNKNOWN] ")
+                    eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[UNKNOWN] ")
                 ## --> Package content id
                 if "CONTENT_ID" in Pkg_Header:
                     Results["PKG_CONTENT_ID"] = Pkg_Header["CONTENT_ID"]
                     Results["PKG_CID_TITLE_ID1"] = Results["PKG_CONTENT_ID"][7:16]
                     Results["PKG_CID_TITLE_ID2"] = Results["PKG_CONTENT_ID"][20:]
+                ## --> Determine SDAT or EDAT, plus license check
+                if Pkg_Header["FLAGS"] & CONST_EDAT_SDAT_FLAG:
+                    Results["EDAT_TYPE"] = "SDAT"
+                    ## --> Check license
+                    if Pkg_Header["LICENSE"] != 0:
+                        eprint("SDAT License Type {}".format(Pkg_Header["LICENSE"]), prefix="[UNKNOWN] ")
+                        eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[UNKNOWN] ")
+                else:
+                    Results["EDAT_TYPE"] = "EDAT"
+                    ## --> Check license
+                    if Pkg_Header["LICENSE"] == 0:
+                        eprint("EDAT License Type {} is for SDAT".format(Pkg_Header["LICENSE"]), prefix="[UNKNOWN] ")
+                        eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[UNKNOWN] ")
+                    elif Pkg_Header["LICENSE"] > 3:
+                        eprint("EDAT License Type {}".format(Pkg_Header["LICENSE"]), prefix="[UNKNOWN] ")
+                        eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[UNKNOWN] ")
+                ## --> Verify header data ECDSA signature (prerequisite for DevKlic/RAP/RIF verification)
+                ##   --> a) Signature
+                Size = CONST_ECDSA_VSH_CURVES[CONST_ECDSA_VSH_PUBKEYS[0]["CURVE"]]["SIZE"]
+                Signature_R = int.from_bytes(Pkg_Header["EXT_HDR_ECDSA"][:Size], byteorder="big")
+                Signature_S = int.from_bytes(Pkg_Header["EXT_HDR_ECDSA"][Size:], byteorder="big")
+                del Size
+                Signature = ecdsa.ecdsa.Signature(Signature_R, Signature_S)
+                del Signature_S
+                del Signature_R
+                ##   --> b) sha1
+                ## Python 2 workaround: must use bytes() for AES's .new()/.encrypt()/.decrypt() and hash's .update()
+                Sha1 = Cryptodome.Hash.SHA1.new(bytes(Package["HEAD_BYTES"][:Pkg_Header["STRUCTURE_DEF"]["EXT_HDR_ECDSA"]["OFFSET"]])).digest()
+                Sha1_Int = int.from_bytes(Sha1, byteorder="big")
+                del Sha1
+                ##   --> c) verify
+                Results["EXT_HDR_ECDSA"] = CONST_ECDSA_VSH_PUBKEYS[0]["PUBKEY"].verifies(Sha1_Int, Signature)
+                del Sha1_Int
+                del Signature
+                #
+                if not Results["EXT_HDR_ECDSA"]:
+                    eprint("ECDSA verification failed for EDAT/SDAT Extended Header.", end="")
+                    if Raps:
+                        eprint(" RAP/RIF verification not possible/trustworthy.", end="", prefix=None)
+                    eprint(prefix=None)
+                    eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[UNKNOWN] ")
+                ## --> Check CMAC hash of (main) header (Dev KLicensee Key verification)
+                Results["HEADER_HASH"] = False
+                Buffer = Package["HEAD_BYTES"][:Pkg_Header["STRUCTURE_DEF"]["HEADER_HASH"]["OFFSET"]]
+                #
+                for Key_Number, KLicensee in CONST_KLICENSEE_KEYS.items():
+                    if Key_Number == 0:
+                        continue
+                    #
+                    Key = bytearray(KLicensee["KEY"])
+                    fastxor.fast_xor_inplace(Key, bytearray(CONST_KLICENSEE_KEYS[2]["KEY"]))
+                    #
+                    ## Python 2 workaround: must use bytes() for AES's .new()/.encrypt()/.decrypt() and hash's .update()
+                    Hash = newCMAC(bytes(Key))
+                    Hash.update(bytes(Buffer))
+                    #
+                    if getCMACDigest(Hash) == Pkg_Header["HEADER_HASH"]:
+                        Results["HEADER_HASH"] = True
+                        Results["DEV_KLICENSEE_KEY"] = KLicensee["KEY"]
+                        break  ## found valid Dev KLicensee key
+                del Buffer
+                ## --> Select SDAT/EDAT key for license
+                Pkg_Header["KEY"] = None
+                if Pkg_Header["LICENSE"] == 0:  ## Type 0: Use header hash (SDAT)
+                    Results["RAP_VERIFY"] = "NOT REQUIRED"
+                    Pkg_Header["KEY"] = {}
+                    Pkg_Header["KEY"][0] = {}
+                    Pkg_Header["KEY"][0]["TYPE"] = "Header Hash"
+                    Pkg_Header["KEY"][0]["RIFKEY"] = bytearray(Pkg_Header["HEADER_HASH"])
+                    fastxor.fast_xor_inplace(Pkg_Header["KEY"][0]["RIFKEY"], bytearray(CONST_SDAT_KEYS[0]["KEY"]))
+                elif Pkg_Header["LICENSE"] == 1 \
+                or Pkg_Header["LICENSE"] == 2:  ## Types 1/2: Use RIF key
+                    Results["RAP_VERIFY"] = None
+                    if Raps:
+                        Pkg_Header["KEY"] = Raps
+                    else:
+                        eprint("EDAT License Type {} needs a RAP/RIF key!".format(Pkg_Header["LICENSE"]))
+                elif Pkg_Header["LICENSE"] == 3:  ## Type 3: Use Dev Klicensee key
+                    Results["RAP_VERIFY"] = "NOT REQUIRED"
+                    if Results["DEV_KLICENSEE_KEY"]:
+                        Pkg_Header["KEY"][0] = {}
+                        Pkg_Header["KEY"][0]["TYPE"] = "DEV_KLICENSEE_KEY"
+                        Pkg_Header["KEY"][0]["RIFKEY"] = Results["DEV_KLICENSEE_KEY"]
+                    else:
+                        eprint("EDAT License Type {} needs a Dev KLicensee key!".format(Pkg_Header["LICENSE"]))
+                ## --> Check CMAC hash of extended header (DevKLicensee/RIF/RAP verification)
+                if not Pkg_Header["KEY"] is None:
+                    Results["EXT_HDR_HASH"] = False
+                    Buffer = Package["HEAD_BYTES"][:Pkg_Header["STRUCTURE_DEF"]["EXT_HDR_HASH"]["OFFSET"]]
+                    #
+                    Decrypt_Key = None
+                    if Pkg_Header["FLAGS"] & CONST_EDAT_ENCRYPTED_KEY:  ## Encrypted CMAC key
+                        if Pkg_Header["VERSION"] >= 4:
+                            Decrypt_Key = CONST_EDAT_KEYS[1]["KEY"]
+                        else:
+                            Decrypt_Key = CONST_EDAT_KEYS[0]["KEY"]
+                    #
+                    for Key_Number, Key in Pkg_Header["KEY"].items():
+                        ## Determine CMAC hash key
+                        if not Decrypt_Key is None:
+                            Key_Aes = Cryptodome.Cipher.AES.new(Decrypt_Key, Cryptodome.Cipher.AES.MODE_CBC, iv=CONST_AES_EMPTY_IV)
+                            ## Python 2 workaround: must use bytes() for AES's .new()/.encrypt()/.decrypt() and hash's .update()
+                            Hash_Key = bytes(Key_Aes.decrypt(Key["RIFKEY"]))
+                            del Key_Aes
+                        else:
+                            Hash_Key = Key["RIFKEY"]
+                        #
+                        ## Python 2 workaround: must use bytes() for AES's .new()/.encrypt()/.decrypt() and hash's .update()
+                        Hash = newCMAC(Hash_Key)
+                        Hash.update(bytes(Buffer))
+                        #
+                        if getCMACDigest(Hash) == Pkg_Header["EXT_HDR_HASH"]:
+                            Results["EXT_HDR_HASH"] = True
+                            Results["RIF_KEY_TYPE"] = Key["TYPE"]
+                            Results["RIF_KEY"] = Key["RIFKEY"]
+                            if Results["RAP_VERIFY"] is None:
+                                Results["RAP_VERIFY"] = Key["RAPKEY"]
+                                break  ## found valid RIF/RAP key
+                    del Decrypt_Key
+                    del Buffer
+                    #
+                    if Results["RAP_VERIFY"] is None \
+                    and Raps:
+                        Results["RAP_VERIFY"] = False
+            ## <-- EDAT/SDAT (NPD)
             #
             if "PKG_CONTENT_ID" in Results \
             and Results["PKG_CONTENT_ID"].strip():
@@ -3847,6 +4281,17 @@ if __name__ == "__main__":
                     if "LIVEAREA_UPDATE_URL" in Results \
                     and Results["LIVEAREA_UPDATE_URL"].strip():
                         print("{:13} {}".format("Livearea URL:", Results["LIVEAREA_UPDATE_URL"]))
+                    if "EDAT_TYPE" in Results:
+                        print("{:13} {}".format("EDAT Type:", Results["EDAT_TYPE"]))
+                    if "DEV_KLICENSEE_KEY" in Results:
+                        print("{:13} {}".format("Dev KLic Key:", convertBytesToHexString(Results["DEV_KLICENSEE_KEY"], sep="")))
+                    if "RAP_VERIFY" in Results:
+                        Value = Results["RAP_VERIFY"]
+                        if isinstance(Value, bytes) \
+                        or isinstance(Value, bytearray):
+                            Value = convertBytesToHexString(Results["RAP_VERIFY"], sep="")
+                        print("{:13} {}".format("RAP Key:", Value))
+                        del Value
                     print()
                 elif Output_Format == 1:  ## Linux Shell Variable Output
                     if "PKG_TOTAL_SIZE" in Results \

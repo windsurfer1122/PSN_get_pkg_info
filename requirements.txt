@@ -1,4 +1,7 @@
 pycryptodomex
+cryptography
 requests
 aenum
 fastxor
+packaging
+ecdsa
