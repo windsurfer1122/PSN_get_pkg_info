@@ -2,6 +2,8 @@
 
 ## To Do
 - [ ] Special cases:
+  * [ ] NPD (EDAT/SDAT) for EDAT/SDAT/SELF files
+    * [ ] Meaning of different versions (1-4), licenses (1-3) types (0-1)
   * [ ] NPJG90002 "LocoRoco おためし版 (Sushi version)", JP
         http://zeus.dl.playstation.net/cdn/JP9000/NPJG90002_00/JHbBbXtj97Qy8Rff3sKuroBm0M3dfMqTlRdIEP9g8xgq76K4L33OgcfNJ5N3MvxmCVyX4gMCKLawlM4jGtBS9iJBB9GauTGJsl3UX.pkg
         Has content type 0x1 for PSX although it was released for the PSP.

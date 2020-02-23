@@ -69,6 +69,7 @@ For __Debian up to 8 "Jessie"__ use the pip version from the original [PyPi](htt
      * Python 3: `pip3 install --upgrade pycryptodomex`
      * Python 2: `pip2 install --upgrade pycryptodomex`
    * Install cryptography module:
+     * Optional: `apt-get install <python3-cryptography|python-cryptography>`
      * Python 3: `pip3 install --upgrade cryptography`
      * Python 2: `pip2 install --upgrade cryptography`
    * Install aenum module:
@@ -81,6 +82,7 @@ For __Debian up to 8 "Jessie"__ use the pip version from the original [PyPi](htt
      * Python 3: `pip3 install --upgrade packaging`
      * Python 2: `pip2 install --upgrade packaging`
    * Install ecdsa module:
+     * Optional: `apt-get install <python3-ecdsa|python-ecdsa>`
      * Python 3: `pip3 install --upgrade ecdsa`
      * Python 2: `pip2 install --upgrade ecdsa`
 
