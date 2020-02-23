@@ -119,7 +119,11 @@ Executing python scripts can be done via Windows Explorer or a Command Prompt. N
 
 ## RIF/RAP/DevKLic Handling
 * RIF/RAP Conversion: `-f 50 --rapkey ... --rifkey ... -- dummy`
-* Verification: `-f <0|2|99> [-f 50] --rapkey ... --rifkey ... --devklickey ... -- <edat file>`
+* Verification: `-f <0|2|99> [-f 50] --rapkey ... --rifkey ... --devklickey ... -- <edat|pkg file>`<br>
+  There can be multiple results for a package file with different EDAT files.
+  * "NOT REQUIRED" = Either SDAT via header hash or EDAT via Dev KLicensee key
+  * False = no supplied RAP/RIF or Dev KLicensee key worked
+  * Otherwise the result is the working RAP or Dev KLicensee key
 
 ## Original Source
 git master repository at https://github.com/windsurfer1122

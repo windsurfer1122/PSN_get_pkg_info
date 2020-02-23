@@ -58,7 +58,7 @@ from builtins import bytes
 
 ## Version definition
 ## see https://www.python.org/dev/peps/pep-0440/
-__version__ = "2020.01.00.beta5"
+__version__ = "2020.01.00.beta6"
 __author__ = "https://github.com/windsurfer1122/PSN_get_pkg_info"
 __license__ = "GPL"
 __copyright__ = "Copyright 2018-2020, windsurfer1122"
@@ -735,7 +735,7 @@ for Count in range(0x0a):
 ## 0x1610-0x17f9: keymap_rp/<nn>/<nnn>.png
 for Count in range(0x01ea):
     Key = 0x1610 + Count
-    CONST_PKG4_META_ENTRY_NAME_MAP[Key] = "keymap_rp/{:02}/{:03}.png".format(Count >> 4, Count & 0xf )
+    CONST_PKG4_META_ENTRY_NAME_MAP[Key] = "keymap_rp/{:02}/{:03}.png".format(Count >> 4, Count & 0xf)
     if Debug_Level >= 4:
         dprint("Add ID {:#06x} Name \"{}\"".format(Key, CONST_PKG4_META_ENTRY_NAME_MAP[Key]))
 #
@@ -790,6 +790,7 @@ CONST_PARAM_SFO_INDEX_ENTRY_FIELDS = collections.OrderedDict([ \
 ##
 #
 CONST_REGEX_PBP_SUFFIX = re.compile(r"\.PBP$", flags=re.UNICODE|re.IGNORECASE)
+CONST_REGEX_EDAT_SUFFIX = re.compile(r"\.(edat|EDAT)$", flags=re.UNICODE|re.IGNORECASE)
 ## --> Header
 CONST_PBP_HEADER_ENDIAN = CONST_FMT_LITTLE_ENDIAN
 CONST_PBP_MAGIC = bytes.fromhex("00504250")  ## "\x00PBP"
@@ -2365,14 +2366,188 @@ def parseEdatHeader(head_bytes, function_debug_level):
     header_fields = convertFieldsToOrdDict(CONST_EDAT_HEADER_FIELDS, temp_fields)
     del temp_fields
 
+    ## Check header version
+    if header_fields["VERSION"] > 4:
+        eprint("EDAT/SDAT Version {}".format(header_fields["LICENSE"]), prefix="[UNKNOWN] ")
+        eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[UNKNOWN] ")
+
     ## Determine debug edat
     header_fields["DEBUG_PKG"] = (header_fields["FLAGS"] & 0x80000000) != 0
+
+    ## Check license type for EDAT/SDAT
+    if header_fields["FLAGS"] & CONST_EDAT_SDAT_FLAG:
+        if header_fields["LICENSE"] != 0:
+            eprint("SDAT License Type {}".format(header_fields["LICENSE"]), prefix="[UNKNOWN] ")
+            eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[UNKNOWN] ")
+    else:
+        if header_fields["LICENSE"] == 0:
+            eprint("EDAT License Type {} is for SDAT".format(header_fields["LICENSE"]), prefix="[UNKNOWN] ")
+            eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[UNKNOWN] ")
+        elif header_fields["LICENSE"] > 3:
+            eprint("EDAT License Type {}".format(header_fields["LICENSE"]), prefix="[UNKNOWN] ")
+            eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[UNKNOWN] ")
 
     ## Debug print results
     dprint(">>>>> parseEdatHeader results:")
     dprintFieldsDict(header_fields, "edatheaderfields[{KEY:15}|{INDEX:2}]", function_debug_level, None)
 
     return header_fields
+
+
+def checkEdatHeader(header_fields, header_bytes, results, function_debug_level):
+    ## Determine EDAT/SDAT
+    if header_fields["FLAGS"] & CONST_EDAT_SDAT_FLAG:
+        results["EDAT_TYPE"] = "SDAT"
+    else:
+        results["EDAT_TYPE"] = "EDAT"
+
+    ## Verify header data ECDSA signature (prerequisite for DevKlic/RAP/RIF verification)
+    ## --> Signature
+    size = CONST_ECDSA_VSH_CURVES[CONST_ECDSA_VSH_PUBKEYS[0]["CURVE"]]["SIZE"]
+    signature_r = int.from_bytes(header_fields["EXT_HDR_ECDSA"][:size], byteorder="big")
+    signature_s = int.from_bytes(header_fields["EXT_HDR_ECDSA"][size:], byteorder="big")
+    del size
+    signature = ecdsa.ecdsa.Signature(signature_r, signature_s)
+    del signature_s
+    del signature_r
+    ## --> sha1
+    ## Python 2 workaround: must use bytes() for AES's .new()/.encrypt()/.decrypt() and hash's .update()
+    sha1 = Cryptodome.Hash.SHA1.new(bytes(header_bytes[:header_fields["STRUCTURE_DEF"]["EXT_HDR_ECDSA"]["OFFSET"]])).digest()
+    sha1_int = int.from_bytes(sha1, byteorder="big")
+    del sha1
+    ## --> verify
+    results["EXT_HDR_ECDSA"] = CONST_ECDSA_VSH_PUBKEYS[0]["PUBKEY"].verifies(sha1_int, signature)
+    del sha1_int
+    del signature
+    #
+    if not results["EXT_HDR_ECDSA"]:
+        eprint("ECDSA verification failed for EDAT/SDAT Extended Header.", end="")
+        if Raps:
+            eprint(" RAP/RIF verification not trustworthy.", end="", prefix=None)
+        if Arguments.devklickey:
+            eprint(" Dev KLicensee verification not trustworthy.", end="", prefix=None)
+        eprint(prefix=None)
+        eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info")
+
+    ## Check CMAC hash of (main) header (Dev KLicensee Key verification)
+    results["HEADER_HASH"] = False
+    buffer = header_bytes[:header_fields["STRUCTURE_DEF"]["HEADER_HASH"]["OFFSET"]]
+    #
+    for key_number, klicensee in CONST_KLICENSEE_KEYS.items():
+        if key_number == 0:
+            continue
+        #
+        key = bytearray(klicensee["KEY"])
+        fastxor.fast_xor_inplace(key, bytearray(CONST_KLICENSEE_KEYS[2]["KEY"]))
+        #
+        ## Python 2 workaround: must use bytes() for AES's .new()/.encrypt()/.decrypt() and hash's .update()
+        hash = newCMAC(bytes(key))
+        hash.update(bytes(buffer))
+        #
+        if getCMACDigest(hash) == header_fields["HEADER_HASH"]:
+            results["HEADER_HASH"] = True
+            results["DEV_KLICENSEE_KEY"] = klicensee["KEY"]
+            break  ## found valid Dev KLicensee key
+    del buffer
+    #
+    if Arguments.devklickey \
+    and not "DEV_KLICENSEE_KEY" in results:
+        results["DEV_KLICENSEE_KEY"] = False
+
+    ## Select SDAT/EDAT key for license
+    header_fields["KEY"] = None
+    if header_fields["LICENSE"] == 0:  ## Type 0: Use header hash (SDAT)
+        results["RAP_VERIFY"] = "NOT REQUIRED"
+        header_fields["KEY"] = {}
+        header_fields["KEY"][0] = {}
+        header_fields["KEY"][0]["TYPE"] = "Header Hash"
+        header_fields["KEY"][0]["RIFKEY"] = bytearray(header_fields["HEADER_HASH"])
+        fastxor.fast_xor_inplace(header_fields["KEY"][0]["RIFKEY"], bytearray(CONST_SDAT_KEYS[0]["KEY"]))
+    elif header_fields["LICENSE"] == 1 \
+    or header_fields["LICENSE"] == 2:  ## Types 1/2: Use RIF key
+        if Raps:
+            results["RAP_VERIFY"] = None
+            header_fields["KEY"] = Raps
+        else:
+            eprint("EDAT License Type {} needs a RAP/RIF key!".format(header_fields["LICENSE"]))
+    elif header_fields["LICENSE"] == 3:  ## Type 3: Use Dev Klicensee key
+        results["RAP_VERIFY"] = "NOT REQUIRED"
+        if "DEV_KLICENSEE_KEY" in results \
+        and results["DEV_KLICENSEE_KEY"] != False:
+            header_fields["KEY"] = {}
+            header_fields["KEY"][0] = {}
+            header_fields["KEY"][0]["TYPE"] = "Dev KLicensee Key"
+            header_fields["KEY"][0]["RIFKEY"] = results["DEV_KLICENSEE_KEY"]
+        else:
+            eprint("EDAT License Type {} needs a Dev KLicensee key!".format(header_fields["LICENSE"]))
+
+    ## Check CMAC hash of extended header (DevKLicensee/RIF/RAP verification)
+    if not header_fields["KEY"] is None:
+        results["EXT_HDR_HASH"] = False
+        buffer = header_bytes[:header_fields["STRUCTURE_DEF"]["EXT_HDR_HASH"]["OFFSET"]]
+        #
+        decrypt_key = None
+        if header_fields["FLAGS"] & CONST_EDAT_ENCRYPTED_KEY:  ## Encrypted CMAC key
+            if header_fields["VERSION"] >= 4:
+                decrypt_key = CONST_EDAT_KEYS[1]["KEY"]
+            else:
+                decrypt_key = CONST_EDAT_KEYS[0]["KEY"]
+        #
+        for key_number, key in header_fields["KEY"].items():
+            ## Determine CMAC hash key
+            if not decrypt_key is None:
+                key_aes = Cryptodome.Cipher.AES.new(decrypt_key, Cryptodome.Cipher.AES.MODE_CBC, iv=CONST_AES_EMPTY_IV)
+                ## Python 2 workaround: must use bytes() for AES's .new()/.encrypt()/.decrypt() and hash's .update()
+                hash_key = bytes(key_aes.decrypt(key["RIFKEY"]))
+                del key_aes
+            else:
+                hash_key = key["RIFKEY"]
+            #
+            ## Python 2 workaround: must use bytes() for AES's .new()/.encrypt()/.decrypt() and hash's .update()
+            hash = newCMAC(hash_key)
+            hash.update(bytes(buffer))
+            #
+            if getCMACDigest(hash) == header_fields["EXT_HDR_HASH"]:
+                results["EXT_HDR_HASH"] = True
+                results["RIF_KEY_TYPE"] = key["TYPE"]
+                results["RIF_KEY"] = key["RIFKEY"]
+                if results["RAP_VERIFY"] is None:
+                    results["RAP_VERIFY"] = key["RAPKEY"]
+                    break  ## found valid RIF/RAP key
+        del decrypt_key
+        del buffer
+        #
+        if results["RAP_VERIFY"] is None \
+        and Raps:
+            results["RAP_VERIFY"] = False
+
+    ## Debug print results
+    if function_debug_level >= 1:
+        dprint(">>>>> checkEdatHeader results:")
+        dprint("checkedatheader[\"EDAT_TYPE\"]:", results["EDAT_TYPE"])
+        dprint("checkedatheader[\"EXT_HDR_ECDSA\"]:", results["EXT_HDR_ECDSA"])
+        dprint("checkedatheader[\"HEADER_HASH\"]:", results["HEADER_HASH"])
+        if "DEV_KLICENSEE_KEY" in results:
+            value = results["DEV_KLICENSEE_KEY"]
+            if isinstance(value, bytes) \
+            or isinstance(value, bytearray):
+                value = convertBytesToHexString(value, sep="")
+            dprint("checkedatheader[\"DEV_KLICENSEE_KEY\"]:", value)
+        if "EXT_HDR_HASH" in results:
+            dprint("checkedatheader[\"EXT_HDR_HASH\"]:", results["EXT_HDR_HASH"])
+        if "RIF_KEY_TYPE" in results:
+            dprint("checkedatheader[\"RIF_KEY_TYPE\"]:", results["RIF_KEY_TYPE"])
+        if "RIF_KEY" in results:
+            dprint("checkedatheader[\"RIF_KEY\"]:", convertBytesToHexString(results["RIF_KEY"], sep=""))
+        if "RAP_VERIFY" in results:
+            value = results["RAP_VERIFY"]
+            if isinstance(value, bytes) \
+            or isinstance(value, bytearray):
+                value = convertBytesToHexString(value, sep="")
+            dprint("checkedatheader[\"RAP_VERIFY\"]:", value)
+            del value
+
+    return
 
 
 def parsePkg3ItemsInfo(header_fields, meta_data, input_stream, function_debug_level):
@@ -2556,8 +2731,9 @@ def parsePkg3ItemsInfo(header_fields, meta_data, input_stream, function_debug_le
     items_info_bytes["FILE_OFS_END"] = items_info_bytes["FILE_OFS"] + items_info_bytes["SIZE"]
 
     ## Debug print results
-    dprint(">>>>> parsePkg3ItemsInfo results:")
-    dprintFieldsList(item_entries, "".join(("pkgitementries[{KEY:", item_cnt_len, "}]")), function_debug_level, None)
+    if function_debug_level >= 2:
+        dprint(">>>>> parsePkg3ItemsInfo results:")
+        dprintFieldsList(item_entries, "".join(("pkgitementries[{KEY:", item_cnt_len, "}]")), function_debug_level, None)
 
     return item_entries, items_info_bytes
 
@@ -3530,6 +3706,33 @@ if __name__ == "__main__":
                             ## --> Process PARAM.SFO data
                             Pbp_Sfo_Values = parseSfo(Sfo_Bytes, max(0, Debug_Level))
                             del Sfo_Bytes
+                        elif CONST_REGEX_EDAT_SUFFIX.search(Item_Entry["NAME"]):
+                            ## Retrieve EDAT/SDAT header
+                            if Debug_Level >= 1:
+                                dprint(">>>>> {} (from encrypted data):".format(Item_Entry["NAME"]))
+                            Package["ITEM_BYTES"][Item_Index] = {}
+                            Package["ITEM_BYTES"][Item_Index]["ADD"] = True
+                            processPkg3Item(Pkg_Header, Item_Entry, Input_Stream, Package["ITEM_BYTES"][Item_Index], size=min(CONST_EDAT_HEADER_FIELDS["STRUCTURE_SIZE"], Item_Entry["DATASIZE"]), function_debug_level=max(0, Debug_Level))
+                            ## Process EDAT/SDAT header
+                            Edat_Bytes = Package["ITEM_BYTES"][Item_Index][CONST_DATATYPE_DECRYPTED][Item_Entry["ALIGN"]["OFSDELTA"]:Item_Entry["ALIGN"]["OFSDELTA"]+CONST_EDAT_HEADER_FIELDS["STRUCTURE_SIZE"]]
+                            Item_Entry["EDAT"] = parseEdatHeader(Edat_Bytes, function_debug_level=max(0, Debug_Level))
+                            ## Check EDAT/SDAT header
+                            if Arguments.rapkey \
+                            or Arguments.rifkey \
+                            or Arguments.devklickey:
+                                Item_Entry["EDAT"]["RESULTS"] = {}
+                                checkEdatHeader(Item_Entry["EDAT"], Edat_Bytes, Item_Entry["EDAT"]["RESULTS"], function_debug_level=max(0, Debug_Level))
+                                #
+                                if "DEV_KLICENSEE_KEY" in Item_Entry["EDAT"]["RESULTS"]:
+                                    if not "DEV_KLICENSEE_KEY" in Results:
+                                        Results["DEV_KLICENSEE_KEY"] = {}
+                                    Results["DEV_KLICENSEE_KEY"][Item_Entry["EDAT"]["RESULTS"]["DEV_KLICENSEE_KEY"]] = True
+                                if "RAP_VERIFY" in Item_Entry["EDAT"]["RESULTS"]:
+                                    if not "RAP_VERIFY" in Results:
+                                        Results["RAP_VERIFY"] = {}
+                                    Results["RAP_VERIFY"][Item_Entry["EDAT"]["RESULTS"]["RAP_VERIFY"]] = True
+                            #
+                            del Edat_Bytes
                     del Item_Entry
                 #
                 if Pkg_Sfo_Values is None \
@@ -3537,6 +3740,26 @@ if __name__ == "__main__":
                     Pkg_Sfo_Values = Item_Sfo_Values
                     Item_Sfo_Values = None
                 Main_Sfo_Values = Pkg_Sfo_Values
+                #
+                if "DEV_KLICENSEE_KEY" in Results:
+                    New_Dict = {}
+                    Number = -1
+                    for Key in Results["DEV_KLICENSEE_KEY"]:
+                        Number += 1
+                        New_Dict[Number] = Key
+                    Results["DEV_KLICENSEE_KEY"] = New_Dict
+                    del Number
+                    del New_Dict
+                #
+                if "RAP_VERIFY" in Results:
+                    New_Dict = {}
+                    Number = -1
+                    for Key in Results["RAP_VERIFY"]:
+                        Number += 1
+                        New_Dict[Number] = Key
+                    Results["RAP_VERIFY"] = New_Dict
+                    del Number
+                    del New_Dict
                 ## Get PKG3 unencrypted tail data
                 if Debug_Level >= 2:
                     dprint(">>>>> PKG3 Tail:")
@@ -3608,140 +3831,29 @@ if __name__ == "__main__":
             ## <-- PBP
             ## --> EDAT/SDAT (NPD)
             elif Pkg_Magic == CONST_EDAT_MAGIC:
-                Pkg_Header = parseEdatHeader(Package["HEAD_BYTES"], max(0, Debug_Level))
-                #
-                if Pkg_Header["VERSION"] > 4:
-                    eprint("EDAT/SDAT Version {}".format(Pkg_Header["LICENSE"]), prefix="[UNKNOWN] ")
-                    eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[UNKNOWN] ")
+                Pkg_Header = parseEdatHeader(Package["HEAD_BYTES"], function_debug_level=max(0, Debug_Level))
                 ## --> Package content id
                 if "CONTENT_ID" in Pkg_Header:
                     Results["PKG_CONTENT_ID"] = Pkg_Header["CONTENT_ID"]
                     Results["PKG_CID_TITLE_ID1"] = Results["PKG_CONTENT_ID"][7:16]
                     Results["PKG_CID_TITLE_ID2"] = Results["PKG_CONTENT_ID"][20:]
-                ## --> Determine SDAT or EDAT, plus license check
-                if Pkg_Header["FLAGS"] & CONST_EDAT_SDAT_FLAG:
-                    Results["EDAT_TYPE"] = "SDAT"
-                    ## --> Check license
-                    if Pkg_Header["LICENSE"] != 0:
-                        eprint("SDAT License Type {}".format(Pkg_Header["LICENSE"]), prefix="[UNKNOWN] ")
-                        eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[UNKNOWN] ")
-                else:
-                    Results["EDAT_TYPE"] = "EDAT"
-                    ## --> Check license
-                    if Pkg_Header["LICENSE"] == 0:
-                        eprint("EDAT License Type {} is for SDAT".format(Pkg_Header["LICENSE"]), prefix="[UNKNOWN] ")
-                        eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[UNKNOWN] ")
-                    elif Pkg_Header["LICENSE"] > 3:
-                        eprint("EDAT License Type {}".format(Pkg_Header["LICENSE"]), prefix="[UNKNOWN] ")
-                        eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[UNKNOWN] ")
-                ## --> Verify header data ECDSA signature (prerequisite for DevKlic/RAP/RIF verification)
-                ##   --> a) Signature
-                Size = CONST_ECDSA_VSH_CURVES[CONST_ECDSA_VSH_PUBKEYS[0]["CURVE"]]["SIZE"]
-                Signature_R = int.from_bytes(Pkg_Header["EXT_HDR_ECDSA"][:Size], byteorder="big")
-                Signature_S = int.from_bytes(Pkg_Header["EXT_HDR_ECDSA"][Size:], byteorder="big")
-                del Size
-                Signature = ecdsa.ecdsa.Signature(Signature_R, Signature_S)
-                del Signature_S
-                del Signature_R
-                ##   --> b) sha1
-                ## Python 2 workaround: must use bytes() for AES's .new()/.encrypt()/.decrypt() and hash's .update()
-                Sha1 = Cryptodome.Hash.SHA1.new(bytes(Package["HEAD_BYTES"][:Pkg_Header["STRUCTURE_DEF"]["EXT_HDR_ECDSA"]["OFFSET"]])).digest()
-                Sha1_Int = int.from_bytes(Sha1, byteorder="big")
-                del Sha1
-                ##   --> c) verify
-                Results["EXT_HDR_ECDSA"] = CONST_ECDSA_VSH_PUBKEYS[0]["PUBKEY"].verifies(Sha1_Int, Signature)
-                del Sha1_Int
-                del Signature
-                #
-                if not Results["EXT_HDR_ECDSA"]:
-                    eprint("ECDSA verification failed for EDAT/SDAT Extended Header.", end="")
-                    if Raps:
-                        eprint(" RAP/RIF verification not possible/trustworthy.", end="", prefix=None)
-                    eprint(prefix=None)
-                    eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[UNKNOWN] ")
-                ## --> Check CMAC hash of (main) header (Dev KLicensee Key verification)
-                Results["HEADER_HASH"] = False
-                Buffer = Package["HEAD_BYTES"][:Pkg_Header["STRUCTURE_DEF"]["HEADER_HASH"]["OFFSET"]]
-                #
-                for Key_Number, KLicensee in CONST_KLICENSEE_KEYS.items():
-                    if Key_Number == 0:
-                        continue
+                ## --> DevKLicensee/RIF/RAP verification
+                if Arguments.rapkey \
+                or Arguments.rifkey \
+                or Arguments.devklickey:
+                    checkEdatHeader(Pkg_Header, Package["HEAD_BYTES"], Results, function_debug_level=max(0, Debug_Level))
                     #
-                    Key = bytearray(KLicensee["KEY"])
-                    fastxor.fast_xor_inplace(Key, bytearray(CONST_KLICENSEE_KEYS[2]["KEY"]))
+                    if "DEV_KLICENSEE_KEY" in Results:
+                        New_Dict = {}
+                        New_Dict[0] = Results["DEV_KLICENSEE_KEY"]
+                        Results["DEV_KLICENSEE_KEY"] = New_Dict
+                        del New_Dict
                     #
-                    ## Python 2 workaround: must use bytes() for AES's .new()/.encrypt()/.decrypt() and hash's .update()
-                    Hash = newCMAC(bytes(Key))
-                    Hash.update(bytes(Buffer))
-                    #
-                    if getCMACDigest(Hash) == Pkg_Header["HEADER_HASH"]:
-                        Results["HEADER_HASH"] = True
-                        Results["DEV_KLICENSEE_KEY"] = KLicensee["KEY"]
-                        break  ## found valid Dev KLicensee key
-                del Buffer
-                ## --> Select SDAT/EDAT key for license
-                Pkg_Header["KEY"] = None
-                if Pkg_Header["LICENSE"] == 0:  ## Type 0: Use header hash (SDAT)
-                    Results["RAP_VERIFY"] = "NOT REQUIRED"
-                    Pkg_Header["KEY"] = {}
-                    Pkg_Header["KEY"][0] = {}
-                    Pkg_Header["KEY"][0]["TYPE"] = "Header Hash"
-                    Pkg_Header["KEY"][0]["RIFKEY"] = bytearray(Pkg_Header["HEADER_HASH"])
-                    fastxor.fast_xor_inplace(Pkg_Header["KEY"][0]["RIFKEY"], bytearray(CONST_SDAT_KEYS[0]["KEY"]))
-                elif Pkg_Header["LICENSE"] == 1 \
-                or Pkg_Header["LICENSE"] == 2:  ## Types 1/2: Use RIF key
-                    Results["RAP_VERIFY"] = None
-                    if Raps:
-                        Pkg_Header["KEY"] = Raps
-                    else:
-                        eprint("EDAT License Type {} needs a RAP/RIF key!".format(Pkg_Header["LICENSE"]))
-                elif Pkg_Header["LICENSE"] == 3:  ## Type 3: Use Dev Klicensee key
-                    Results["RAP_VERIFY"] = "NOT REQUIRED"
-                    if Results["DEV_KLICENSEE_KEY"]:
-                        Pkg_Header["KEY"][0] = {}
-                        Pkg_Header["KEY"][0]["TYPE"] = "DEV_KLICENSEE_KEY"
-                        Pkg_Header["KEY"][0]["RIFKEY"] = Results["DEV_KLICENSEE_KEY"]
-                    else:
-                        eprint("EDAT License Type {} needs a Dev KLicensee key!".format(Pkg_Header["LICENSE"]))
-                ## --> Check CMAC hash of extended header (DevKLicensee/RIF/RAP verification)
-                if not Pkg_Header["KEY"] is None:
-                    Results["EXT_HDR_HASH"] = False
-                    Buffer = Package["HEAD_BYTES"][:Pkg_Header["STRUCTURE_DEF"]["EXT_HDR_HASH"]["OFFSET"]]
-                    #
-                    Decrypt_Key = None
-                    if Pkg_Header["FLAGS"] & CONST_EDAT_ENCRYPTED_KEY:  ## Encrypted CMAC key
-                        if Pkg_Header["VERSION"] >= 4:
-                            Decrypt_Key = CONST_EDAT_KEYS[1]["KEY"]
-                        else:
-                            Decrypt_Key = CONST_EDAT_KEYS[0]["KEY"]
-                    #
-                    for Key_Number, Key in Pkg_Header["KEY"].items():
-                        ## Determine CMAC hash key
-                        if not Decrypt_Key is None:
-                            Key_Aes = Cryptodome.Cipher.AES.new(Decrypt_Key, Cryptodome.Cipher.AES.MODE_CBC, iv=CONST_AES_EMPTY_IV)
-                            ## Python 2 workaround: must use bytes() for AES's .new()/.encrypt()/.decrypt() and hash's .update()
-                            Hash_Key = bytes(Key_Aes.decrypt(Key["RIFKEY"]))
-                            del Key_Aes
-                        else:
-                            Hash_Key = Key["RIFKEY"]
-                        #
-                        ## Python 2 workaround: must use bytes() for AES's .new()/.encrypt()/.decrypt() and hash's .update()
-                        Hash = newCMAC(Hash_Key)
-                        Hash.update(bytes(Buffer))
-                        #
-                        if getCMACDigest(Hash) == Pkg_Header["EXT_HDR_HASH"]:
-                            Results["EXT_HDR_HASH"] = True
-                            Results["RIF_KEY_TYPE"] = Key["TYPE"]
-                            Results["RIF_KEY"] = Key["RIFKEY"]
-                            if Results["RAP_VERIFY"] is None:
-                                Results["RAP_VERIFY"] = Key["RAPKEY"]
-                                break  ## found valid RIF/RAP key
-                    del Decrypt_Key
-                    del Buffer
-                    #
-                    if Results["RAP_VERIFY"] is None \
-                    and Raps:
-                        Results["RAP_VERIFY"] = False
+                    if "RAP_VERIFY" in Results:
+                        New_Dict = {}
+                        New_Dict[0] = Results["RAP_VERIFY"]
+                        Results["RAP_VERIFY"] = New_Dict
+                        del New_Dict
             ## <-- EDAT/SDAT (NPD)
             #
             if "PKG_CONTENT_ID" in Results \
@@ -4284,14 +4396,21 @@ if __name__ == "__main__":
                     if "EDAT_TYPE" in Results:
                         print("{:13} {}".format("EDAT Type:", Results["EDAT_TYPE"]))
                     if "DEV_KLICENSEE_KEY" in Results:
-                        print("{:13} {}".format("Dev KLic Key:", convertBytesToHexString(Results["DEV_KLICENSEE_KEY"], sep="")))
-                    if "RAP_VERIFY" in Results:
-                        Value = Results["RAP_VERIFY"]
-                        if isinstance(Value, bytes) \
-                        or isinstance(Value, bytearray):
-                            Value = convertBytesToHexString(Results["RAP_VERIFY"], sep="")
-                        print("{:13} {}".format("RAP Key:", Value))
+                        for Key, Value in Results["DEV_KLICENSEE_KEY"].items():
+                            if isinstance(Value, bytes) \
+                            or isinstance(Value, bytearray):
+                                Value = convertBytesToHexString(Value, sep="")
+                            print("{:13} {}".format("Dev KLic Key:", Value))
                         del Value
+                        del Key
+                    if "RAP_VERIFY" in Results:
+                        for Key, Value in Results["RAP_VERIFY"].items():
+                            if isinstance(Value, bytes) \
+                            or isinstance(Value, bytearray):
+                                Value = convertBytesToHexString(Value, sep="")
+                            print("{:13} {}".format("RAP Key:", Value))
+                        del Value
+                        del Key
                     print()
                 elif Output_Format == 1:  ## Linux Shell Variable Output
                     if "PKG_TOTAL_SIZE" in Results \
@@ -4594,7 +4713,8 @@ if __name__ == "__main__":
                         if Pkg_Item_Entries:
                             Format_String = "".join(("{:", unicode(len(unicode(len(Pkg_Item_Entries)))), "}"))
                             for Item_Entry in Pkg_Item_Entries:
-                                print("".join(("Pkg_Item_Entries[", Format_String, "]: Ofs {:#012x} Size {:12}")).format(Item_Entry["INDEX"], Item_Entry["DATAOFS"], Item_Entry["DATASIZE"]), end="")
+                                Item_Prefix = "".join(("Pkg_Item_Entries[", Format_String, "]")).format(Item_Entry["INDEX"])
+                                print("".join((Item_Prefix, ": Ofs {:#012x} Size {:12}")).format(Item_Entry["DATAOFS"], Item_Entry["DATASIZE"]), end="")
                                 if "FLAGS" in Item_Entry:
                                     print(" Flags {:#010x}".format(Item_Entry["FLAGS"]), end="")
                                 if "KEYINDEX" in Item_Entry:
@@ -4602,6 +4722,23 @@ if __name__ == "__main__":
                                 if "NAME" in Item_Entry:
                                     print(" Name \"", Item_Entry["NAME"], "\"", sep="", end="")
                                 print()
+                                if "EDAT" in Item_Entry:
+                                    print("".join((Item_Prefix, ": EDAT Version {} License {} Type {} Flags {:#010x}")).format(Item_Entry["EDAT"]["VERSION"], Item_Entry["EDAT"]["LICENSE"], Item_Entry["EDAT"]["TYPE"], Item_Entry["EDAT"]["FLAGS"]), end="")
+                                    if "RESULTS" in Item_Entry["EDAT"]:
+                                        if "DEV_KLICENSEE_KEY" in Item_Entry["EDAT"]["RESULTS"]:
+                                            Value = Item_Entry["EDAT"]["RESULTS"]["DEV_KLICENSEE_KEY"]
+                                            if isinstance(Value, bytes) \
+                                            or isinstance(Value, bytearray):
+                                                Value = convertBytesToHexString(Value, sep="")
+                                            print(" Dev KLic ", Value, sep="", end="")
+                                        if "RAP_VERIFY" in Item_Entry["EDAT"]["RESULTS"]:
+                                            Value = Item_Entry["EDAT"]["RESULTS"]["RAP_VERIFY"]
+                                            if isinstance(Value, bytes) \
+                                            or isinstance(Value, bytearray):
+                                                Value = convertBytesToHexString(Value, sep="")
+                                            print(" RAP ", Value, sep="", end="")
+                                            del Value
+                                    print()
                         if Pkg_Meta_Table:
                             Format_String = "".join(("{:", unicode(len(unicode(Pkg_Header["METACNT"]-1))), "}"))
                             for Meta_Entry in Pkg_Meta_Table:

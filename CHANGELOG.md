@@ -1,5 +1,8 @@
 # PSN_get_pkg_info.py - Changelog
 
+## 2020.01.00.beta6
+* NEW: RAP, RIF and Dev KLicensse Key Verification for package files
+
 ## 2020.01.00.beta5
 * NEW: RAP, RIF and Dev KLicensse Key Verification for EDAT files
 
