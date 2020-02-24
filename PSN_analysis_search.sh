@@ -210,9 +210,17 @@ main()
   #GREP_1='-l	-e	Pkg_Meta_Data\[0x03\]:.*Value 0000048c$'
   #GREP_OUTPUT='-e	Results\["SFO_TITLE"'
   #
-  ## EBOOT.BIN/EDAT
+  ## EBOOT.BIN/.EDAT/.SDAT
   #GREP_OUTPUT='-i	-e	Name[[:space:]]\+".*eboot.bin"'
   #GREP_OUTPUT='-i	-e	Name[[:space:]]\+".*\.edat"'
+  #GREP_OUTPUT='-i	-e	Name[[:space:]]\+".*\.sdat"'
+  #GREP_OUTPUT='-i	-e	NPD[[:space:]]\+.*$'
+  #GREP_OUTPUT='-i	-e	NPD[[:space:]]\+.*License 0.*$'
+  #GREP_OUTPUT='-i	-e	NPD Version 0.*$'
+  #GREP_OUTPUT='-i	-e	NPD Version 1.*$	--before-context=1	-n'
+  #GREP_OUTPUT='-i	-e	Name[[:space:]]\+".*ISO\.BIN\.EDAT"'
+  #GREP_OUTPUT='-i	-e	PLATFORM'
+  #GREP_OUTPUT='-i	-e	CONTENT_ID'
   #
   ## RETAIL/DEBUG
   #GREP_OUTPUT='-e	^Pkg_Header\["REV"[[:space:]]\+|.*\]: .*'

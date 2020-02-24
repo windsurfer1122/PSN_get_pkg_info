@@ -1600,8 +1600,13 @@ def convertRapkeyToRifkey(rapkey_bytes):
         carryover = 0
         for _i in range(Cryptodome.Cipher.AES.block_size):
             pos1 = CONST_RAP_PBOX[_i]
+            key_byte = CONST_RAP_KEYS[2]["KEY"][pos1]
             ## Python 2 workaround: must use int.from_bytes()
-            new_byte = temp_bytes[pos1] - carryover - int.from_bytes(CONST_RAP_KEYS[2]["KEY"][pos1])
+            if isinstance(key_byte, str) \
+            or isinstance(key_byte, bytes) \
+            or isinstance(key_byte, bytearray):
+                key_byte = int.from_bytes(key_byte, byteorder="big")
+            new_byte = temp_bytes[pos1] - carryover - key_byte
             if new_byte < 0x00:
                 carryover = 1
             else:
@@ -1618,8 +1623,13 @@ def convertRifkeyToRapkey(rifkey_bytes):
         carryover = 0
         for _i in range(Cryptodome.Cipher.AES.block_size):
             pos1 = CONST_RAP_PBOX[_i]
+            key_byte = CONST_RAP_KEYS[2]["KEY"][pos1]
             ## Python 2 workaround: must use int.from_bytes()
-            new_byte = temp_bytes[pos1] + carryover + int.from_bytes(CONST_RAP_KEYS[2]["KEY"][pos1])
+            if isinstance(key_byte, str) \
+            or isinstance(key_byte, bytes) \
+            or isinstance(key_byte, bytearray):
+                key_byte = int.from_bytes(key_byte, byteorder="big")
+            new_byte = temp_bytes[pos1] + carryover + key_byte
             if new_byte > 0xff:
                 carryover = 1
             else:
@@ -2373,8 +2383,12 @@ def parseNpdHeader(head_bytes, function_debug_level):
     del temp_fields
 
     ## Check header version and depending fields
-    if header_fields["VERSION"] == 1:
-        header_fields["SDAT"] = True
+    if header_fields["VERSION"] == 0 \
+    or header_fields["VERSION"] > 4:
+        eprint("NPD Header Version {}".format(header_fields["LICENSE"]), prefix="[UNKNOWN] ")
+        eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[UNKNOWN] ")
+    elif header_fields["VERSION"] == 1:
+        header_fields["SDAT"] = False
         ## --> Remove extended header fields
         del header_fields["FLAGS"]
         del header_fields["BLOCKSIZE"]
@@ -2383,9 +2397,6 @@ def parseNpdHeader(head_bytes, function_debug_level):
         del header_fields["EXT_HDR_HASH"]
         del header_fields["META_ECDSA"]
         del header_fields["EXT_HDR_ECDSA"]
-    elif header_fields["VERSION"] > 4:
-        eprint("NPD Header Version {}".format(header_fields["LICENSE"]), prefix="[UNKNOWN] ")
-        eprint("Please report this issue at https://github.com/windsurfer1122/PSN_get_pkg_info", prefix="[UNKNOWN] ")
     elif header_fields["VERSION"] >= 2:
         ## Determine SDAT
         header_fields["SDAT"] = (header_fields["FLAGS"] & CONST_NPD_SDAT_FLAG) != 0
@@ -3564,7 +3575,7 @@ if __name__ == "__main__":
             ## Initialize header bytes array
             dprint(">>>>> PKG Main Header:")
 
-            ## Get file magic code/string and check for PKG/PBP file
+            ## Get file magic code/string and check for PKG/PBP/NPD file
             ## see http://www.psdevwiki.com/ps3/PKG_files#File_Header_2
             ## see http://www.psdevwiki.com/ps4/PKG_files#File_Header
             try:
@@ -3597,7 +3608,7 @@ if __name__ == "__main__":
                 dprint("Detected NPD (EDAT/SDAT)")
             else:
                 Input_Stream.close(function_debug_level=max(0, Debug_Level))
-                eprint("Not a known PKG/PBP file ({} <> {}|{}|{})".format(convertBytesToHexString(Pkg_Magic, sep=""), convertBytesToHexString(CONST_PKG3_MAGIC, sep=""), convertBytesToHexString(CONST_PKG4_MAGIC, sep=""), convertBytesToHexString(CONST_PBP_MAGIC, sep="")), Input_Stream.getSource(function_debug_level=max(0, Debug_Level)))
+                eprint("Not a known PKG/PBP/NPD file ({} <> {}|{}|{})".format(convertBytesToHexString(Pkg_Magic, sep=""), convertBytesToHexString(CONST_PKG3_MAGIC, sep=""), convertBytesToHexString(CONST_PKG4_MAGIC, sep=""), convertBytesToHexString(CONST_PBP_MAGIC, sep="")), Input_Stream.getSource(function_debug_level=max(0, Debug_Level)))
                 eprint("", prefix=None)
                 sys.exit(2)
 
@@ -3622,6 +3633,9 @@ if __name__ == "__main__":
                 ## --> Size of package (=file size)
                 if "TOTALSIZE" in Pkg_Header:
                     Results["PKG_TOTAL_SIZE"] = Pkg_Header["TOTALSIZE"]
+                    if Results["FILE_SIZE"] < Pkg_Header["TOTALSIZE"]:
+                        print("[ERROR] File size ({}) is less than package size ({}), seems to be the first part of a multi-part package. Please try to determine the related XML file/URL for the package.".format(Results["FILE_SIZE"], Pkg_Header["TOTALSIZE"]))
+                        print("[ERROR] Analysis and extraction will stop when end of file is reached.")
                 ## --> Package content id
                 if "CONTENT_ID" in Pkg_Header:
                     Results["PKG_CONTENT_ID"] = Pkg_Header["CONTENT_ID"]
@@ -3696,7 +3710,12 @@ if __name__ == "__main__":
                                 dprint(">>>>> {} (from encrypted data):".format(Item_Entry["NAME"]))
                             Package["ITEM_BYTES"][Item_Index] = {}
                             Package["ITEM_BYTES"][Item_Index]["ADD"] = True
-                            processPkg3Item(Pkg_Header, Item_Entry, Input_Stream, Package["ITEM_BYTES"][Item_Index], function_debug_level=max(0, Debug_Level))
+                            try:
+                                processPkg3Item(Pkg_Header, Item_Entry, Input_Stream, Package["ITEM_BYTES"][Item_Index], function_debug_level=max(0, Debug_Level))
+                            except:
+                                del Package["ITEM_BYTES"][Item_Index]["ADD"]
+                                eprint("ABORT analyzing items")
+                                break
                             del Package["ITEM_BYTES"][Item_Index]["ADD"]
                             ## Process PARAM.SFO
                             Sfo_Bytes = Package["ITEM_BYTES"][Item_Index][CONST_DATATYPE_DECRYPTED][Item_Entry["ALIGN"]["OFSDELTA"]:Item_Entry["ALIGN"]["OFSDELTA"]+Item_Entry["DATASIZE"]]
@@ -3711,7 +3730,12 @@ if __name__ == "__main__":
                                 dprint(">>>>> {} (from encrypted data):".format(Item_Entry["NAME"]))
                             Package["ITEM_BYTES"][Item_Index] = {}
                             Package["ITEM_BYTES"][Item_Index]["ADD"] = True
-                            processPkg3Item(Pkg_Header, Item_Entry, Input_Stream, Package["ITEM_BYTES"][Item_Index], size=min(2048, Item_Entry["DATASIZE"]), function_debug_level=max(0, Debug_Level))
+                            try:
+                                processPkg3Item(Pkg_Header, Item_Entry, Input_Stream, Package["ITEM_BYTES"][Item_Index], size=min(2048, Item_Entry["DATASIZE"]), function_debug_level=max(0, Debug_Level))
+                            except:
+                                del Package["ITEM_BYTES"][Item_Index]["ADD"]
+                                eprint("ABORT analyzing items")
+                                break
                             ## Process PBP header
                             Pbp_Bytes = Package["ITEM_BYTES"][Item_Index][CONST_DATATYPE_DECRYPTED][Item_Entry["ALIGN"]["OFSDELTA"]:Item_Entry["ALIGN"]["OFSDELTA"]+CONST_PBP_HEADER_FIELDS["STRUCTURE_SIZE"]]
                             Pbp_Header, Pbp_Item_Entries = parsePbpHeader(Pbp_Bytes, None, Item_Entry["DATASIZE"], function_debug_level=max(0, Debug_Level))
@@ -3719,7 +3743,12 @@ if __name__ == "__main__":
                             ## Retrieve PBP PARAM.SFO
                             if Debug_Level >= 1:
                                 dprint(">>>>> PARAM.SFO (from PBP):")
-                            processPkg3Item(Pkg_Header, Item_Entry, Input_Stream, Package["ITEM_BYTES"][Item_Index], size=Pbp_Header["ICON0_PNG_OFS"], function_debug_level=max(0, Debug_Level))
+                            try:
+                                processPkg3Item(Pkg_Header, Item_Entry, Input_Stream, Package["ITEM_BYTES"][Item_Index], size=Pbp_Header["ICON0_PNG_OFS"], function_debug_level=max(0, Debug_Level))
+                            except:
+                                del Package["ITEM_BYTES"][Item_Index]["ADD"]
+                                eprint("ABORT analyzing items")
+                                break
                             del Package["ITEM_BYTES"][Item_Index]["ADD"]
                             ## Process PARAM.SFO
                             Sfo_Bytes = Package["ITEM_BYTES"][Item_Index][CONST_DATATYPE_DECRYPTED][Item_Entry["ALIGN"]["OFSDELTA"]+Pbp_Item_Entries[0]["DATAOFS"]:Item_Entry["ALIGN"]["OFSDELTA"]+Pbp_Item_Entries[0]["DATAOFS"]+Pbp_Item_Entries[0]["DATASIZE"]]
@@ -3737,7 +3766,13 @@ if __name__ == "__main__":
                                 dprint(">>>>> {} (from encrypted data):".format(Item_Entry["NAME"]))
                             Package["ITEM_BYTES"][Item_Index] = {}
                             Package["ITEM_BYTES"][Item_Index]["ADD"] = True
-                            processPkg3Item(Pkg_Header, Item_Entry, Input_Stream, Package["ITEM_BYTES"][Item_Index], size=min(CONST_NPD_HEADER_FIELDS["STRUCTURE_SIZE"], Item_Entry["DATASIZE"]), function_debug_level=max(0, Debug_Level))
+                            try:
+                                processPkg3Item(Pkg_Header, Item_Entry, Input_Stream, Package["ITEM_BYTES"][Item_Index], size=min(CONST_NPD_HEADER_FIELDS["STRUCTURE_SIZE"], Item_Entry["DATASIZE"]), function_debug_level=max(0, Debug_Level))
+                            except:
+                                del Package["ITEM_BYTES"][Item_Index]["ADD"]
+                                eprint("ABORT analyzing items")
+                                break
+                            del Package["ITEM_BYTES"][Item_Index]["ADD"]
                             ## Check NPD header magic
                             Npd_Bytes = Package["ITEM_BYTES"][Item_Index][CONST_DATATYPE_DECRYPTED][Item_Entry["ALIGN"]["OFSDELTA"]:Item_Entry["ALIGN"]["OFSDELTA"]+CONST_NPD_HEADER_FIELDS["STRUCTURE_SIZE"]]
                             #
@@ -5347,8 +5382,16 @@ if __name__ == "__main__":
                             if Item_Index in Package["ITEM_BYTES"]:
                                 Item_Data = Package["ITEM_BYTES"][Item_Index]
                             #
-                            processPkg3Item(Extractions_Fields, Item_Entry, Input_Stream, Item_Data, extractions=Use_Extractions, function_debug_level=max(0, Debug_Level))
-
+                            try:
+                                processPkg3Item(Extractions_Fields, Item_Entry, Input_Stream, Item_Data, extractions=Use_Extractions, function_debug_level=max(0, Debug_Level))
+                            except:
+                                Extract_Key = None
+                                Extract = None
+                                for Extract_Key, Extract in Extractions.items():
+                                    Extract["PROCESS"] = False
+                                    eprint("[{}] ABORT extraction".format(Extract_Key))
+                                del Extract
+                                del Extract_Key
                         ## Close streams
                         Extract_Key = None
                         Extract = None
