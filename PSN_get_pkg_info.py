@@ -101,6 +101,8 @@ import fastxor
 import Cryptodome.Cipher.AES
 import Cryptodome.Util.Counter
 import Cryptodome.Hash
+import Cryptodome.Hash.SHA1
+import Cryptodome.Hash.SHA256
 
 ## pip install packaging
 ## https://pypi.org/project/packaging/
